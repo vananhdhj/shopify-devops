@@ -11,6 +11,7 @@ configMapGenerator:
     literals:
       - APP_ENV=dev
       - COOKIE_SECURE=false # plain http on the lab ingress
+      - FAULT_CHECKOUT_ERRORS=true # bad-release drill: every Checkout fails with 500
 patches:
   - target: {kind: Ingress, name: storefront}
     patch: |-
