@@ -1,0 +1,15 @@
+# The edge: k3s's Traefik already serves Prometheus metrics on its `metrics` port (9100).
+# This is where the storefront's request rate and error ratio are measured.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: traefik
+spec:
+  namespaceSelector:
+    matchNames: [kube-system]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics

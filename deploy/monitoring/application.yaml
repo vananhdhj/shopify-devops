@@ -1,0 +1,38 @@
+# The monitoring stack, deployed by Argo CD like everything else: the pinned kube-prometheus-stack
+# chart with this repo's values, plus the lab's own pieces in deploy/monitoring/config.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.3.0
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - $values/deploy/monitoring/values.yaml
+    - repoURL: https://github.com/vananhdhj/shopify-devops.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/vananhdhj/shopify-devops.git
+      targetRevision: main
+      path: deploy/monitoring/config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring # created, with its Secrets, by `make secrets`
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true # the operator's CRDs are too large for client-side apply
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

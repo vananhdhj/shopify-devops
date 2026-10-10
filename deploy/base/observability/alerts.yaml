@@ -1,0 +1,30 @@
+# The shop's two alerts, both acted on by the runbook. Probe and scrape routes are excluded from
+# the error ratio so they neither dilute it nor satisfy the minimum-traffic condition.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shop-alerts
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: shop
+      rules:
+        - alert: ShopServerErrorRatioHigh
+          expr: |
+            (
+              sum by (namespace, container) (rate(http_request_duration_seconds_count{status_code=~"5..", route!~"/health/.*|/metrics"}[2m]))
+              / sum by (namespace, container) (rate(http_request_duration_seconds_count{route!~"/health/.*|/metrics"}[2m]))
+            ) > 0.05
+            and sum by (namespace, container) (rate(http_request_duration_seconds_count{route!~"/health/.*|/metrics"}[2m])) > 0.1
+          for: 1m
+          labels:
+            severity: page
+          annotations:
+            summary: "{{ $labels.container }} in {{ $labels.namespace }}: over 5% of requests failing with 5xx"
+        - alert: ShopOldestPendingOrderStale
+          expr: max by (namespace) (orders_oldest_pending_age_seconds) > 60
+          labels:
+            severity: page
+          annotations:
+            summary: "{{ $labels.namespace }}: an Order has been Pending for over 60 s (is the worker or a dependency down?)"

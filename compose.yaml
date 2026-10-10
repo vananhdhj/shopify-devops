@@ -171,8 +171,10 @@ services:
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?run make secrets}
       SESSION_SECRET: ${SESSION_SECRET:?run make secrets}
+      APP_ENV: dev
     ports:
       - "127.0.0.1:3000:3000"
+      - "127.0.0.1:9464:9464" # private metrics listener (instrumentation.ts)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
       interval: 2s

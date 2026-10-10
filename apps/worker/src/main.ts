@@ -14,7 +14,7 @@ const connection = redisConnection(config.redisUrl);
 // The producer side fails fast while Redis is unreachable instead of buffering commands in
 // memory: during a long outage the dispatcher would otherwise pile up abandoned enqueues.
 const queue = new Queue<SettleOrderJob>(ordersQueue, { connection: { ...connection, enableOfflineQueue: false } });
-const metrics = workerMetrics(db, queue);
+const metrics = workerMetrics(queue);
 
 // Private operational listener: health and metrics only, no business endpoints.
 const ops = createService({
