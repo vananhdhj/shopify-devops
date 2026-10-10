@@ -8,6 +8,8 @@ mkdir -p .secrets
 chmod 700 .secrets
 touch "$file"
 chmod 600 "$file"
+# A hand-pasted last line often lacks a newline; appending to it would glue two keys together.
+[ ! -s "$file" ] || [ -z "$(tail -c1 "$file")" ] || echo >>"$file"
 
 add_if_missing() {
   grep -q "^$1=" "$file" || echo "$1=$(openssl rand -hex 24)" >>"$file"

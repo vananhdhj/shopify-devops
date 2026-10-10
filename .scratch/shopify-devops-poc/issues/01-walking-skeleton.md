@@ -14,7 +14,7 @@
 - [x] On termination the API stops accepting new requests and drains in-flight requests within a bound
 - [x] Every image is multi-stage, runs as non-root, and takes configuration only from the environment
 - [x] Generated secrets live only in a gitignored local file; a Gitleaks pre-commit hook blocks a committed fake secret
-- [x] Logs are structured JSON with service, environment, severity, and request ID (catalog-cart API; storefront moved to ticket 09)
+- [x] Logs are structured JSON with service, environment, severity, and request ID (catalog-cart API; storefront done in ticket 09)
 
 ## Comments
 
