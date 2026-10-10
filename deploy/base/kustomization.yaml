@@ -1,0 +1,15 @@
+# Everything an environment runs. Overlays set the namespace, environment values, and the
+# exact image digests. Secrets are created out of band by `make secrets` (never in Git).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: shop
+resources:
+  - data/postgres.yaml
+  - data/redis.yaml
+  - jobs/db-migrate.yaml
+  - apps/catalog-cart-api.yaml
+  - apps/order-service.yaml
+  - apps/worker.yaml
+  - apps/storefront.yaml

@@ -1,0 +1,30 @@
+# The dev environment on the laptop's k3d cluster. CI rewrites the `digest:` lines below after
+# each release build (ADR-0003); everything else changes only through pull requests.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shop-dev
+resources:
+  - ../../base
+  - seed-job.yaml
+configMapGenerator:
+  - name: shop-env
+    literals:
+      - APP_ENV=dev
+      - COOKIE_SECURE=false # plain http on the lab ingress
+patches:
+  - target: { kind: Ingress, name: storefront }
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: shop.localhost
+images:
+  - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
+    digest: sha256:784a9e0326f33c1f04f998e489e5e91e7eb825e9750ce8106ca5f159e26dfbbb
+  - name: ghcr.io/vananhdhj/shopify-devops/order-service
+    digest: sha256:8e0bdc185ecaea781d6e43b278b2a8bddcb6daeb860636e3eda580fca5b13894
+  - name: ghcr.io/vananhdhj/shopify-devops/worker
+    digest: sha256:ba94934fbd8e4253620df4160d7b6fbebff379a010eb404a2bce02ab4ef6c62d
+  - name: ghcr.io/vananhdhj/shopify-devops/storefront
+    digest: sha256:49914a6e25dad78bcbc6c34aa2f56dadda52dae2f33cadede357abc53f895505
+  - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # set by the first release

@@ -1,0 +1,13 @@
+# Local lab cluster: one k3s server on Colima's Docker engine. k3s ships Traefik (ingress),
+# local-path storage, and metrics-server. Only the ingress port is published, on loopback.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: shop
+servers: 1
+agents: 0
+image: rancher/k3s:v1.35.5-k3s1
+ports:
+  - port: 127.0.0.1:8080:80
+    nodeFilters:
+      - loadbalancer

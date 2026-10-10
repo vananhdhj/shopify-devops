@@ -7,3 +7,4 @@ dist/
 .secrets/
 .DS_Store
 next-env.d.ts
+.local/

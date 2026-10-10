@@ -1,0 +1,84 @@
+# Order service: Checkout and Order reads (orders schema).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: order-service
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-service
+    spec:
+      serviceAccountName: order-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # node in the image; numeric so the kubelet can verify non-root
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: order-service
+          image: ghcr.io/vananhdhj/shopify-devops/order-service
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: DB_ORDER_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgres://order_app:$(DB_PASSWORD)@postgres:5432/shop?sslmode=disable"
+            - name: CATALOG_API_URL
+              value: http://catalog-cart-api:4001
+            - name: ORDER_TOKEN_SECRET
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: ORDER_TOKEN_SECRET } }
+            - name: ADMIN_SERVICE_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
+          envFrom:
+            - configMapRef:
+                name: shop-env # generated per environment by the overlay
+          ports:
+            - name: http
+              containerPort: 4002
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  selector:
+    app.kubernetes.io/name: order-service
+  ports:
+    - name: http
+      port: 4002
+      targetPort: http

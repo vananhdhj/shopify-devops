@@ -1,0 +1,106 @@
+# Storefront: the only unit exposed through ingress.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: storefront
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storefront
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: storefront
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: storefront
+    spec:
+      serviceAccountName: storefront
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # node in the image; numeric so the kubelet can verify non-root
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: storefront
+          image: ghcr.io/vananhdhj/shopify-devops/storefront
+          env:
+            - name: CATALOG_API_URL
+              value: http://catalog-cart-api:4001
+            - name: ORDER_SERVICE_URL
+              value: http://order-service:4002
+            - name: ADMIN_SERVICE_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
+            - name: ADMIN_PASSWORD_HASH
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_PASSWORD_HASH } }
+            - name: SESSION_SECRET
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: SESSION_SECRET } }
+          envFrom:
+            - configMapRef:
+                name: shop-env # generated per environment by the overlay
+          ports:
+            - name: http
+              containerPort: 3000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: next-cache
+              mountPath: /app/apps/storefront/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: next-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: storefront
+spec:
+  selector:
+    app.kubernetes.io/name: storefront
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: storefront
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: shop.example # set by each overlay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: storefront
+                port:
+                  name: http
