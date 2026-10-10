@@ -157,10 +157,10 @@ The bad-release drill is written up step by step in
 - Argo CD polls Git (no webhook): about a minute passes between a merge and the start of its sync.
 - A change to the shared `shop-env` ConfigMap restarts all four Deployments, not only the one that
   reads the changed key.
-- The 5xx alert ends when traffic falls below its minimum rate, not only when errors stop, and can
-  fire again just after a fix while old errors are still in its 2-minute window. Rule options such
-  as Prometheus's `keep_firing_for` would trade that against slower resolution; the rule was left
-  as specified and the drill keeps traffic steady instead.
+- The 5xx alert needs a minimum request rate, so a lull in traffic can end it while requests still
+  fail. `keep_firing_for: 1m` holds it through lulls up to a minute, at the cost of resolving a
+  minute later; a longer lull still ends it. It can also fire again just after a fix while old
+  errors remain in its 2-minute window. The drill keeps traffic steady for both reasons.
 - The dev seed job resets seed products' price and Stock on every sync.
 - Logs are read through the container runtime; there is no log store or tracing. Discord delivery
   is checked by eye.

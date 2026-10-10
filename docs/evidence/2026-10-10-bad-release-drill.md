@@ -67,7 +67,9 @@ Lesson: an error-ratio alert with a minimum-traffic guard ends when traffic drop
 errors stop, and it can re-fire right after a fix while old errors are still in its window. The
 drill was fixed in PR #12: recovery traffic never pauses (one attempt a second from before the
 revert until the alert resolves), and only a resolution that ends after the first accepted
-Checkout counts. The alert rule was left as it is; the trade-off is noted in the README.
+Checkout counts. Afterwards the rule gained `keep_firing_for: 1m`, which would have held the
+alert through run 1's lull (it ended 36 s before the revert landed); it does not prevent the
+re-fire after a fix, and it delays every resolution by a minute.
 
 ## Automatic and operator-driven steps
 
