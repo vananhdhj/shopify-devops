@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { AddToCartForm } from "@/app/add-to-cart";
 import { getProduct } from "@/lib/catalog";
 import { formatPrice } from "@/lib/money";
 
@@ -15,6 +16,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <p>{product.description}</p>
       <p className="price">{formatPrice(product.priceMinor, product.currency)}</p>
       <p className="stock">{product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}</p>
+      <AddToCartForm productId={product.id} />
     </article>
   );
 }

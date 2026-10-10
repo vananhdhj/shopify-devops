@@ -97,7 +97,9 @@ Around that app, build one thin pass through every core DevOps layer: GitHub Act
 
 ### API contracts
 
-- Catalog-cart API: list products, get product, create Cart, get Cart, set a Cart item's quantity, admin create product, and the internal Inventory-effect endpoint. The internal endpoint accepts only the worker's internal service token and has bounded timeouts.
+- Catalog-cart API: list products, get product, create Cart, get Cart, set a Cart item's quantity (an integer from 0 to 99; 0 removes the line), admin create product, and the internal Inventory-effect endpoint.
+- A Cart's id doubles as its cart token (a random v4 UUID). To keep tokens and ids out of logs, every API logs requests by route template (`/carts/:id`), never the raw URL; handlers log the ids they need explicitly.
+- The shop sells in a single currency (USD), enforced by a database constraint on products. The internal endpoint accepts only the worker's internal service token and has bounded timeouts.
 - Order service: Checkout, read Order by Order token, admin list Orders, admin set Order status (only Confirmed → Fulfilled).
 - Checkout request carries Cart token, Checkout key, and Payment scenario. It reads Cart contents and current prices from the catalog server-side, then returns `202` with the Order ID and Order token. Conflicts return `409`: same Checkout key with a different request hash, or a Cart that already became an Order.
 - Each API unit exposes liveness, readiness, and metrics endpoints outside the business routes; the worker has a private operational listener. Liveness tests the process only; readiness reflects whether the unit can serve, and a failing readiness check never acknowledges unfinished queue work.

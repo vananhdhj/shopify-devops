@@ -11,3 +11,9 @@ export function compose(...args: string[]): string {
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
+
+/** Stops a container started with `compose run --rm` (addressed by name, not service); --rm removes it. */
+export function stopContainer(name: string): void {
+  execFileSync("docker", ["stop", "--timeout", "10", name], { stdio: "ignore" });
+}
+

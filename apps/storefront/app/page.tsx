@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AddToCartForm } from "@/app/add-to-cart";
 import { listProducts } from "@/lib/catalog";
 import { formatPrice } from "@/lib/money";
 
@@ -18,6 +19,7 @@ export default async function HomePage() {
               <p className="price">{formatPrice(product.priceMinor, product.currency)}</p>
               <p className="stock">{product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}</p>
             </Link>
+            <AddToCartForm productId={product.id} />
           </li>
         ))}
       </ul>

@@ -25,4 +25,16 @@ describe("catalog-cart API logs", () => {
       .poll(() => logLinesWith(correlationId)[0], { timeout: 5_000 })
       .toMatchObject({ service: "catalog-cart-api", environment: "dev", severity: "info", requestId: correlationId });
   });
+
+  it("logs the route template, never the token or ids in the raw URL", async () => {
+    const correlationId = `test-${randomUUID()}`;
+    const created = await fetch(`${catalogApiUrl}/carts`, { method: "POST" });
+    const { id: cartToken } = (await created.json()) as { id: string };
+    await fetch(`${catalogApiUrl}/carts/${cartToken}`, { headers: { "x-request-id": correlationId } });
+
+    await expect
+      .poll(() => logLinesWith(correlationId)[0], { timeout: 5_000 })
+      .toMatchObject({ req: { method: "GET", route: "/carts/:id" } });
+    expect(JSON.stringify(logLinesWith(correlationId))).not.toContain(cartToken);
+  });
 });

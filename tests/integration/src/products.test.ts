@@ -23,6 +23,6 @@ describe("product catalog", () => {
   ])("answers 404 for %s", async (_label, id) => {
     const res = await getJson<{ error: string }>(`${catalogApiUrl}/products/${id}`);
     expect(res.status).toBe(404);
-    expect(res.body.error).toBe("not_found");
+    expect(res.body.error).toBe("product_not_found");
   });
 });

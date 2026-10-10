@@ -36,4 +36,12 @@ describe("storefront", () => {
     expect(html).not.toContain("catalog-cart-api");
     expect(html).not.toContain(":4001");
   });
+
+  it("offers add-to-cart on the listing as well as the product page", async () => {
+    for (const path of ["/", `/products/${seedProducts.lastLantern}`]) {
+      const { html } = await page(path);
+      expect(html).toContain('action="/cart/items"');
+      expect(html).toContain(`value="${seedProducts.lastLantern}"`);
+    }
+  });
 });
