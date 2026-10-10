@@ -9,7 +9,7 @@ describe("storefront cart", () => {
     const added = await browser.submit("/cart/items", { productId: seedProducts.lastLantern, action: "add" });
     expect(added.status).toBe(303);
     expect(added.headers.get("location")).toMatch(/\/cart$/);
-    expect(browser.cartCookie).toMatch(/^cart=[0-9a-f-]{36}$/);
+    expect(browser.cookie).toMatch(/^cart=[0-9a-f-]{36}$/);
     expect(added.headers.get("set-cookie")).toMatch(/HttpOnly/i);
 
     const firstView = await browser.html("/cart");
@@ -51,8 +51,8 @@ describe("storefront cart", () => {
 
     await browser.submit("/cart/items", { productId: seedProducts.enamelMug, action: "add" });
 
-    expect(browser.cartCookie).toMatch(/^cart=[0-9a-f-]{36}$/);
-    expect(browser.cartCookie).not.toBe(staleCookie);
+    expect(browser.cookie).toMatch(/^cart=[0-9a-f-]{36}$/);
+    expect(browser.cookie).not.toBe(staleCookie);
     expect(await browser.html("/cart")).toContain("Enamel Mug");
   });
 
@@ -72,7 +72,7 @@ describe("storefront cart", () => {
 
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("/cart?error=not-added");
-    expect(browser.cartCookie).toBe("");
+    expect(browser.cookie).toBe("");
     expect(await browser.html("/cart?error=not-added")).toContain("That product couldn&#x27;t be added");
   });
 

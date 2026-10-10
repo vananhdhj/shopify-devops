@@ -8,5 +8,6 @@ const app = buildApp({
   environment: config.environment,
   catalogApiUrl: config.catalogApiUrl,
   orderTokenSecret: config.orderTokenSecret,
+  adminServiceToken: config.adminServiceToken,
 });
 await runService(app, db, config.port);

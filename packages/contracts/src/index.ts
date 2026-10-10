@@ -102,3 +102,33 @@ export interface InventoryEffectResult {
   outcome: InventoryEffectOutcome;
 }
 
+/** One row of the Merchant's order list. */
+export interface AdminOrderSummary {
+  id: string;
+  status: OrderStatus;
+  paymentScenario: PaymentScenario;
+  itemCount: number;
+  subtotalMinor: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface AdminOrderList {
+  /** Confirmed orders (awaiting fulfillment) first, then newest first. */
+  orders: AdminOrderSummary[];
+  /** True when more Orders exist than were returned. */
+  truncated: boolean;
+}
+
+/** The Merchant's only status action: Confirmed → Fulfilled. */
+export interface AdminStatusChange {
+  status: "FULFILLED";
+}
+
+export interface NewProduct {
+  name: string;
+  description?: string;
+  priceMinor: number;
+  stock: number;
+}
+

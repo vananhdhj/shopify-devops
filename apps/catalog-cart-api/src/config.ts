@@ -5,4 +5,5 @@ export const config = {
   databaseUrl: required("DATABASE_URL"),
   environment: process.env.APP_ENV ?? "dev",
   internalInventoryToken: required("INTERNAL_INVENTORY_TOKEN"),
+  adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
 };

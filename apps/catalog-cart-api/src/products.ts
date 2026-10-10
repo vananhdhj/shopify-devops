@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { Product } from "@shop/contracts";
+import type { NewProduct, Product } from "@shop/contracts";
 
 interface ProductRow {
   id: string;
@@ -37,3 +37,13 @@ export async function findProduct(db: Pool, id: string): Promise<Product | undef
   );
   return rows[0] && toProduct(rows[0]);
 }
+
+export async function addProduct(db: Pool, product: NewProduct): Promise<Product> {
+  const { rows } = await db.query<ProductRow>(
+    `INSERT INTO catalog.products (name, description, price_minor, stock)
+     VALUES ($1, $2, $3, $4) RETURNING ${columns}`,
+    [product.name, product.description ?? "", product.priceMinor, product.stock],
+  );
+  return toProduct(rows[0]!);
+}
+

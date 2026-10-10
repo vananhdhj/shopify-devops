@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
-import type { CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
-import { createService, isUuid } from "@shop/service-kit";
+import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
+import { createService, isUuid, requireSecretHeader } from "@shop/service-kit";
+import { fulfillOrder, listOrders } from "./admin.ts";
 import { CatalogUnavailableError } from "./catalog-client.ts";
 import { acceptCheckout } from "./checkout.ts";
 import { isValidOrderToken, orderTokenFor } from "./order-tokens.ts";
@@ -11,7 +12,15 @@ export interface AppDeps {
   environment: string;
   catalogApiUrl: string;
   orderTokenSecret: string;
+  /** Presented by the storefront on behalf of the signed-in Merchant. */
+  adminServiceToken: string;
 }
+
+const statusChangeBody = {
+  type: "object",
+  required: ["status"],
+  properties: { status: { type: "string", enum: ["FULFILLED"] } },
+} as const;
 
 const checkoutBody = {
   type: "object",
@@ -65,6 +74,25 @@ export function buildApp(deps: AppDeps) {
     if (!order) return reply.code(404).send({ error: "order_not_found", message: "order not found" });
     return order;
   });
+
+  const adminOnly = { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken) };
+
+  app.get("/admin/orders", adminOnly, async (): Promise<AdminOrderList> => listOrders(deps.db));
+
+  app.patch<{ Params: { id: string }; Body: AdminStatusChange }>(
+    "/admin/orders/:id/status",
+    { ...adminOnly, schema: { body: statusChangeBody } },
+    async (req, reply) => {
+      const { id } = req.params;
+      const result = isUuid(id) ? await fulfillOrder(deps.db, id) : "order_not_found";
+      if (result === "order_not_found") return reply.code(404).send({ error: result, message: "order not found" });
+      if (result === "illegal_transition") {
+        return reply.code(409).send({ error: result, message: "only a Confirmed order can be fulfilled" });
+      }
+      req.log.info({ orderId: id }, "order fulfilled");
+      return { id, status: "FULFILLED" };
+    },
+  );
 
   return app;
 }

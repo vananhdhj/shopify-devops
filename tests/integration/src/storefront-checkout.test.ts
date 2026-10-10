@@ -34,7 +34,7 @@ describe("storefront checkout", () => {
     const browser = new Browser();
     await browser.submit("/cart/items", { productId: seedProducts.notebookSet, action: "add" });
     const fields = { checkoutKey: checkoutKeyIn(await browser.html("/checkout")), paymentScenario: "approve" };
-    const cookieAtSubmit = browser.cartCookie;
+    const cookieAtSubmit = browser.cookie;
 
     const first = await browser.submit("/orders", fields);
     browser.useCookie(cookieAtSubmit);

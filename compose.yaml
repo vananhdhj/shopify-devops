@@ -96,6 +96,7 @@ services:
     environment:
       DATABASE_URL: postgres://catalog_app:${DB_CATALOG_PASSWORD}@postgres:5432/shop?sslmode=disable
       INTERNAL_INVENTORY_TOKEN: ${INTERNAL_INVENTORY_TOKEN:?run make secrets}
+      ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
       - "127.0.0.1:4001:4001"
@@ -116,6 +117,7 @@ services:
       DATABASE_URL: postgres://order_app:${DB_ORDER_PASSWORD}@postgres:5432/shop?sslmode=disable
       CATALOG_API_URL: http://catalog-cart-api:4001
       ORDER_TOKEN_SECRET: ${ORDER_TOKEN_SECRET:?run make secrets}
+      ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
       - "127.0.0.1:4002:4002"
@@ -166,6 +168,9 @@ services:
     environment:
       CATALOG_API_URL: http://catalog-cart-api:4001
       ORDER_SERVICE_URL: http://order-service:4002
+      ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?run make secrets}
+      SESSION_SECRET: ${SESSION_SECRET:?run make secrets}
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:

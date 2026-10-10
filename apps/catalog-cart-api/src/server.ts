@@ -3,5 +3,10 @@ import { buildApp } from "./app.ts";
 import { config } from "./config.ts";
 
 const db = createPool(config.databaseUrl);
-const app = buildApp({ db, environment: config.environment, internalInventoryToken: config.internalInventoryToken });
+const app = buildApp({
+  db,
+  environment: config.environment,
+  internalInventoryToken: config.internalInventoryToken,
+  adminServiceToken: config.adminServiceToken,
+});
 await runService(app, db, config.port);

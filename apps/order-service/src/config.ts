@@ -5,5 +5,6 @@ export const config = {
   databaseUrl: required("DATABASE_URL"),
   catalogApiUrl: required("CATALOG_API_URL"),
   orderTokenSecret: required("ORDER_TOKEN_SECRET"),
+  adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
   environment: process.env.APP_ENV ?? "dev",
 };

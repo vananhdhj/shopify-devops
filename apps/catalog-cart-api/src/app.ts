@@ -1,10 +1,10 @@
 import type { FastifyReply } from "fastify";
 import type { Pool } from "pg";
-import type { InventoryEffectRequest, InventoryEffectResult, ProductList } from "@shop/contracts";
-import { createService, isUuid, secretsEqual, uuidPatternSource } from "@shop/service-kit";
+import type { InventoryEffectRequest, InventoryEffectResult, NewProduct, ProductList } from "@shop/contracts";
+import { createService, isUuid, requireSecretHeader, uuidPatternSource } from "@shop/service-kit";
 import { createCart, getCart, setCartItemQuantity, type Missing } from "./carts.ts";
 import { applyInventoryEffect } from "./inventory.ts";
-import { findProduct, listProducts } from "./products.ts";
+import { addProduct, findProduct, listProducts } from "./products.ts";
 
 function notFound(reply: FastifyReply, missing: Missing) {
   return reply.code(404).send({ error: `${missing}_not_found`, message: `${missing} not found` });
@@ -38,11 +38,24 @@ const inventoryEffectBody = {
   },
 } as const;
 
+const newProductBody = {
+  type: "object",
+  required: ["name", "priceMinor", "stock"],
+  properties: {
+    name: { type: "string", minLength: 1, maxLength: 200 },
+    description: { type: "string", maxLength: 2_000 },
+    priceMinor: { type: "integer", minimum: 0 },
+    stock: { type: "integer", minimum: 0 },
+  },
+} as const;
+
 export interface AppDeps {
   db: Pool;
   environment: string;
   /** Shared with the worker; the only credential that may change Stock. */
   internalInventoryToken: string;
+  /** Presented by the storefront on behalf of the signed-in Merchant. */
+  adminServiceToken: string;
 }
 
 export function buildApp(deps: AppDeps) {
@@ -86,16 +99,23 @@ export function buildApp(deps: AppDeps) {
   // exposed), and refused without the internal service token.
   app.post<{ Body: InventoryEffectRequest }>(
     "/internal/inventory-effects",
-    { schema: { body: inventoryEffectBody } },
-    async (req, reply) => {
-      if (!secretsEqual(req.headers["x-internal-token"], deps.internalInventoryToken)) {
-        return reply.code(401).send({ error: "unauthorized", message: "internal token required" });
-      }
+    { preHandler: requireSecretHeader("x-internal-token", deps.internalInventoryToken), schema: { body: inventoryEffectBody } },
+    async (req) => {
       const { orderId, action, items } = req.body;
       const outcome = await applyInventoryEffect(deps.db, orderId.toLowerCase(), action, items);
       req.log.info({ orderId, action, outcome }, "inventory effect");
       const result: InventoryEffectResult = { orderId, action, outcome };
       return result;
+    },
+  );
+
+  app.post<{ Body: NewProduct }>(
+    "/admin/products",
+    { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken), schema: { body: newProductBody } },
+    async (req, reply) => {
+      const product = await addProduct(deps.db, req.body);
+      req.log.info({ productId: product.id }, "product added");
+      return reply.code(201).send(product);
     },
   );
 
