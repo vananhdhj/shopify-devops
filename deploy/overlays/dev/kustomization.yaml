@@ -19,12 +19,12 @@ patches:
         value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
-    digest: sha256:f161ac00c158abd6d0da36fd6cbdc2999490858e78d9bd5f2410303bc45a088c
+    digest: sha256:b27b2210e0d468785ba4c8bc39abe6dc89e546212b5f4d3765c7cefff5695596
   - name: ghcr.io/vananhdhj/shopify-devops/order-service
-    digest: sha256:d4d2a78fd840eff70949891fba60b825551604e406a5ef9215a29f001ebba13c
+    digest: sha256:ab3605173bfc4fc37a9119c9e8dd8e51013a64d628a305dbef4135554367ec2b
   - name: ghcr.io/vananhdhj/shopify-devops/worker
-    digest: sha256:33fab12e6e37395ca4272c57453e28e3e2246edcccc31df05fecf8ed409435c7
+    digest: sha256:7a1fb3924c3ed74161923f28b86748ac836742c3ac3362f885957112a649d768
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
-    digest: sha256:6abedc30a8ebb86caa966a89d3bae9babd31f46861db39fa973a636fbc670ab1
+    digest: sha256:84b20be72b9738d10f0d8dfe06ce0bea6397ea1e93d1d35e6c5eea891f4754aa
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:924921dd326b3700df6c7ac9814b7901f9452dc2b4a4f2c67d1c094fc4cccdf0
+    digest: sha256:7d91fb56b07285c40d0ef5d7f072d11d01f0b4739b15b56ee0b4e895e1c4dcbf
