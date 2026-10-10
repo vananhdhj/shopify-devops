@@ -1,11 +1,16 @@
 SHELL := /bin/bash
 COMPOSE := docker compose --env-file .secrets/dev.env
+CLUSTER := shop
+CONTEXT := k3d-$(CLUSTER)
+NAMESPACE := shop-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke
 
-## Generate local secrets into .secrets/dev.env (never overwrites existing values)
+## Generate local secrets into .secrets/dev.env (never overwrites existing values), and copy
+## them into the lab cluster as a Secret when the cluster is running
 secrets:
 	@scripts/secrets.sh
+	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE)
 
 ## Point git at the repo's hooks (Gitleaks pre-commit)
 hooks:
@@ -30,3 +35,27 @@ test: install dev-up
 
 dev-down:
 	$(COMPOSE) down
+
+## Create the single-node k3d lab cluster on Colima (Traefik on 127.0.0.1:8080)
+cluster-up:
+	@k3d cluster list $(CLUSTER) >/dev/null 2>&1 || k3d cluster create --config deploy/k3d/cluster.yaml
+	@kubectl --context $(CONTEXT) wait --for=condition=Ready node --all --timeout=120s
+
+cluster-down:
+	k3d cluster delete $(CLUSTER)
+
+ARGOCD_CHART_VERSION := 10.10.2
+
+## Install Argo CD (pinned chart) and hand the dev environment to it; it then deploys main
+bootstrap-gitops: cluster-up
+	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
+	  --version $(ARGOCD_CHART_VERSION) --namespace argocd --create-namespace \
+	  --kube-context $(CONTEXT) --values deploy/argocd/values.yaml --wait --timeout 10m
+	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE)
+	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml
+	@echo "Argo CD UI: kubectl --context $(CONTEXT) -n argocd port-forward svc/argocd-server 8081:80"
+
+## Check a deployed environment through its ingress (default: the lab cluster's dev storefront)
+smoke:
+	@scripts/smoke.sh
+

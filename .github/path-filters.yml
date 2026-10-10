@@ -27,5 +27,10 @@ worker:
   - "db/orders/**"
 storefront:
   - "apps/storefront/**"
+db-migrations:
+  - "apps/db-migrations/**"
+  - "db/**"
+deploy:
+  - "deploy/**"
 tests:
   - "tests/**"

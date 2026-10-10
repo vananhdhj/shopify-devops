@@ -1,0 +1,82 @@
+# Catalog-cart API: products, Carts, and Inventory effects (catalog schema).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: catalog-cart-api
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-cart-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-cart-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: catalog-cart-api
+    spec:
+      serviceAccountName: catalog-cart-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # node in the image; numeric so the kubelet can verify non-root
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: catalog-cart-api
+          image: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: DB_CATALOG_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgres://catalog_app:$(DB_PASSWORD)@postgres:5432/shop?sslmode=disable"
+            - name: INTERNAL_INVENTORY_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: INTERNAL_INVENTORY_TOKEN } }
+            - name: ADMIN_SERVICE_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
+          envFrom:
+            - configMapRef:
+                name: shop-env # generated per environment by the overlay
+          ports:
+            - name: http
+              containerPort: 4001
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-cart-api
+spec:
+  selector:
+    app.kubernetes.io/name: catalog-cart-api
+  ports:
+    - name: http
+      port: 4001
+      targetPort: http

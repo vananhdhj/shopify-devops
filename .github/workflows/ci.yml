@@ -75,6 +75,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Typecheck ${{ matrix.service }} and the packages it depends on
+        if: hashFiles(format('apps/{0}/package.json', matrix.service)) != ''
         run: pnpm turbo run typecheck --filter="@shop/${{ matrix.service }}..."
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the ${{ matrix.service }} image (not pushed)
@@ -85,6 +86,32 @@ jobs:
           push: false
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # Renders both overlays (dev runs on the lab cluster; staging is never applied) and validates
+  # every object against the Kubernetes API schema, so a broken manifest never reaches Argo CD.
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install kubeconform (checksum-verified)
+        env:
+          VERSION: "0.8.0"
+        run: |
+          base="https://github.com/yannh/kubeconform/releases/download/v${VERSION}"
+          curl -fsSLO "${base}/kubeconform-linux-amd64.tar.gz"
+          curl -fsSLO "${base}/CHECKSUMS"
+          grep " kubeconform-linux-amd64.tar.gz$" CHECKSUMS | sha256sum --check
+          tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
+      - name: Render and validate the dev and staging overlays
+        run: |
+          for overlay in dev staging; do
+            kubectl kustomize "deploy/overlays/${overlay}" >"${overlay}.yaml"
+            ./kubeconform -strict -summary -kubernetes-version 1.35.0 "${overlay}.yaml"
+          done
+      - name: Every workload image is pinned by digest
+        run: |
+          unpinned="$(grep -hE '^\s+image:' dev.yaml staging.yaml | grep -v '@sha256:' || true)"
+          if [ -n "$unpinned" ]; then echo "::error::images without a digest:"; echo "$unpinned"; exit 1; fi
 
   integration:
     needs: changes
@@ -108,7 +135,7 @@ jobs:
   # cancelled, and accepts jobs skipped because nothing they cover changed.
   ci-ok:
     if: always()
-    needs: [changes, lint, secret-scan, service, integration]
+    needs: [changes, lint, secret-scan, manifests, service, integration]
     runs-on: ubuntu-latest
     steps:
       - name: All required jobs passed or were intentionally skipped
