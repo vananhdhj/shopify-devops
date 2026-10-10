@@ -23,5 +23,5 @@ Resolved 2026-10-10. `make test` passes from a wiped stack. New service-HTTP tes
 
 Decided in review: Order token is an HMAC of the order id, never stored (ADR-0004); refused Checkouts are "refused", never "rejected" (a Rejected order is a terminal Order); order_app may only append to the outbox. Shared service plumbing now lives in `@shop/service-kit`.
 
-Deferred: storefront log check for `?token=` links (ticket 09).
+Deferred: storefront log check for `?token=` links (ticket 09; done there).
 
