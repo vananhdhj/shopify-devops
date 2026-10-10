@@ -13,3 +13,7 @@
 - [ ] A failing test blocks merging
 - [ ] On main, each affected image is built once, pushed to GHCR, and its digest recorded as a workflow output or artifact
 - [ ] GHCR package visibility is verified so the cluster can pull without credentials; any one-time manual step is documented
+
+## Comments
+
+- Carried from ticket 01 review: Gitleaks in CI also covers commits made before `make hooks` ran (e.g. from a fresh clone), which the local pre-commit hook cannot guard.

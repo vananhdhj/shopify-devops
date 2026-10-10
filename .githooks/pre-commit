@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Block commits that contain secrets. Installed by `make hooks`.
+set -euo pipefail
+if ! command -v gitleaks >/dev/null; then
+  echo "pre-commit: gitleaks is not installed (brew install gitleaks)" >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --redact --no-banner

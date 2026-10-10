@@ -1,0 +1,18 @@
+{
+  "name": "shopify-devops",
+  "private": true,
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test:integration": "pnpm --filter @shop/integration-tests test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "turbo": "^2.11.7",
+    "typescript": "^7.0.2"
+  }
+}

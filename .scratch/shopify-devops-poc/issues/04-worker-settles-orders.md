@@ -16,3 +16,7 @@
 - [ ] Seam-1 test: killing the worker container after the stock deduction and before the status change leads, after restart, to one deduction and a terminal Order
 - [ ] On termination the worker stops taking jobs and leaves interrupted jobs to retry safely; readiness failure never acknowledges unfinished work
 - [ ] Worker exposes a private operational listener with health and metrics, including queue depth, oldest Pending order age, retries, and throughput
+
+## Comments
+
+- Carried from ticket 01 review: test that an in-flight request completes and new requests are refused during API shutdown (ticket 01 only proves a clean, prompt exit with no request in flight).

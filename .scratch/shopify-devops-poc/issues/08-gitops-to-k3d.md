@@ -16,3 +16,7 @@
 - [ ] The deploy-key bypass and trigger behavior are verified against GitHub, not assumed
 - [ ] `make smoke` checks that the storefront serves the seeded products
 - [ ] Memory use of the Colima VM and of each component is measured and recorded with the stack running
+
+## Comments
+
+- Carried from ticket 01 review: schemas are created by the superuser role-bootstrap step (not dbmate) and migrations/seed are mounted from the host in Compose; the in-cluster migration job needs its own way to run role bootstrap and ship migration files.

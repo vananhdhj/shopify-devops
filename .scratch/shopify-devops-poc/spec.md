@@ -104,7 +104,7 @@ Around that app, build one thin pass through every core DevOps layer: GitHub Act
 
 ### Data model
 
-- One PostgreSQL instance, two schemas with separate owning identities, plus a migration identity. The catalog identity cannot read or write order tables; the order identity cannot write catalog tables. Both denials are tested.
+- One PostgreSQL instance, two schemas, one runtime identity per schema, plus a migration identity. The migration identity owns both schemas and their tables; runtime identities receive only the table privileges their slice needs, so a compromised service can change rows but never alter or drop tables. The catalog identity cannot read or write order tables; the order identity cannot write catalog tables. Both denials are tested.
 - `catalog`: products (price in integer minor units, stock never negative), carts, cart items (quantity positive), inventory effects (unique per Order and action).
 - `orders`: orders (unique Checkout key with stored request hash; unique source Cart ID per ADR-0001; status; Payment scenario; hashed Order token), order items (immutable item and price snapshot), outbox (stable event ID), order events (unique event ID, append-only status history).
 - No cross-schema foreign keys; product IDs and Order IDs are plain references across the boundary.

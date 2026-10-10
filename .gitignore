@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+.env
+.secrets/
+.DS_Store
+next-env.d.ts

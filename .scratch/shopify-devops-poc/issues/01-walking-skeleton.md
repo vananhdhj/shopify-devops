@@ -4,14 +4,22 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `make secrets`, `make dev-up`, `make seed`, `make test`, `make dev-down` work from a clean checkout; each reports success only after its health checks pass
-- [ ] Seeded data contains about 12 products, two of them with a stock of 1; prices are integer minor units and stock is never negative (database constraints)
-- [ ] Storefront listing and product detail pages render seeded products; the browser never calls the API directly
-- [ ] Seam-1 test: listing and detail return the same product and server-owned price
-- [ ] Catalog-cart API exposes liveness, readiness, and metrics endpoints; readiness fails when PostgreSQL is unreachable while liveness stays healthy
-- [ ] On termination the API stops accepting new requests and drains in-flight requests within a bound
-- [ ] Every image is multi-stage, runs as non-root, and takes configuration only from the environment
-- [ ] Generated secrets live only in a gitignored local file; a Gitleaks pre-commit hook blocks a committed fake secret
-- [ ] Logs are structured JSON with service, environment, severity, and request ID
+- [x] `make secrets`, `make dev-up`, `make seed`, `make test`, `make dev-down` work from a clean checkout; each reports success only after its health checks pass
+- [x] Seeded data contains about 12 products, two of them with a stock of 1; prices are integer minor units and stock is never negative (database constraints)
+- [x] Storefront listing and product detail pages render seeded products; the browser never calls the API directly
+- [x] Seam-1 test: listing and detail return the same product and server-owned price
+- [x] Catalog-cart API exposes liveness, readiness, and metrics endpoints; readiness fails when PostgreSQL is unreachable while liveness stays healthy
+- [x] On termination the API stops accepting new requests and drains in-flight requests within a bound
+- [x] Every image is multi-stage, runs as non-root, and takes configuration only from the environment
+- [x] Generated secrets live only in a gitignored local file; a Gitleaks pre-commit hook blocks a committed fake secret
+- [x] Logs are structured JSON with service, environment, severity, and request ID (catalog-cart API; storefront moved to ticket 09)
+
+## Comments
+
+Resolved 2026-10-10. `make test` passes from a wiped stack: typecheck plus 12 service-HTTP tests (product listing/detail agreement, 404s, readiness vs liveness with PostgreSQL stopped, route-template metrics, JSON logs with correlation ID, clean SIGTERM exit, storefront pages rendered server-side). Gitleaks pre-commit hook verified by hand against a fake GitHub token.
+
+Decided in review: the migration identity owns the schemas; runtime identities get table privileges only (spec updated). `catalog_app` currently has SELECT only.
+
+Deferred from review: storefront JSON logs and request-ID forwarding (09); in-flight drain test (04); CI secret scanning for unhooked commits (07); schema bootstrap for the in-cluster migration job (08).

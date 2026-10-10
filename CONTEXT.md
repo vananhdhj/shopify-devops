@@ -16,6 +16,14 @@ _Avoid_: Admin user, seller, owner
 
 ### Catalog
 
+**Product**:
+Something the Merchant sells, with one server-owned price and a Stock count.
+_Avoid_: Item, SKU, listing
+
+**Stock**:
+The number of units of a Product still available to sell; never negative, and changed only by Inventory effects once a Product exists.
+_Avoid_: Inventory level, quantity on hand
+
 **Cart**:
 A guest buyer's server-side list of products and quantities, identified by a cart token; adding to a cart never deducts stock. A cart becomes at most one Order.
 _Avoid_: Basket, bag, session
