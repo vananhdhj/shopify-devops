@@ -5350,7 +5350,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>Runtime role không có DDL, không DROP</li>
-          <li>UPDATE chỉ theo cột: stock, status, dispatched_at</li>
+          <li>UPDATE theo cột trên products, orders, outbox: stock, status, dispatched_at</li>
+          <li>Riêng Cart: catalog_app sửa cả dòng carts, cart_items và xoá dòng cart_items</li>
           <li>Không có FK xuyên schema</li>
         </ul>
       </div>
