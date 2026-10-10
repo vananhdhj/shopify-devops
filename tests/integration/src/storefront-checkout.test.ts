@@ -23,7 +23,8 @@ describe("storefront checkout", () => {
     expect(res.headers.get("set-cookie")).toMatch(/cart=;.*Max-Age=0/i);
 
     const orderPage = await browser.html(res.headers.get("location")!);
-    expect(orderPage).toContain("Pending");
+    // The worker may settle the Order before the page loads; either state is a correct Order page.
+    expect(orderPage).toMatch(/Status: (<!-- -->)?(Pending|Confirmed)/);
     expect(orderPage).toContain("Notebook Set");
     expect(orderPage).toContain("$12.00");
 

@@ -12,12 +12,14 @@ describe("checkout", () => {
     expect(accepted.status).toBe(202);
     expect(accepted.body).toEqual({ orderId: expect.any(String), orderToken: expect.any(String), status: "PENDING" });
 
+    // The 202 above is the proof of acceptance as Pending; by the time the Order is read back the
+    // worker may already have confirmed it, so only the snapshot is asserted exactly.
     const order = await readOrder(accepted.body.orderId, accepted.body.orderToken);
     expect(order.status).toBe(200);
     // Expected prices come from the seed data: Notebook Set 1200, Wool Socks 1600.
     expect(order.body).toEqual({
       id: accepted.body.orderId,
-      status: "PENDING",
+      status: expect.stringMatching(/^(PENDING|CONFIRMED)$/),
       paymentScenario: "approve",
       items: [
         { productId: seedProducts.notebookSet, name: "Notebook Set", unitPriceMinor: 1200, quantity: 2, lineTotalMinor: 2400 },
