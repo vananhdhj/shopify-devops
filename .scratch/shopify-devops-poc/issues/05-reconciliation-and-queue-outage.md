@@ -10,7 +10,7 @@
 - [x] Reconciliation re-enqueues Pending orders older than a threshold, reusing their stable event IDs
 - [x] Seam-1 test: with Redis stopped, Checkout still returns Pending orders; after Redis restarts, every one of them reaches a terminal state
 - [x] Seam-1 test: deleting a dispatched job from the queue still ends with a terminal Order and exactly one deduction
-- [ ] Redis runs with persistence and a non-evicting memory policy in both Compose and the cluster configuration (Compose done since ticket 01; cluster deferred to ticket 08, where the cluster first exists)
+- [x] Redis runs with persistence and a non-evicting memory policy in both Compose and the cluster configuration (Compose since ticket 01; cluster since ticket 08)
 - [x] There is no expiry status and no cancel action
 
 ## Comments

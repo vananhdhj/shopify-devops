@@ -27,4 +27,4 @@ images:
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
     digest: sha256:6abedc30a8ebb86caa966a89d3bae9babd31f46861db39fa973a636fbc670ab1
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:924921dd326b3700df6c7ac9814b7901f9452dc2b4a4f2c67d1c094fc4cccdf0 # set by the first release
+    digest: sha256:924921dd326b3700df6c7ac9814b7901f9452dc2b4a4f2c67d1c094fc4cccdf0
