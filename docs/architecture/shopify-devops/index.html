@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shopify DevOps Lab: kiến trúc hiện tại</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --panel: #ffffff; --text: #1d2330; --muted: #5d6677;
+    --border: #dde1e8; --accent: #2f6fde; --accent-soft: #e8f0fd; --code: #f0f2f5;
+    --uncertain: #b7791f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --panel: #171b23; --text: #e4e8ef; --muted: #9aa3b2;
+      --border: #2a303c; --accent: #6ea0ff; --accent-soft: #1c2740; --code: #1f2430;
+      --uncertain: #d69e2e;
+    }
+  }
+  /* Step numbers match the ① labels on diagram edges. */
+  @counter-style circled { system: fixed; symbols: '①' '②' '③' '④' '⑤' '⑥' '⑦' '⑧' '⑨' '⑩' '⑪' '⑫'; suffix: ' '; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+  nav.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 28px 16px 28px 24px;
+            border-right: 1px solid var(--border); font-size: 14px; }
+  nav.toc .doc-title { font-weight: 700; margin-bottom: 16px; }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; }
+  nav.toc li { margin: 2px 0; }
+  nav.toc ul ul { padding-left: 14px; }
+  nav.toc ul ul ul { padding-left: 14px; font-size: 13px; }
+  nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 2px 6px; border-radius: 4px; }
+  nav.toc a:hover { color: var(--text); background: var(--accent-soft); }
+  main { padding: 32px 40px 80px; min-width: 0; }
+  header.doc { margin-bottom: 28px; }
+  header.doc h1 { margin: 0 0 6px; font-size: 28px; }
+  header.doc .meta { color: var(--muted); font-size: 13px; }
+  section.top { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+                padding: 24px 28px; margin-bottom: 28px; scroll-margin-top: 16px; }
+  section.top > h2 { margin-top: 0; font-size: 21px; }
+  h3, h4 { font-size: 17px; margin: 0; }
+  a { color: var(--accent); }
+  /* Long evidence paths wrap instead of widening the table past its panel. */
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: 13px; overflow-wrap: anywhere; }
+  abbr { text-decoration: underline dotted; cursor: help; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  #summary table { table-layout: fixed; }
+  #summary th:nth-child(1) { width: 18%; }
+  #summary th:nth-child(2) { width: 12%; }
+  #summary th:nth-child(3) { width: 36%; }
+  .diagram-frame { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 12px 0; }
+  .diagram-frame iframe { display: block; width: 100%; height: min(560px, 62vh); border: 0; background: var(--bg); }
+  .diagram-frame.small iframe { height: min(460px, 55vh); }
+  .open-link { font-size: 14px; font-weight: 600; }
+  .lead { font-size: 16px; }
+  ol.walk, ol.steps { list-style: circled; padding-left: 28px; }
+  section.group { margin-top: 24px; scroll-margin-top: 16px; }
+  section.group > h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+                       border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  article.discovery { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px;
+                      padding: 16px 20px; margin: 14px 0; scroll-margin-top: 16px; }
+  article.discovery:target { background: var(--accent-soft); }
+  article.discovery header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  article.discovery .updated { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .question { color: var(--muted); font-style: italic; margin: 6px 0 10px; }
+  .answer { border-left: 2px solid var(--border); padding-left: 10px; }
+  ul.diagrams { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  ul.diagrams a { display: inline-block; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 999px;
+                  text-decoration: none; font-size: 13px; }
+  ul.diagrams a:hover { background: var(--accent-soft); }
+  details { margin-top: 8px; font-size: 14px; }
+  summary { cursor: pointer; color: var(--muted); }
+  .assumption { color: var(--uncertain); font-size: 12px; font-weight: 600; }
+  .open-questions { margin-top: 10px; padding: 8px 12px; border-left: 3px solid var(--uncertain); font-size: 14px; }
+  .open-questions h5 { margin: 0 0 4px; font-size: 13px; color: var(--uncertain); }
+  .open-questions ul { margin: 0; padding-left: 18px; }
+  .changes { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+    main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <div class="doc-title">Shopify DevOps Lab: kiến trúc hiện tại</div>
+    <ul>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#discovery">Discovery</a>
+        <ul>
+          <li><a href="#g-data">Dữ liệu &amp; ranh giới</a>
+            <ul>
+              <li><a href="#d-db-isolation">DB: một Postgres, hai schema, mỗi ranh giới một danh tính</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-shopping">Mua hàng</a>
+            <ul>
+              <li><a href="#d-cart">Cart: cookie ở storefront, dữ liệu ở catalog</a></li>
+              <li><a href="#d-checkout">Checkout: một transaction, giá do server quyết</a></li>
+              <li><a href="#d-checkout-retry">Retry: key, hash và unique cart chặn đơn trùng</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-fulfillment">Xử lý Order</a>
+            <ul>
+              <li><a href="#d-settle">Settle: outbox, queue và kho, đúng một lần về hiệu lực</a></li>
+              <li><a href="#d-inventory-effect">Inventory effect: mỗi (Order, action) áp tối đa một lần</a></li>
+              <li><a href="#d-reconcile">Reconcile: không mất Order khi Redis hỏng hay job mất</a></li>
+              <li><a href="#d-order-lifecycle">Vòng đời Order: worker quyết, Merchant giao</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-security">Bảo mật</a>
+            <ul>
+              <li><a href="#d-crypto">Mật mã: HMAC, scrypt, SHA-256; chưa có TLS</a></li>
+              <li><a href="#d-order-token">Order token: HMAC của order id, không lưu vào DB</a></li>
+              <li><a href="#d-merchant">Merchant: scrypt, cookie ký HMAC, service token</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-delivery">Giao hàng (CI/CD)</a>
+            <ul>
+              <li><a href="#d-ci">CI: một check bắt buộc, chạy theo service bị ảnh hưởng</a></li>
+              <li><a href="#d-gitops">Release: digest vào Git, Argo CD tự kéo về</a></li>
+              <li><a href="#d-cluster">Cluster: Kustomize base, overlay và pod cứng hoá</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-platform">Nền tảng &amp; kiểm thử</a>
+            <ul>
+              <li><a href="#d-service-kit">service-kit: quy ước chung cho API và worker</a></li>
+              <li><a href="#d-local-stack">Compose: chỉ trả về khi mọi healthcheck xanh</a></li>
+              <li><a href="#d-tests">Test: gọi HTTP vào stack thật, đọc DB để chốt kết quả</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-observability">Quan sát &amp; phục hồi</a>
+            <ul>
+              <li><a href="#d-observability">Quan sát: metric và log có giới hạn, alert nằm trong Git</a></li>
+              <li><a href="#d-stale-alert">Alert Pending: worker dừng, gauge ở order-service vẫn tăng</a></li>
+              <li><a href="#d-bad-release">Bad release: cờ lỗi vào Git, alert báo, git revert cứu</a></li>
+            </ul>
+          </li>
+          <li><a href="#g-roadmap">Tiến độ &amp; kế hoạch</a>
+            <ul>
+              <li><a href="#d-status">Tiến độ: ticket 01-10 xong, POC đủ phạm vi spec</a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
+
+  <main>
+    <header class="doc">
+      <h1>Shopify DevOps Lab: kiến trúc hiện tại</h1>
+      <div class="meta">Repository: <code>shopify-devops</code> · Commit: <code>3ae3d50</code> · Updated: 2026-10-10</div>
+    </header>
+
+    <section class="top" id="summary">
+      <h2>Summary</h2>
+      <p>Yêu cầu: hiểu toàn bộ project. Shopify DevOps Lab là một shop nhỏ cho một merchant, dựng ra để build, deploy, quan sát, phá và khôi phục. Doc mô tả những gì code làm ở <code>3ae3d50</code>: storefront, hai API, worker, Postgres và Redis chạy bằng Compose hoặc k3d, cùng CI, GitOps, stack giám sát và hai drill (alert Order kẹt, release lỗi).</p>
+      <table>
+        <thead><tr><th>Component</th><th>Kind</th><th>Role</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Guest buyer</td>
+            <td>Actor</td>
+            <td>Người mua ẩn danh, không có tài khoản; chỉ chạm Cart và Order qua token.</td>
+            <td><code>Guest buyer</code><br><code>CONTEXT.md:9</code></td>
+          </tr>
+          <tr>
+            <td>Merchant</td>
+            <td>Actor</td>
+            <td>Chủ shop duy nhất: đăng nhập, thêm sản phẩm, giao Order đã Confirmed.</td>
+            <td><code>Merchant</code><br><code>CONTEXT.md:13</code></td>
+          </tr>
+          <tr>
+            <td>storefront</td>
+            <td><abbr title="Server-side rendered web app">Web SSR</abbr></td>
+            <td>Next.js :3000; render trang mua hàng và quản trị, giữ cookie Cart và session Merchant; là bên duy nhất gọi hai API; không sở hữu dữ liệu.</td>
+            <td><code>POST</code><br><code>apps/storefront/app/cart/items/route.ts:12</code></td>
+          </tr>
+          <tr>
+            <td>catalog-cart-api</td>
+            <td><abbr title="Application Programming Interface">API</abbr></td>
+            <td>Fastify :4001; sở hữu sản phẩm, giá, stock, Cart và Inventory effect.</td>
+            <td><code>buildApp</code><br><code>apps/catalog-cart-api/src/app.ts:61</code></td>
+          </tr>
+          <tr>
+            <td>order-service</td>
+            <td>API</td>
+            <td>Fastify :4002; nhận Checkout, ghi Order PENDING cùng outbox, cho đọc Order bằng token, và phục vụ endpoint admin.</td>
+            <td><code>acceptCheckout</code><br><code>apps/order-service/src/checkout.ts:36</code></td>
+          </tr>
+          <tr>
+            <td>worker</td>
+            <td>Worker</td>
+            <td>Chuyển outbox vào queue rồi settle Order bằng Inventory effect và payment scenario; reconcile Order kẹt PENDING.</td>
+            <td><code>settleOrder</code><br><code>apps/worker/src/settle.ts:29</code></td>
+          </tr>
+          <tr>
+            <td>PostgreSQL 18</td>
+            <td><abbr title="Relational database">Database</abbr></td>
+            <td>Một instance, hai schema <code>catalog</code> và <code>orders</code>, mỗi ranh giới một role.</td>
+            <td><code>roles.sh</code><br><code>db/roles.sh:10</code></td>
+          </tr>
+          <tr>
+            <td>Redis 8</td>
+            <td><abbr title="Message queue">Queue</abbr></td>
+            <td>Hàng đợi BullMQ <code>orders</code> cho worker; AOF, không evict, có mật khẩu.</td>
+            <td><code>ordersQueue</code><br><code>apps/worker/src/queue.ts:3</code></td>
+          </tr>
+          <tr>
+            <td>Delivery pipeline</td>
+            <td><abbr title="Continuous integration and delivery">CI/CD</abbr></td>
+            <td>GitHub Actions build image lên GHCR, ghi digest vào Git; Argo CD triển khai lên k3d.</td>
+            <td><code>deploy-dev</code><br><code>.github/workflows/release.yml:130</code><br><code>shop-dev</code><br><code>deploy/argocd/shop-dev.yaml:8</code></td>
+          </tr>
+          <tr>
+            <td>Monitoring</td>
+            <td>Monitoring</td>
+            <td>kube-prometheus-stack do Argo CD triển khai: Prometheus scrape cả bốn đơn vị, hai rule trong Git, Alertmanager gửi alert tới Discord và alert-catcher, Grafana đọc dashboard từ Git.</td>
+            <td><code>ShopOldestPendingOrderStale</code><br><code>deploy/base/observability/alerts.yaml:28-33</code><br><code>monitoring</code><br><code>deploy/monitoring/application.yaml:6</code></td>
+          </tr>
+          <tr>
+            <td>Discord</td>
+            <td>Third-party</td>
+            <td>Nhận alert qua webhook; URL đọc từ Secret, không nằm trong Git.</td>
+            <td><code>discord_configs</code><br><code>deploy/monitoring/values.yaml:60-63</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="top" id="overview">
+      <h2>Overview</h2>
+      <p class="lead">Guest buyer đặt hàng qua storefront, order-service ghi Order PENDING cùng outbox, worker settle nó bằng Inventory effect, và Merchant giao Order đã Confirmed.</p>
+      <div class="diagram-frame">
+        <iframe src="diagrams/overview.html" title="Architecture overview" loading="lazy"></iframe>
+      </div>
+      <ol class="walk">
+        <li><b>Guest buyer</b> mở storefront ở cổng 3000 để duyệt sản phẩm và Cart.</li>
+        <li><b>storefront</b> gửi <code>POST /checkout</code> tới order-service, vốn đọc Cart và giá hiện tại từ catalog-cart-api.</li>
+        <li><b>order-service</b> ghi Order, snapshot và outbox trong một transaction bằng <code>order_app</code>, rồi trả 202.</li>
+        <li><b>worker</b> poll outbox, enqueue vào Redis và nhận lại job qua BullMQ.</li>
+        <li><b>worker</b> gọi catalog-cart-api để trừ kho qua Inventory effect rồi chạy payment scenario.</li>
+        <li><b>worker</b> đổi Order sang CONFIRMED hoặc REJECTED_* và ghi <code>order_events</code>.</li>
+        <li><b>Merchant</b> đăng nhập storefront rồi Fulfill Order đã Confirmed qua order-service.</li>
+      </ol>
+      <a class="open-link" href="diagrams/overview.html">Mở diagram tổng quan toàn màn hình →</a>
+    </section>
+
+    <section class="top" id="discovery">
+      <h2>Discovery</h2>
+      <section class="group" id="g-data">
+        <h3>Dữ liệu &amp; ranh giới</h3>
+
+        <article class="discovery" id="d-db-isolation">
+
+          <header>
+            <h4>DB: một Postgres, hai schema, mỗi ranh giới một danh tính</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Làm sao catalog và order dùng chung một PostgreSQL mà không đụng dữ liệu của nhau?</p>
+
+          <p class="answer">Một instance PostgreSQL chứa hai schema, <code>catalog</code> và <code>orders</code>, và mỗi ranh giới kết nối bằng role riêng. <code>migrator</code> sở hữu cả hai schema và chạy DDL; <code>catalog_app</code> và <code>order_app</code> chỉ nhận quyền bảng và quyền theo cột tối thiểu. Worker thuộc ranh giới order nên dùng chung <code>order_app</code>. Test <code>db-identities</code> xác nhận các từ chối chéo schema.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/db-isolation.html" title="Architecture: danh tính và schema" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/db-isolation.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>db-roles</b> chạy <code>roles.sh</code> bằng superuser ở mỗi lần start, idempotent: tạo ba role, đặt mật khẩu, tạo hai schema thuộc <code>migrator</code>.</li>
+            <li><b>migrate-catalog</b> và <b>migrate-orders</b> chạy dbmate bằng <code>migrator</code>, mỗi schema một bảng migration riêng.</li>
+            <li><b>Migration catalog</b> cấp cho <code>catalog_app</code>: SELECT sản phẩm, ghi Cart, INSERT bốn cột mô tả sản phẩm (Merchant thêm hàng), <code>UPDATE (stock)</code> và ghi <code>inventory_effects</code>.</li>
+            <li><b>Migration orders</b> cấp cho <code>order_app</code>: SELECT và INSERT trên orders, order_items; INSERT outbox, đọc outbox và <code>UPDATE (dispatched_at)</code>; <code>UPDATE (status)</code>; INSERT <code>order_events</code>.</li>
+            <li><b>catalog-cart-api</b>, <b>order-service</b> và <b>worker</b> nhận <code>DATABASE_URL</code> của đúng danh tính mình; hai cái sau cùng dùng <code>order_app</code>.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Vì order-service và worker chung <code>order_app</code>, DB không phân biệt được ai đổi status; chỉ trigger <code>orders_status_transition</code> giới hạn các chuyển hợp lệ. Spec đặt worker trong ranh giới order (<code>spec.md:94</code>) nhưng không nói vì sao không tách danh tính; chủ repo trả lời được.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 13 locations in 10 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>roles.sh</code> — <code>db/roles.sh:10-23</code> — tạo role, đặt mật khẩu, tạo schema thuộc migrator</li>
+            <li><code>migrate-catalog</code> — <code>compose.yaml:64</code> — dbmate bằng migrator, bảng migration riêng theo schema</li>
+            <li><code>GRANT products</code> — <code>db/catalog/migrations/20261010000001_create_products.sql:14-15</code> — catalog_app chỉ SELECT products ban đầu</li>
+            <li><code>GRANT carts</code> — <code>db/catalog/migrations/20261010000002_create_carts.sql:19-20</code> — quyền Cart tối thiểu, DELETE chỉ cho cart_items</li>
+            <li><code>GRANT stock</code> — <code>db/catalog/migrations/20261010000004_create_inventory_effects.sql:16-17</code> — UPDATE (stock) và ghi inventory_effects</li>
+            <li><code>GRANT insert products</code> — <code>db/catalog/migrations/20261010000005_merchant_adds_products.sql:4</code> — INSERT bốn cột, không id hay currency</li>
+            <li><code>GRANT orders</code> — <code>db/orders/migrations/20261010000101_create_orders.sql:40-42</code> — SELECT, INSERT; outbox ban đầu chỉ INSERT</li>
+            <li><code>GRANT status</code> — <code>db/orders/migrations/20261010000102_order_events_and_dispatch.sql:19-21</code> — UPDATE (status), outbox dispatch, INSERT order_events</li>
+            <li><code>DATABASE_URL</code> — <code>compose.yaml:97</code> — catalog dùng catalog_app</li>
+            <li><code>DATABASE_URL</code> — <code>compose.yaml:117</code> — order-service dùng order_app</li>
+            <li><code>DATABASE_URL</code> — <code>compose.yaml:141</code> — worker cũng dùng order_app</li>
+            <li><code>database identities</code> — <code>tests/integration/src/db-identities.test.ts:16-34</code> — các từ chối chéo schema được test</li>
+            <li><code>worker belongs to the order boundary</code> — <code>./.scratch/shopify-devops-poc/spec.md:94</code> — spec đặt worker trong ranh giới order</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: thêm quyền theo cột (stock, status, dispatched_at), hai bảng mới <code>inventory_effects</code> và <code>order_events</code>, và worker dùng <code>order_app</code>; bỏ open question về quyền UPDATE vì đã có migration.</p>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-shopping">
+        <h3>Mua hàng</h3>
+
+        <article class="discovery" id="d-cart">
+
+          <header>
+            <h4>Cart: cookie ở storefront, dữ liệu ở catalog</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Cart của Guest buyer nằm ở đâu và sống sót qua reload hay replica thế nào?</p>
+
+          <p class="answer">Cart nằm trong bảng <code>catalog.carts</code>, id của nó chính là cart token. Storefront giữ token trong cookie httpOnly <code>cart</code> (30 ngày) và là bên duy nhất gọi API. Mọi replica đọc cùng một DB nên đọc ra cùng nội dung. Thêm vào Cart không bao giờ đụng stock.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/cart.html" title="Sequence: thêm vào Cart" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/cart.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>storefront</b> nhận form POST <code>/cart/items</code> với <code>productId</code> và <code>action</code> (add hoặc set).</li>
+            <li><b>storefront</b> đọc Cart hiện có theo cookie để biết số lượng hiện tại.</li>
+            <li><b>storefront</b> tạo Cart mới nếu chưa có cookie hoặc cookie trỏ tới Cart không còn.</li>
+            <li><b>storefront</b> gọi PUT với số lượng tuyệt đối 0..99; 0 xóa dòng.</li>
+            <li><b>catalog-cart-api</b> chạm <code>carts.updated_at</code> (đồng thời kiểm tra tồn tại) rồi upsert hoặc xóa dòng <code>cart_items</code>.</li>
+            <li><b>catalog-cart-api</b> trả Cart với giá hiện tại của sản phẩm.</li>
+            <li><b>storefront</b> trả 303 về <code>/cart</code> kèm <code>Set-Cookie</code>.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Cờ <code>secure</code> của cookie chỉ bật khi <code>COOKIE_SECURE=true</code>: Compose không đặt biến này, overlay dev đặt <code>false</code> vì ingress chạy HTTP, overlay staging đặt <code>true</code> nhưng staging chưa bao giờ được áp dụng. Khi nào có TLS thì chủ repo quyết.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 10 locations in 7 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>POST</code> — <code>apps/storefront/app/cart/items/route.ts:12</code> — form target của add và set</li>
+            <li><code>create-or-reuse</code> — <code>apps/storefront/app/cart/items/route.ts:33-34</code> — dùng Cart sẵn có hoặc tạo mới rồi set</li>
+            <li><code>cartCookie</code> — <code>apps/storefront/lib/cart-cookie.ts:3-11</code> — httpOnly, lax, 30 ngày, secure theo env</li>
+            <li><code>PUT /carts/:id/items/:productId</code> — <code>apps/catalog-cart-api/src/app.ts:85-96</code> — body quantity là integer 0..99</li>
+            <li><code>setCartItemQuantity</code> — <code>apps/catalog-cart-api/src/carts.ts:57-80</code> — UPDATE carts, upsert hoặc delete cart_items</li>
+            <li><code>getCart</code> — <code>apps/catalog-cart-api/src/carts.ts:34-47</code> — giá lấy từ products hiện tại</li>
+            <li><code>COOKIE_SECURE dev</code> — <code>deploy/overlays/dev/kustomization.yaml:13</code> — false vì lab chạy HTTP</li>
+            <li><code>COOKIE_SECURE staging</code> — <code>deploy/overlays/staging/kustomization.yaml:13</code> — true, nhưng staging chưa áp dụng</li>
+            <li><code>never changes Stock</code> — <code>tests/integration/src/cart.test.ts:99</code> — thêm Cart không đổi stock</li>
+            <li><code>cart across API replicas</code> — <code>tests/integration/src/cart.test.ts:110-130</code> — đọc Cart qua replica khác</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: số dòng route PUT theo <code>3ae3d50</code>; open question về cookie nay nhắc cả hai overlay.</p>
+
+        </article>
+
+        <article class="discovery" id="d-checkout">
+
+          <header>
+            <h4>Checkout: một transaction, giá do server quyết</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Checkout biến Cart thành Order thế nào, và client gửi gì lên?</p>
+
+          <p class="answer">Client chỉ gửi cart token, checkout key và payment scenario; order-service tự đọc Cart và giá từ catalog rồi ghi Order, snapshot các dòng hàng và một outbox event trong cùng một transaction. Kết quả trả ngay là 202 với <code>orderId</code> và <code>orderToken</code>. Order ở PENDING cho tới khi worker đọc outbox và settle nó.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/checkout.html" title="Sequence: Checkout" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/checkout.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>storefront</b> nhận form <code>/orders</code>, lấy cart token từ cookie và gọi <code>POST /checkout</code>; checkout key là UUID sinh mỗi lần render form.</li>
+            <li><b>order-service</b> tra <code>checkout_key</code> trước tiên (<code>priorCheckout</code>).</li>
+            <li><b>order-service</b> đọc Cart từ catalog, chờ tối đa 3 giây; lỗi thì trả 503 <code>dependency_unavailable</code>.</li>
+            <li><b>order-service</b> chạy BEGIN, INSERT orders, order_items, outbox (<code>order.accepted</code>), COMMIT.</li>
+            <li><b>order-service</b> trả 202 kèm header <code>location</code>; storefront chuyển buyer tới trang Order.</li>
+          </ol>
+
+          <details class="evidence"><summary>Evidence: 9 locations in 7 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>acceptCheckout</code> — <code>apps/order-service/src/checkout.ts:36-79</code> — luồng Checkout và transaction</li>
+            <li><code>fault flag</code> — <code>apps/order-service/src/app.ts:57</code> — ném lỗi trước mọi xử lý Checkout khi cờ bật</li>
+            <li><code>outbox insert</code> — <code>apps/order-service/src/checkout.ts:63-66</code> — event order.accepted cùng transaction</li>
+            <li><code>fetchCart</code> — <code>apps/order-service/src/catalog-client.ts:6-17</code> — timeout 3 giây, lỗi thành CatalogUnavailableError</li>
+            <li><code>POST /checkout</code> — <code>apps/order-service/src/app.ts:53-75</code> — 202, hoặc 503 khi catalog lỗi</li>
+            <li><code>checkout key per form</code> — <code>apps/storefront/app/checkout/page.tsx:36-38</code> — UUID mới mỗi lần render form</li>
+            <li><code>POST</code> — <code>apps/storefront/app/orders/route.ts:11-25</code> — gọi submitCheckout rồi redirect kèm token</li>
+            <li><code>submitCheckout</code> — <code>apps/storefront/lib/orders.ts:9-18</code> — POST tới order-service</li>
+            <li><code>accepts a Cart as a Pending order</code> — <code>tests/integration/src/checkout.test.ts:8</code> — snapshot theo giá server</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: worker đã tồn tại nên bỏ open question "không ai đọc outbox" và câu "Order dừng ở PENDING vì chưa có worker"; số dòng theo <code>3ae3d50</code>. route nay có cờ <code>FAULT_CHECKOUT_ERRORS</code> làm mọi Checkout trả 500 (xem d-bad-release).</p>
+
+        </article>
+
+        <article class="discovery" id="d-checkout-retry">
+
+          <header>
+            <h4>Retry: key, hash và unique cart chặn đơn trùng</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Điều gì ngăn một Checkout bị lặp thành hai Order khi retry hoặc bấm Back?</p>
+
+          <p class="answer">Ba lớp chặn. Cùng checkout key và cùng request hash (cart id + scenario) trả đúng Order cũ; cùng key khác hash trả 409. Một Cart đã thành Order qua key khác bị unique <code>source_cart_id</code> chặn bằng 409 (ADR-0001). Race giữa hai request được giải quyết bằng chính các ràng buộc unique. Test bắn 100 retry đồng thời và chỉ thu về một Order.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/checkout-retry.html" title="Workflow: các lớp chặn trùng" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/checkout-retry.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>order-service</b> tra <code>checkout_key</code>: hash khớp thì trả Order cũ, khác thì 409 <code>checkout_key_reused</code>.</li>
+            <li><b>order-service</b> chuyển cart token về chữ thường, để cách viết hoa khác không đổi hash; với key mới thì đọc Cart: không thấy thì 404, rỗng thì 422.</li>
+            <li><b>PostgreSQL</b> từ chối INSERT trùng <code>checkout_key</code> trong race; order-service tra lại và trả Order thắng cuộc.</li>
+            <li><b>PostgreSQL</b> từ chối INSERT trùng <code>source_cart_id</code>; order-service trả 409 <code>cart_already_ordered</code>.</li>
+            <li><b>storefront</b> dùng một key cho mỗi form, nên submit đúp rơi cùng một Order, và xóa cookie Cart sau mỗi kết quả đã chốt.</li>
+          </ol>
+
+          <details class="evidence"><summary>Evidence: 12 locations in 6 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>requestHash</code> — <code>apps/order-service/src/checkout.ts:11-14</code> — chỉ băm cart id và scenario</li>
+            <li><code>priorCheckout</code> — <code>apps/order-service/src/checkout.ts:17-27</code> — khớp thì Order cũ, lệch thì key_reused</li>
+            <li><code>23505 mapping</code> — <code>apps/order-service/src/checkout.ts:70-77</code> — ánh xạ lỗi unique về kết quả đúng</li>
+            <li><code>refusalStatus</code> — <code>apps/order-service/src/app.ts:38-43</code> — 404, 422, 409, 409</li>
+            <li><code>UNIQUE checkout_key</code> — <code>db/orders/migrations/20261010000101_create_orders.sql:6</code> — ràng buộc cấp DB</li>
+            <li><code>UNIQUE source_cart_id</code> — <code>db/orders/migrations/20261010000101_create_orders.sql:8</code> — một Cart tối đa một Order</li>
+            <li><code>100 concurrent retries</code> — <code>tests/integration/src/checkout.test.ts:34</code> — đúng một Order</li>
+            <li><code>second Checkout of a Cart</code> — <code>tests/integration/src/checkout.test.ts:74</code> — 409 theo ADR-0001</li>
+            <li><code>letter-case retry</code> — <code>tests/integration/src/checkout.test.ts:47</code> — token khác cách viết hoa vẫn là cùng Checkout</li>
+            <li><code>cartToken lowercased</code> — <code>apps/order-service/src/app.ts:60</code> — chuẩn hoá trước acceptCheckout</li>
+            <li><code>double-submitted form</code> — <code>tests/integration/src/storefront-checkout.test.ts:34</code> — cùng một Order</li>
+            <li><code>ADR-0001</code> — <code>docs/adr/0001-one-cart-becomes-at-most-one-order.md:5</code> — quyết định one cart, at most one order</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: số dòng theo <code>3ae3d50</code>.</p>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-fulfillment">
+        <h3>Xử lý Order</h3>
+
+        <article class="discovery" id="d-settle">
+
+          <header>
+            <h4>Settle: outbox, queue và kho, đúng một lần về hiệu lực</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Worker biến một Order PENDING thành CONFIRMED hoặc REJECTED như thế nào?</p>
+
+          <p class="answer">Worker đọc outbox, đẩy mỗi event vào hàng đợi BullMQ với jobId là event id, rồi consumer gọi <code>settleOrder</code>: trừ kho qua catalog, chạy payment scenario đã lưu trên Order, rồi đổi status trong một transaction cùng dòng <code>order_events</code>. Mọi bước chạy lại đều an toàn vì effect khử trùng theo (Order, action) và UPDATE chỉ áp từ PENDING. Lỗi làm job retry, Order vẫn PENDING.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/settle.html" title="Sequence: worker settle một Order" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/settle.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>worker</b> chạy <code>dispatchOutbox</code> mỗi 250 ms: SELECT tối đa 50 event chưa dispatch bằng <code>FOR UPDATE SKIP LOCKED</code>, nên nhiều replica chạy song song không giẫm nhau.</li>
+            <li><b>worker</b> gọi <code>queue.add</code> với jobId là event id (BullMQ bỏ bản trùng), chờ tối đa 2 giây mỗi lần, rồi đánh dấu <code>dispatched_at</code>.</li>
+            <li><b>Redis</b> giao job cho consumer của một worker (5 job song song, khoá 10 giây).</li>
+            <li><b>worker</b> đọc status và scenario; Order không còn PENDING thì không làm gì.</li>
+            <li><b>worker</b> gọi catalog để trừ kho với <code>x-internal-token</code>; thiếu hàng thì REJECTED_OUT_OF_STOCK. Sau đó chạy payment: <code>decline</code> nhả kho rồi REJECTED_PAYMENT, <code>slow</code> chờ 3 giây rồi duyệt, <code>approve</code> duyệt ngay.</li>
+            <li><b>worker</b> UPDATE status WHERE status là PENDING và INSERT <code>order_events</code> trong một transaction; trigger của DB canh các chuyển hợp lệ.</li>
+          </ol>
+
+
+          <details class="evidence"><summary>Evidence: 16 locations in 11 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>dispatchOutbox</code> — <code>apps/worker/src/dispatcher.ts:33-55</code> — SKIP LOCKED, jobId là event id, đánh dấu dispatched_at</li>
+            <li><code>settleJobOptions</code> — <code>apps/worker/src/dispatcher.ts:11-22</code> — 10 lần, backoff mũ, removeOnFail</li>
+            <li><code>Worker</code> — <code>apps/worker/src/main.ts:37-46</code> — consumer: concurrency 5, lockDuration 10 s</li>
+            <li><code>settleOrder</code> — <code>apps/worker/src/settle.ts:29-42</code> — trừ kho, payment, nhả kho trước khi từ chối</li>
+            <li><code>transition</code> — <code>apps/worker/src/settle.ts:67-79</code> — UPDATE từ PENDING cộng order_events, một transaction</li>
+            <li><code>simulatePayment</code> — <code>apps/worker/src/payment.ts:10-14</code> — kết quả cố định theo scenario đã lưu</li>
+            <li><code>inventoryClient</code> — <code>apps/worker/src/inventory-client.ts:14-29</code> — x-internal-token, timeout 3 s, lỗi thì ném</li>
+            <li><code>config</code> — <code>apps/worker/src/config.ts:12-17</code> — chu kỳ dispatch và số lần retry</li>
+            <li><code>workerMetrics</code> — <code>apps/worker/src/metrics.ts:14-49</code> — settled, thất bại, requeued, queue depth</li>
+            <li><code>orderMetrics</code> — <code>apps/order-service/src/metrics.ts:9-22</code> — gauge tuổi Order PENDING cũ nhất, đọc DB lúc scrape</li>
+            <li><code>ShopOldestPendingOrderStale</code> — <code>deploy/base/observability/alerts.yaml:28-33</code> — alert khi Order PENDING quá 60 giây</li>
+            <li><code>approve settles</code> — <code>tests/integration/src/settle.test.ts:10</code> — CONFIRMED, trừ kho một lần</li>
+            <li><code>decline releases</code> — <code>tests/integration/src/settle.test.ts:19</code> — trả kho rồi REJECTED_PAYMENT</li>
+            <li><code>out of stock</code> — <code>tests/integration/src/settle.test.ts:46</code> — không trừ một phần</li>
+            <li><code>two replicas</code> — <code>tests/integration/src/settle-resilience.test.ts:37</code> — hai worker chung queue, mỗi Order một lần</li>
+            <li><code>worker killed</code> — <code>tests/integration/src/settle-resilience.test.ts:59</code> — kill giữa trừ kho và đổi status vẫn trừ một lần</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: gauge tuổi Order PENDING nay nằm ở order-service và đã có alert (xem d-stale-alert); bỏ open question.</p>
+
+        </article>
+
+        <article class="discovery" id="d-inventory-effect">
+
+          <header>
+            <h4>Inventory effect: mỗi (Order, action) áp tối đa một lần</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Làm sao trừ và nhả kho đúng một lần dù bị gọi lại nhiều lần?</p>
+
+          <p class="answer">Mỗi Inventory effect ghi một dòng trong <code>catalog.inventory_effects</code> với khoá chính (order_id, action), cùng transaction với thay đổi stock. Lời gọi lặp đọc dòng đã ghi và trả đúng outcome cũ mà không chạm stock. Advisory lock theo order id xếp hàng các lời gọi đồng thời; deduct khoá hàng sản phẩm theo thứ tự id nên không deadlock và lấy hết hoặc không lấy gì; release trả đúng những gì deduct đã lấy.</p>
+
+          <ol class="steps">
+            <li><b>catalog-cart-api</b> nhận <code>POST /internal/inventory-effects</code> chỉ khi header <code>x-internal-token</code> đúng; schema ép orderId là UUID, mỗi dòng 1..99, tối đa 100 dòng. Endpoint không đi qua ingress.</li>
+            <li><b>applyInventoryEffect</b> mở transaction và lấy advisory lock theo order id.</li>
+            <li><b>catalog-cart-api</b> tìm effect đã ghi cho (Order, action); có thì trả outcome đã ghi.</li>
+            <li><b>deduct</b> khoá các hàng sản phẩm theo id; đủ hàng ở mọi dòng thì UPDATE stock và ghi <code>applied</code>, thiếu thì ghi <code>insufficient_stock</code> và không đổi stock.</li>
+            <li><b>release</b> đọc deduct đã <code>applied</code>: không có thì ghi <code>nothing_to_release</code>; có thì cộng lại đúng các dòng đã trừ, bỏ qua items của request.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Một release tới trước deduct sẽ ghi <code>nothing_to_release</code> và chặn release thật về sau. Worker luôn gọi deduct trước nên chưa gặp, nhưng endpoint không tự bảo vệ điều này; chủ repo xác nhận đó là chủ ý.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 11 locations in 6 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>/internal/inventory-effects</code> — <code>apps/catalog-cart-api/src/app.ts:98-110</code> — guard token, schema, gọi applyInventoryEffect</li>
+            <li><code>applyInventoryEffect</code> — <code>apps/catalog-cart-api/src/inventory.ts:15-30</code> — advisory lock, đọc effect đã ghi</li>
+            <li><code>lockStock</code> — <code>apps/catalog-cart-api/src/inventory.ts:41-47</code> — khoá hàng theo thứ tự id</li>
+            <li><code>deduct</code> — <code>apps/catalog-cart-api/src/inventory.ts:63-72</code> — tất cả hoặc không dòng nào</li>
+            <li><code>release</code> — <code>apps/catalog-cart-api/src/inventory.ts:74-83</code> — trả đúng items của deduct</li>
+            <li><code>inventory_effects</code> — <code>db/catalog/migrations/20261010000004_create_inventory_effects.sql:5-12</code> — PRIMARY KEY (order_id, action)</li>
+            <li><code>requireSecretHeader</code> — <code>packages/service-kit/src/guards.ts:8-14</code> — 401 nếu thiếu token</li>
+            <li><code>applied once</code> — <code>tests/integration/src/inventory-effects.test.ts:20</code> — gọi lặp, stock đổi một lần</li>
+            <li><code>no partial deduction</code> — <code>tests/integration/src/inventory-effects.test.ts:30</code> — thiếu một dòng thì không trừ dòng nào</li>
+            <li><code>releases once</code> — <code>tests/integration/src/inventory-effects.test.ts:46</code> — nhả đúng số đã trừ</li>
+            <li><code>last unit</code> — <code>tests/integration/src/settle-resilience.test.ts:23</code> — 20 Order tranh một đơn vị, đúng một CONFIRMED</li>
+            </ul>
+          </details>
+
+        </article>
+
+        <article class="discovery" id="d-reconcile">
+
+          <header>
+            <h4>Reconcile: không mất Order khi Redis hỏng hay job mất</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Điều gì xảy ra với Order đã nhận khi Redis hỏng hoặc job biến mất?</p>
+
+          <p class="answer">Không Order nào bị bỏ rơi, vì Checkout chỉ ghi outbox trong Postgres và không chạm Redis. Cột <code>dispatched_at</code> chỉ là gợi ý; bằng chứng duy nhất là status của Order. Job hết 10 lần thử bị xoá để nhả jobId, và cứ 10 giây reconcile xoá <code>dispatched_at</code> của Order còn PENDING quá 30 giây, để dispatcher enqueue lại dưới cùng event id. Pending không bao giờ hết hạn (ADR-0002).</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/reconcile.html" title="Workflow: dispatch và reconcile" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/reconcile.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>worker</b> poll outbox mỗi 250 ms; producer tắt hàng đợi offline nên khi Redis chết lời gọi lỗi ngay, transaction rollback và không đánh dấu dispatched.</li>
+            <li><b>worker</b> enqueue với jobId là event id; BullMQ bỏ bản trùng khi job còn tồn tại.</li>
+            <li><b>Redis</b> giao job; consumer chạy <code>settleOrder</code>.</li>
+            <li><b>worker</b> kết thúc: Order chạm trạng thái cuối, job được giữ một giờ.</li>
+            <li><b>worker</b> thử tối đa 10 lần với backoff mũ bắt đầu 500 ms; hết lần thì job bị xoá để nhả jobId và được đếm vào metric <code>worker_jobs_exhausted_total</code>.</li>
+            <li><b>worker</b> chạy <code>reconcileStalePending</code> mỗi 10 giây: chọn Order còn PENDING mà lần dispatch cuối cách đây hơn 30 giây.</li>
+            <li><b>reconcile</b> đặt <code>dispatched_at</code> về NULL; dispatcher lại enqueue dưới cùng event id nên effect không bao giờ có key mới.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Test chứng minh phục hồi khi Redis dừng, khi job bị xoá và khi job hết lần, nhưng chưa có test cho trường hợp mất cả volume <code>redisdata</code>. Reconcile về lý thuyết phục hồi được từ outbox, nhưng chưa kiểm chứng.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 13 locations in 9 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>settleJobOptions</code> — <code>apps/worker/src/dispatcher.ts:11-22</code> — removeOnFail để nhả jobId cho reconcile</li>
+            <li><code>enableOfflineQueue</code> — <code>apps/worker/src/main.ts:16</code> — producer lỗi ngay khi Redis chết</li>
+            <li><code>dispatch loop</code> — <code>apps/worker/src/main.ts:69-71</code> — chạy mỗi dispatchIntervalMs</li>
+            <li><code>reconcile loop</code> — <code>apps/worker/src/main.ts:72-78</code> — chạy mỗi reconcileIntervalMs, đếm requeued</li>
+            <li><code>reconcileStalePending</code> — <code>apps/worker/src/reconcile.ts:12-23</code> — xoá dispatched_at của Order PENDING quá hạn</li>
+            <li><code>intervals</code> — <code>apps/worker/src/config.ts:13-20</code> — 10 lần, 500 ms, 10 s, 30 s</li>
+            <li><code>outbox write</code> — <code>apps/order-service/src/checkout.ts:63-66</code> — Checkout chỉ ghi Postgres</li>
+            <li><code>Redis down</code> — <code>tests/integration/src/reconciliation.test.ts:16</code> — nhận Checkout khi Redis chết, settle hết khi Redis về</li>
+            <li><code>lost job</code> — <code>tests/integration/src/reconciliation.test.ts:40</code> — job bị xoá, vẫn một lần trừ</li>
+            <li><code>exhausted job</code> — <code>tests/integration/src/reconciliation.test.ts:57</code> — hết lần, reconcile settle</li>
+            <li><code>Redis persistence</code> — <code>compose.yaml:30-39</code> — AOF, noeviction, requirepass</li>
+            <li><code>reconciliation rule</code> — <code>./.scratch/shopify-devops-poc/spec.md:123</code> — reconcile là vòng retry dài hạn</li>
+            <li><code>ADR-0002</code> — <code>docs/adr/0002-pending-orders-never-expire.md:5</code> — PENDING không hết hạn</li>
+            </ul>
+          </details>
+
+        </article>
+
+        <article class="discovery" id="d-order-lifecycle">
+
+          <header>
+            <h4>Vòng đời Order: worker quyết, Merchant giao</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Một Order đi qua những trạng thái nào, và ai được phép đổi trạng thái?</p>
+
+          <p class="answer">Order bắt đầu ở <code>PENDING</code>; worker chuyển nó sang <code>CONFIRMED</code> hoặc một trong hai <code>REJECTED_*</code>, và Merchant chuyển <code>CONFIRMED</code> sang <code>FULFILLED</code>. Trigger <code>orders_status_transition</code> trong DB từ chối mọi chuyển khác bằng <code>check_violation</code>, nên không đường mã nào lách được. Mỗi lần chuyển ghi một dòng <code>order_events</code>, mỗi trạng thái tối đa một lần cho một Order.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/order-lifecycle.html" title="Lifecycle: trạng thái Order" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/order-lifecycle.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>order-service</b> tạo Order ở <code>PENDING</code>; trigger bắt buộc Order mới phải PENDING.</li>
+            <li><b>worker</b> chuyển PENDING sang CONFIRMED, REJECTED_OUT_OF_STOCK hoặc REJECTED_PAYMENT, kèm dòng <code>order_events</code>.</li>
+            <li><b>order-service</b> chuyển CONFIRMED sang FULFILLED khi Merchant bấm Fulfill; endpoint chỉ nhận target FULFILLED và trả 409 nếu Order chưa Confirmed.</li>
+            <li><b>storefront</b> hiển thị trạng thái bằng nhãn cho cả năm giá trị, ở trang Order và trang quản trị.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li><code>order_events</code> chỉ được ghi (worker và Merchant), không API, metric hay dashboard nào đọc nó, kể cả sau ticket 09 và 10; chỉ test truy vấn bảng này. Chưa rõ nó dành cho việc gì; chủ repo trả lời được.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 11 locations in 11 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>status CHECK</code> — <code>db/orders/migrations/20261010000101_create_orders.sql:10-11</code> — năm giá trị, mặc định PENDING</li>
+            <li><code>trigger</code> — <code>db/orders/migrations/20261010000103_enforce_status_transitions.sql:6-27</code> — chỉ bốn chuyển hợp lệ, còn lại 23514</li>
+            <li><code>order_events</code> — <code>db/orders/migrations/20261010000102_order_events_and_dispatch.sql:4-11</code> — UNIQUE (order_id, to_status)</li>
+            <li><code>transition</code> — <code>apps/worker/src/settle.ts:67-79</code> — worker: PENDING sang trạng thái cuối</li>
+            <li><code>fulfillOrder</code> — <code>apps/order-service/src/admin.ts:48-64</code> — CONFIRMED sang FULFILLED cùng order_events</li>
+            <li><code>PATCH status</code> — <code>apps/order-service/src/app.ts:91-104</code> — 409 khi chưa Confirmed</li>
+            <li><code>OrderStatus</code> — <code>packages/contracts/src/index.ts:39</code> — kiểu năm trạng thái</li>
+            <li><code>statusLabels</code> — <code>apps/storefront/app/orders/[id]/page.tsx:9-15</code> — nhãn trang Order</li>
+            <li><code>admin labels</code> — <code>apps/storefront/app/admin/page.tsx:10-16</code> — nhãn trang quản trị</li>
+            <li><code>database refuses</code> — <code>tests/integration/src/admin-orders.test.ts:66</code> — DB tự từ chối chuyển lậu, bất kể ai thử</li>
+            <li><code>ADR-0002</code> — <code>docs/adr/0002-pending-orders-never-expire.md:5</code> — PENDING không hết hạn</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: viết lại: worker và Merchant đã tồn tại, DB có trigger chặn chuyển lậu và bảng <code>order_events</code>.</p>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-security">
+        <h3>Bảo mật</h3>
+
+        <article class="discovery" id="d-crypto">
+
+          <header>
+            <h4>Mật mã: HMAC, scrypt, SHA-256; chưa có TLS</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Docs nhắc những cơ chế mã hoá nào, mỗi cái bảo vệ điều gì, và cái nào chưa có?</p>
+
+          <p class="answer">Code dùng năm cơ chế mật mã và không mã hoá dữ liệu nào: HMAC-SHA256 cho Order token và cookie session của Merchant, scrypt để băm mật khẩu Merchant, SHA-256 để nhận dạng request Checkout, và bộ sinh số ngẫu nhiên cho secret, token, id. Mọi so sánh secret dùng <code>timingSafeEqual</code>. Chưa có TLS (<code>sslmode=disable</code>) lẫn mã hoá khi lưu, nên an toàn dựa vào mạng nội bộ.</p>
+
+          <ol class="steps">
+            <li><b>order-service</b> tạo Order token bằng HMAC-SHA256 (khoá <code>ORDER_TOKEN_SECRET</code>, thông điệp là order id), base64url thành 43 ký tự, không lưu; khi đọc thì tính lại và so bằng <code>timingSafeEqual</code>.</li>
+            <li><b>order-service</b> băm SHA-256 chuỗi <code>cartToken + \n + paymentScenario</code> thành <code>request_hash</code> để nhận ra retry. Đây là dấu vân tay, không phải bí mật; cart token được chuyển về chữ thường trước khi băm.</li>
+            <li><b>make secrets</b> băm mật khẩu Merchant bằng scrypt (salt 16 byte ngẫu nhiên, key 32 byte) thành <code>scrypt:&lt;salt&gt;:&lt;key&gt;</code>; storefront tính lại và so bằng <code>timingSafeEqual</code>. Mật khẩu thô <code>ADMIN_PASSWORD</code> không bao giờ lên cluster.</li>
+            <li><b>storefront</b> cấp cookie session <code>&lt;hết hạn&gt;.&lt;HMAC-SHA256&gt;</code>; chữ ký bao gồm <code>SESSION_SECRET</code> và chính hash mật khẩu, nên đổi mật khẩu hoặc secret là đăng xuất mọi session. Cookie httpOnly, sameSite=strict, path <code>/admin</code>, sống 8 giờ.</li>
+            <li><b>Các service</b> gọi nhau bằng token tĩnh trong header (<code>x-admin-token</code>, <code>x-internal-token</code>); <code>requireSecretHeader</code> so bằng <code>secretsEqual</code>, tức <code>timingSafeEqual</code> sau khi kiểm độ dài.</li>
+            <li><b>make secrets</b> sinh mọi secret còn lại bằng <code>openssl rand -hex 24</code> (192 bit), ghi vào <code>.secrets/dev.env</code> (thư mục 700, file 600, gitignored, không ghi đè). <code>cluster-secrets.sh</code> sao chép file đó thành Secret <code>shop-secrets</code> trừ <code>ADMIN_PASSWORD</code>, và tạo thêm Secret <code>grafana-admin</code> cùng <code>alertmanager-discord</code> ở namespace monitoring, nên webhook Discord không nằm trong Git.</li>
+            <li><b>PostgreSQL</b> sinh id bằng <code>gen_random_uuid()</code> (UUID v4, 122 bit ngẫu nhiên); Cart id chính là cart token, nên việc không đoán được là lớp bảo vệ duy nhất của Cart. Checkout key là <code>randomUUID()</code> sinh mỗi lần render form.</li>
+            <li><b>PostgreSQL</b> và <b>Redis</b> xác thực bằng mật khẩu riêng (<code>--requirepass</code> cho Redis); cookie <code>cart</code> httpOnly, sameSite=lax. <b>gitleaks</b> chặn commit chứa secret ở pre-commit và quét toàn lịch sử trong CI. Cách Postgres lưu băm mật khẩu role không do repo cấu hình <span class="assumption">assumption</span> kiến thức nền: bản mới mặc định SCRAM-SHA-256.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Lưu lượng chưa mã hoá: mọi <code>DATABASE_URL</code> dùng <code>sslmode=disable</code>, Redis và HTTP giữa các Pod không có TLS, ingress Traefik chạy HTTP và Argo CD đặt <code>server.insecure</code> (chỉ port-forward qua loopback). Repo không nói khi nào có TLS; chủ repo trả lời được, và staging (<code>COOKIE_SECURE=true</code>) chưa từng chạy để thử.</li><li>Mã hoá khi lưu: không thấy cấu hình nào cho volume <code>pgdata</code>, <code>redisdata</code> hay PVC của cluster <span class="assumption">assumption</span> không có, vì chỉ thấy volume thường và PVC mặc định.</li><li>Tham số scrypt không được truyền, nên là mặc định của Node <span class="assumption">assumption</span> N=16384, r=8, p=1 theo tài liệu Node, không ghi trong repo.</li><li>Đăng xuất chỉ xoá cookie ở trình duyệt đó (ghi rõ trong <code>merchant-session.ts</code>); cookie bị lộ vẫn hợp lệ tới 8 giờ trừ khi đổi mật khẩu hoặc <code>SESSION_SECRET</code>. Không thấy mã giới hạn số lần đăng nhập sai <span class="assumption">assumption</span> không có rate limit.</li><li>Pod đọc secret lúc khởi động (<code>cluster-secrets.sh</code>), nên xoay secret trong cluster cần restart Deployment; repo chưa có quy trình xoay cho riêng <code>ORDER_TOKEN_SECRET</code> ngoài ghi chú ADR-0004.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 24 locations in 18 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>orderTokenFor</code> — <code>apps/order-service/src/order-tokens.ts:9-15</code> — HMAC-SHA256, tính lại và so</li>
+            <li><code>requestHash</code> — <code>apps/order-service/src/checkout.ts:11-14</code> — SHA-256 hex của cart token và scenario</li>
+            <li><code>lowercase cart token</code> — <code>apps/order-service/src/app.ts:60</code> — chuẩn hoá trước khi băm</li>
+            <li><code>ADR-0004</code> — <code>docs/adr/0004-order-token-is-an-hmac-of-the-order-id.md:5</code> — vì sao HMAC thay vì token lưu</li>
+            <li><code>scrypt hash</code> — <code>scripts/secrets.sh:28-41</code> — salt ngẫu nhiên, key 32 byte, định dạng scrypt:salt:key</li>
+            <li><code>isMerchantPassword</code> — <code>apps/storefront/lib/merchant-session.ts:51-56</code> — tính lại scrypt, timingSafeEqual</li>
+            <li><code>signature</code> — <code>apps/storefront/lib/merchant-session.ts:29-33</code> — HMAC của hết hạn và hash mật khẩu</li>
+            <li><code>merchantCookie</code> — <code>apps/storefront/lib/merchant-session.ts:14-23</code> — httpOnly, strict, /admin, 8 giờ</li>
+            <li><code>requireSecretHeader</code> — <code>packages/service-kit/src/guards.ts:8-14</code> — token dịch vụ trong header</li>
+            <li><code>secretsEqual</code> — <code>packages/service-kit/src/secrets.ts:4-9</code> — timingSafeEqual sau khi so độ dài</li>
+            <li><code>add_if_missing</code> — <code>scripts/secrets.sh:14-16</code> — openssl rand -hex 24, không ghi đè</li>
+            <li><code>chmod secrets</code> — <code>scripts/secrets.sh:7-10</code> — thư mục 700, file 600</li>
+            <li><code>gitignore</code> — <code>./.gitignore:7</code> — không commit .secrets/</li>
+            <li><code>cluster secret</code> — <code>scripts/cluster-secrets.sh:18-22</code> — shop-secrets, trừ ADMIN_PASSWORD</li>
+            <li><code>monitoring secrets</code> — <code>scripts/cluster-secrets.sh:25-38</code> — Grafana admin và webhook Discord, lấy từ file secret cục bộ</li>
+            <li><code>carts.id</code> — <code>db/catalog/migrations/20261010000002_create_carts.sql:4</code> — gen_random_uuid() là cart token</li>
+            <li><code>cartCookie</code> — <code>apps/storefront/lib/cart-cookie.ts:3-11</code> — httpOnly, lax, secure theo env</li>
+            <li><code>randomUUID</code> — <code>apps/storefront/app/checkout/page.tsx:38</code> — checkout key mỗi lần render form</li>
+            <li><code>DATABASE_URL</code> — <code>compose.yaml:117</code> — sslmode=disable</li>
+            <li><code>DATABASE_URL</code> — <code>deploy/base/apps/order-service.yaml:36</code> — sslmode=disable cả trong cluster</li>
+            <li><code>requirepass</code> — <code>compose.yaml:38-39</code> — Redis cần mật khẩu</li>
+            <li><code>server.insecure</code> — <code>deploy/argocd/values.yaml:12</code> — Argo CD UI qua HTTP, chỉ port-forward</li>
+            <li><code>pre-commit</code> — <code>./.githooks/pre-commit:8</code> — gitleaks --staged</li>
+            <li><code>gitleaks CI</code> — <code>./.github/workflows/ci.yml:59</code> — quét toàn lịch sử</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: viết lại: scrypt, session ký HMAC, service token và Secret trong cluster giờ đã có trong code; bỏ mục "chỉ có trong spec". thêm Secret của monitoring (Grafana, Discord).</p>
+
+        </article>
+
+        <article class="discovery" id="d-order-token">
+
+          <header>
+            <h4>Order token: HMAC của order id, không lưu vào DB</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Guest buyer đọc lại Order bằng gì, và token được tạo, kiểm tra ra sao?</p>
+
+          <p class="answer">Order token là <code>base64url(HMAC-SHA256(ORDER_TOKEN_SECRET, orderId))</code> và không được lưu ở đâu cả (ADR-0004). Nhờ vậy Checkout retry trả đúng token cũ, còn mỗi lần đọc được xác minh bằng cách tính lại. Token sai hoặc thiếu trả 404 y hệt Order không tồn tại. Đổi secret làm mọi link Order cũ mất hiệu lực, nên secret này không nằm trong xoay vòng thường kỳ của POC.</p>
+
+          <ol class="steps">
+            <li><b>order-service</b> tính <code>orderTokenFor(orderId)</code> khi trả 202.</li>
+            <li><b>storefront</b> chuyển buyer tới <code>/orders/:id?token=…</code> và xóa cookie Cart.</li>
+            <li><b>storefront</b> đọc Order bằng header <code>x-order-token</code>.</li>
+            <li><b>order-service</b> kiểm tra id là UUID và token khớp (<code>timingSafeEqual</code>); không khớp thì 404 <code>order_not_found</code>.</li>
+          </ol>
+
+
+          <details class="evidence"><summary>Evidence: 9 locations in 8 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>orderTokenFor</code> — <code>apps/order-service/src/order-tokens.ts:9-11</code> — HMAC-SHA256 của order id</li>
+            <li><code>isValidOrderToken</code> — <code>apps/order-service/src/order-tokens.ts:13-15</code> — so sánh thời gian hằng</li>
+            <li><code>GET /orders/:id</code> — <code>apps/order-service/src/app.ts:77-85</code> — sai token trả 404 như Order lạ</li>
+            <li><code>redirect token</code> — <code>apps/storefront/app/orders/route.ts:24</code> — token đi trong query của trang Order</li>
+            <li><code>getOrder</code> — <code>apps/storefront/lib/orders.ts:22-24</code> — gửi token qua header x-order-token</li>
+            <li><code>token never stored</code> — <code>tests/integration/src/checkout.test.ts:99</code> — test xác nhận không lưu token</li>
+            <li><code>no query-string log test</code> — <code>tests/integration/src/storefront-logs.test.ts:27</code> — test: log của storefront không chứa query string</li>
+            <li><code>storefront proxy log</code> — <code>apps/storefront/proxy.ts:13-27</code> — log chỉ ghi path, không ghi query string</li>
+            <li><code>ADR-0004</code> — <code>docs/adr/0004-order-token-is-an-hmac-of-the-order-id.md:5</code> — lý do dùng HMAC thay vì token ngẫu nhiên</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: đổi sang <code>secretsEqual</code> và số dòng theo <code>3ae3d50</code>; storefront nay có logger chỉ ghi path và test kiểm điều đó, nên bỏ open question về log.</p>
+
+        </article>
+
+        <article class="discovery" id="d-merchant">
+
+          <header>
+            <h4>Merchant: scrypt, cookie ký HMAC, service token</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Merchant đăng nhập và thao tác thế nào mà mật khẩu không bao giờ tới API?</p>
+
+          <p class="answer">Storefront kiểm mật khẩu bằng scrypt với <code>ADMIN_PASSWORD_HASH</code> rồi cấp cookie <code>merchant_session</code> ký HMAC, không lưu gì ở server. Khi gọi API, storefront dùng <code>ADMIN_SERVICE_TOKEN</code> riêng, nên mật khẩu người không rời storefront. Form post từ site khác bị từ chối bằng kiểm Origin, bổ sung cho SameSite=Strict.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/merchant.html" title="Sequence: Merchant sign-in và Fulfill" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/merchant.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>storefront</b> nhận <code>POST /admin/session</code>: từ chối form khác site, tính scrypt, rồi cấp cookie và chuyển tới <code>/admin</code>; mật khẩu sai quay về sign-in.</li>
+            <li><b>storefront</b> render <code>/admin</code> sau <code>requireMerchant</code> (thiếu cookie, sai chữ ký hay hết hạn đều về sign-in), gọi order-service <code>GET /admin/orders</code>: Confirmed lên đầu, rồi mới nhất, tối đa 200.</li>
+            <li><b>storefront</b> nhận form Fulfill, kiểm Origin và session, rồi <code>PATCH</code> trạng thái FULFILLED; order-service chỉ cho Confirmed sang Fulfilled và trả 409 với các trạng thái khác.</li>
+            <li><b>storefront</b> cũng nhận form thêm sản phẩm (giá nhập theo cent) và chuyển tới catalog <code>POST /admin/products</code>; <code>catalog_app</code> chỉ INSERT bốn cột.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Storefront dùng một <code>ADMIN_SERVICE_TOKEN</code> chung cho cả catalog và order-service, nên lộ một nơi là lộ cả hai. Không thấy lý do tách hay không tách trong ADR hay spec; chủ repo trả lời được.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 16 locations in 13 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>POST session</code> — <code>apps/storefront/app/admin/session/route.ts:7-15</code> — chặn cross-site, scrypt, cấp cookie</li>
+            <li><code>merchantCookie</code> — <code>apps/storefront/lib/merchant-session.ts:14-23</code> — httpOnly, strict, /admin, 8 giờ</li>
+            <li><code>isValidSession</code> — <code>apps/storefront/lib/merchant-session.ts:40-45</code> — hết hạn và chữ ký</li>
+            <li><code>requireMerchant</code> — <code>apps/storefront/lib/merchant.ts:8-10</code> — redirect về sign-in</li>
+            <li><code>isCrossSitePost</code> — <code>apps/storefront/lib/merchant.ts:21-29</code> — so Origin với Host</li>
+            <li><code>admin page</code> — <code>apps/storefront/app/admin/page.tsx:25-26</code> — requireMerchant rồi listOrders</li>
+            <li><code>adminHeaders</code> — <code>apps/storefront/lib/admin-api.ts:7-9</code> — x-admin-token chỉ ở server</li>
+            <li><code>fulfill route</code> — <code>apps/storefront/app/admin/orders/[id]/fulfillment/route.ts:7-12</code> — kiểm Origin và session</li>
+            <li><code>add product route</code> — <code>apps/storefront/app/admin/products/route.ts:9-25</code> — kiểm đầu vào, gọi catalog</li>
+            <li><code>sign out</code> — <code>apps/storefront/app/admin/session/end/route.ts:5-9</code> — xoá cookie phía trình duyệt</li>
+            <li><code>admin routes</code> — <code>apps/order-service/src/app.ts:87-104</code> — guard token, danh sách, PATCH</li>
+            <li><code>listOrders</code> — <code>apps/order-service/src/admin.ts:21-40</code> — Confirmed trước, tối đa 200</li>
+            <li><code>POST /admin/products</code> — <code>apps/catalog-cart-api/src/app.ts:112-120</code> — guard x-admin-token, schema</li>
+            <li><code>sign-in tests</code> — <code>tests/integration/src/storefront-admin.test.ts:49-74</code> — sai mật khẩu, cookie, giả mạo</li>
+            <li><code>cross-site</code> — <code>tests/integration/src/storefront-admin.test.ts:36</code> — form khác site bị từ chối</li>
+            <li><code>no credential in logs</code> — <code>tests/integration/src/admin-logs.test.ts:8</code> — mật khẩu, cookie, token không vào log</li>
+            </ul>
+          </details>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-delivery">
+        <h3>Giao hàng (CI/CD)</h3>
+
+        <article class="discovery" id="d-ci">
+
+          <header>
+            <h4>CI: một check bắt buộc, chạy theo service bị ảnh hưởng</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Pull request được kiểm tra thế nào, và làm sao chọn service cần build?</p>
+
+          <p class="answer"><code>ci.yml</code> chạy trên mọi pull request với token chỉ đọc và không tham chiếu secret nào. Job <code>changes</code> suy ra service bị ảnh hưởng từ path filter: thay đổi ở packages, lockfile hay cấu hình chung ảnh hưởng tất cả. Lint, gitleaks, typecheck cộng build image, validate manifest và <code>make test</code> chạy song song; <code>ci-ok</code> là check duy nhất branch protection yêu cầu, chấp nhận job bị bỏ qua nhưng fail khi có job fail hoặc cancel.</p>
+
+          <ol class="steps">
+            <li><b>changes</b> chạy <code>dorny/paths-filter</code> với <code>path-filters.yml</code>, rồi <code>affected-services.sh</code> đổi kết quả thành danh sách service và cờ integration.</li>
+            <li><b>lint</b> chạy <code>pnpm lint</code>; <b>secret-scan</b> cài gitleaks có kiểm checksum rồi quét toàn bộ lịch sử.</li>
+            <li><b>service</b> (matrix) typecheck service và package nó phụ thuộc, rồi build image mà không push, dùng cache GitHub Actions.</li>
+            <li><b>manifests</b> render hai overlay và config monitoring, validate cả chúng lẫn hai Application Argo CD bằng kubeconform strict với Kubernetes 1.35.0 (CRD lấy từ catalog schema cộng đồng), và từ chối workload có image không ghim <code>@sha256</code>.</li>
+            <li><b>integration</b> chạy <code>make test</code> với secret sinh tạm, và in log stack khi fail.</li>
+            <li><b>ci-ok</b> luôn chạy, gom kết quả các job và fail nếu có failure hoặc cancelled.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Job <code>integration</code> chạy trên runner amd64, còn image arm64 chỉ được build ở workflow release và chưa có test nào chạy trên đó; cluster của laptop (M2) chạy arm64. Chủ repo xác nhận đây là chủ ý của POC hay khoảng trống.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 10 locations in 4 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>permissions</code> — <code>./.github/workflows/ci.yml:5-11</code> — trigger PR, quyền chỉ đọc, không secret</li>
+            <li><code>changes</code> — <code>./.github/workflows/ci.yml:18-30</code> — paths-filter rồi affected-services</li>
+            <li><code>secret-scan</code> — <code>./.github/workflows/ci.yml:44-59</code> — gitleaks toàn lịch sử, checksum</li>
+            <li><code>service</code> — <code>./.github/workflows/ci.yml:61-88</code> — matrix: typecheck và build image không push</li>
+            <li><code>manifests</code> — <code>./.github/workflows/ci.yml:92-118</code> — kubeconform cho overlay, monitoring và Application; image phải có digest</li>
+            <li><code>integration</code> — <code>./.github/workflows/ci.yml:120-136</code> — make test</li>
+            <li><code>ci-ok</code> — <code>./.github/workflows/ci.yml:140-153</code> — fail nếu failure hoặc cancelled</li>
+            <li><code>path filters</code> — <code>./.github/path-filters.yml:3-15</code> — shared ảnh hưởng mọi service</li>
+            <li><code>affected</code> — <code>./.github/scripts/affected-services.sh:12-23</code> — shared thì build tất cả; test cho mọi thay đổi code</li>
+            <li><code>ci status</code> — <code>./.scratch/shopify-devops-poc/issues/07-ci-pipeline.md:7</code> — resolved</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: job manifests nay validate cả monitoring và hai Application Argo CD.</p>
+
+        </article>
+
+        <article class="discovery" id="d-gitops">
+
+          <header>
+            <h4>Release: digest vào Git, Argo CD tự kéo về</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Một commit trên main thành pod chạy trong k3d thế nào?</p>
+
+          <p class="answer">Khi merge vào main, <code>release.yml</code> build mỗi service bị ảnh hưởng một lần cho amd64 và arm64 bằng runner native rồi gộp thành một image đa kiến trúc trên GHCR. Job <code>deploy-dev</code> ghi digest vào <code>deploy/overlays/dev</code> và push lên main bằng deploy key (ADR-0003); workflow bỏ qua commit chỉ đổi <code>deploy/</code> nên không tự lặp. Argo CD poll Git mỗi 60 giây và tự sync; rollback là <code>git revert</code>.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/gitops.html" title="Workflow: từ commit đến cluster" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/gitops.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>ci.yml</b> xanh và <code>ci-ok</code> cho phép merge vào main.</li>
+            <li><b>release.yml</b> chạy trên push vào main (trừ commit chỉ đổi <code>deploy/</code>) và xác định service bị ảnh hưởng.</li>
+            <li><b>build</b> mỗi service trên runner amd64 và arm64 riêng, push theo digest; <b>merge</b> gộp hai digest thành một index tag <code>sha-&lt;commit&gt;</code> và ghi digest của index.</li>
+            <li><b>GHCR</b> giữ image; digest của index là thứ triển khai tham chiếu.</li>
+            <li><b>deploy-dev</b> dùng <code>yq</code> ghi digest vào <code>overlays/dev/kustomization.yaml</code>.</li>
+            <li><b>deploy-dev</b> commit <code>deploy(dev): …</code> và push lên main bằng deploy key, thử lại tối đa 3 lần với rebase.</li>
+            <li><b>Argo CD</b> poll mỗi 60 giây, thấy commit mới, chạy hook PreSync <code>db-migrate</code>, rồi sync tự động với prune và self-heal; PostSync seed chỉ ở dev.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Chưa có test nào chạy trên image arm64 trước khi deploy; chỉ <code>make smoke</code> kiểm storefront, seed và một Checkout Confirmed sau khi triển khai. Ngoài ra staging chưa được áp dụng nên promotion thủ công chưa được thử.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 14 locations in 9 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>trigger</code> — <code>./.github/workflows/release.yml:5-14</code> — push vào main bỏ qua deploy/, hoặc chạy tay</li>
+            <li><code>platforms</code> — <code>./.github/workflows/release.yml:50-52</code> — amd64 và arm64 trên runner native</li>
+            <li><code>imagetools</code> — <code>./.github/workflows/release.yml:113-114</code> — gộp thành index, lấy digest</li>
+            <li><code>deploy-dev</code> — <code>./.github/workflows/release.yml:130-164</code> — yq ghi digest, commit, push thử lại</li>
+            <li><code>digest bump</code> — <code>./.github/workflows/release.yml:149</code> — cập nhật trường digest theo tên image</li>
+            <li><code>ADR-0003</code> — <code>docs/adr/0003-ci-commits-image-digest-to-same-repo.md:5</code> — vì sao commit digest về cùng repo</li>
+            <li><code>Application</code> — <code>deploy/argocd/shop-dev.yaml:12-28</code> — tự sync, prune, self-heal, retry</li>
+            <li><code>poll</code> — <code>deploy/argocd/values.yaml:14-15</code> — poll Git mỗi 60 giây</li>
+            <li><code>dev images</code> — <code>deploy/overlays/dev/kustomization.yaml:20-30</code> — digest từng image</li>
+            <li><code>bootstrap</code> — <code>Makefile:47-57</code> — cài Argo CD bản ghim, áp hai Application (shop-dev và monitoring)</li>
+            <li><code>PreSync</code> — <code>deploy/base/jobs/db-migrate.yaml:13-16</code> — migrate trước khi sync workload</li>
+            <li><code>smoke</code> — <code>scripts/smoke.sh:36-40</code> — kiểm storefront và seed qua ingress</li>
+            <li><code>smoke Checkout</code> — <code>scripts/smoke.sh:76-84</code> — đặt Checkout và chờ Order Confirmed</li>
+            <li><code>gitops status</code> — <code>./.scratch/shopify-devops-poc/issues/08-gitops-to-k3d.md:7</code> — resolved</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: bootstrap áp thêm Application <code>monitoring</code>; smoke có thêm Checkout.</p>
+
+        </article>
+
+        <article class="discovery" id="d-cluster">
+
+          <header>
+            <h4>Cluster: Kustomize base, overlay và pod cứng hoá</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Manifest triển khai được tổ chức và cứng hoá ra sao?</p>
+
+          <p class="answer"><code>deploy/base</code> mô tả mọi thứ một môi trường chạy: StatefulSet Postgres (2Gi) và Redis (1Gi), Job <code>db-migrate</code>, bốn Deployment, Ingress Traefik cho riêng storefront, cùng PodMonitor, PrometheusRule và dashboard. Overlay dev đặt namespace, host và digest; overlay staging nhân đôi replica nhưng chưa từng được áp dụng. Secret không nằm trong Git mà do <code>make secrets</code> tạo trong cluster. Mọi workload chạy non-root và bỏ hết capabilities; ứng dụng và Redis có rootfs chỉ đọc (Postgres thì không), bốn ứng dụng có đủ ba loại probe và resource.</p>
+
+          <ol class="steps">
+            <li><b>base</b> liệt kê dữ liệu, job migrate, bốn ứng dụng và phần quan sát (PodMonitor, PrometheusRule, ConfigMap dashboard); nhãn <code>part-of: shop</code> áp cho tất cả.</li>
+            <li><b>Overlay dev</b> đặt namespace <code>shop-dev</code>, host <code>shop.localhost</code>, <code>COOKIE_SECURE=false</code> và digest; thêm Job seed PostSync.</li>
+            <li><b>Mỗi workload</b> khai báo ServiceAccount không mount token, non-root, bỏ capabilities; bốn ứng dụng còn có seccomp RuntimeDefault, rootfs chỉ đọc, probe startup, liveness, readiness và resource. Postgres là ngoại lệ về rootfs.</li>
+            <li><b>Chỉ storefront</b> có Ingress; catalog, order-service và worker là ClusterIP, nên endpoint nội bộ và admin không ra ngoài; cổng metrics 9464 của storefront chỉ mở ở container, không nằm sau Service hay Ingress.</li>
+            <li><b>make cluster-up</b> tạo cluster k3d một server qua Colima, chỉ publish cổng ingress trên loopback.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Overlay staging có digest <code>db-migrations</code> là placeholder toàn số 0, ghi chú "promoted after the first release"; promotion chưa được thử vì staging chưa áp dụng.</li><li>Không thấy NetworkPolicy trong <code>deploy/</code> <span class="assumption">assumption</span> không có, nên Pod nào cũng gọi được Pod khác trong namespace.</li><li>Resource request của service (96-128 MiB) gấp 2-3 lần mức dùng lúc rảnh; docs/evidence ghi cần đo lại dưới tải.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 14 locations in 11 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>base</code> — <code>deploy/base/kustomization.yaml:5-25</code> — resource, nhãn và ConfigMap dashboard</li>
+            <li><code>order-service</code> — <code>deploy/base/apps/order-service.yaml:22-28</code> — non-root, seccomp</li>
+            <li><code>hardening</code> — <code>deploy/base/apps/order-service.yaml:49-66</code> — caps, rootfs, probe, resource</li>
+            <li><code>metrics port</code> — <code>deploy/base/apps/storefront.yaml:49</code> — cổng metrics riêng, không qua Service hay Ingress</li>
+            <li><code>ingress</code> — <code>deploy/base/apps/storefront.yaml:92-108</code> — chỉ storefront ra ngoài</li>
+            <li><code>postgres PVC</code> — <code>deploy/base/data/postgres.yaml:78-85</code> — 2Gi</li>
+            <li><code>redis</code> — <code>deploy/base/data/redis.yaml:51-56</code> — AOF và requirepass trong cluster</li>
+            <li><code>db-migrate</code> — <code>deploy/base/jobs/db-migrate.yaml:13-16</code> — hook PreSync</li>
+            <li><code>seed</code> — <code>deploy/overlays/dev/seed-job.yaml:8-9</code> — hook PostSync, chỉ dev</li>
+            <li><code>dev overlay</code> — <code>deploy/overlays/dev/kustomization.yaml:5-19</code> — namespace, env, host</li>
+            <li><code>staging overlay</code> — <code>deploy/overlays/staging/kustomization.yaml:14-22</code> — 2 replica mỗi đơn vị</li>
+            <li><code>staging digest</code> — <code>deploy/overlays/staging/kustomization.yaml:39</code> — placeholder 0</li>
+            <li><code>k3d</code> — <code>deploy/k3d/cluster.yaml:1-13</code> — một server, ingress trên loopback</li>
+            <li><code>memory</code> — <code>docs/evidence/2026-10-10-k3d-memory.md:16-22</code> — kèm monitoring (khoảng 882 MiB) vẫn còn khoảng 5,7 GB trong VM Colima</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: base có thêm phần quan sát; bộ nhớ đo lại sau khi thêm monitoring.</p>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-platform">
+        <h3>Nền tảng &amp; kiểm thử</h3>
+
+        <article class="discovery" id="d-service-kit">
+
+          <header>
+            <h4>service-kit: quy ước chung cho API và worker</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Các service dùng chung những gì, và chúng hành xử ra sao lúc chạy và lúc tắt?</p>
+
+          <p class="answer">Package <code>@shop/service-kit</code> gom phần nền mà hai API và worker dùng chung, nên mỗi nơi chỉ viết phần riêng. Nó cung cấp Fastify với log JSON theo route template, <code>/metrics</code> Prometheus, probe liveness và readiness, lỗi <code>{ error, message }</code> không lộ chi tiết nội bộ, pool Postgres có timeout, <code>withTransaction</code>, so sánh secret hằng thời gian, và tắt êm khi nhận SIGTERM. <code>@shop/contracts</code> chỉ chứa kiểu TypeScript, không có mã chạy.</p>
+
+          <ol class="steps">
+            <li><b>createPool</b> tạo pool với timeout kết nối 2 giây và truy vấn 5 giây, kể cả <code>statement_timeout</code> ở phía PostgreSQL.</li>
+            <li><b>createService</b> dựng Fastify không ép kiểu body, gắn log, metrics, error handler và hai probe; order-service và worker truyền <code>registry</code> riêng (gauge đọc lúc scrape), worker thêm <code>readinessChecks</code> cho Redis.</li>
+            <li><b>API</b> khai báo route; <code>requireSecretHeader</code> và <code>secretsEqual</code> bảo vệ route nội bộ và admin; <code>withTransaction</code> bọc các thao tác ghi nhiều bước.</li>
+            <li><b>runService</b> lắng nghe cổng, rồi khi nhận SIGTERM hoặc SIGINT thì fail readiness, chạy <code>beforeClose</code> (worker dừng nhận job), drain request, đóng pool và thoát; quá 8 giây thì thoát mã 1.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Test health và shutdown chỉ nhắm <code>catalog-cart-api</code>; order-service chưa có test tương ứng dù dùng chung service-kit. Worker có kiểm tra riêng cho SIGTERM trong <code>worker-ops.test.ts</code>. Chủ repo xác nhận đây là chủ ý hay thiếu sót.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 13 locations in 10 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>createService</code> — <code>packages/service-kit/src/service.ts:28-58</code> — Fastify với quy ước chung, registry và readinessChecks</li>
+            <li><code>health probes</code> — <code>packages/service-kit/src/service.ts:44-55</code> — live không đụng DB, ready chạy SELECT 1</li>
+            <li><code>createPool</code> — <code>packages/service-kit/src/service.ts:65-67</code> — timeout 2 giây và 5 giây</li>
+            <li><code>runService</code> — <code>packages/service-kit/src/service.ts:76-109</code> — drain 8 giây, beforeClose, thoát mã 1 khi quá hạn</li>
+            <li><code>requireSecretHeader</code> — <code>packages/service-kit/src/guards.ts:8-14</code> — 401 nếu thiếu token</li>
+            <li><code>withTransaction</code> — <code>packages/service-kit/src/transactions.ts:7-20</code> — commit, rollback, trả client</li>
+            <li><code>loggingOptions</code> — <code>packages/service-kit/src/logging.ts:10</code> — log theo route template</li>
+            <li><code>registerMetrics</code> — <code>packages/service-kit/src/metrics.ts:9</code> — histogram theo route template</li>
+            <li><code>orderMetrics registry</code> — <code>apps/order-service/src/app.ts:46-51</code> — order-service truyền registry riêng vào createService</li>
+            <li><code>worker ops listener</code> — <code>apps/worker/src/main.ts:20-27</code> — service-kit dùng cho worker với readiness Redis</li>
+            <li><code>contracts</code> — <code>packages/contracts/src/index.ts:1-2</code> — type-only, dùng import type</li>
+            <li><code>shutdown test</code> — <code>tests/integration/src/shutdown.test.ts:8</code> — chỉ kiểm tra catalog-cart-api</li>
+            <li><code>health test</code> — <code>tests/integration/src/health.test.ts:8</code> — chỉ kiểm tra catalog-cart-api</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: thêm guards, secrets, transactions, hook <code>beforeClose</code> và việc worker dùng lại service-kit. order-service nay cũng truyền registry riêng.</p>
+
+        </article>
+
+        <article class="discovery" id="d-local-stack">
+
+          <header>
+            <h4>Compose: chỉ trả về khi mọi healthcheck xanh</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">make dev-up khởi động những gì, theo thứ tự nào?</p>
+
+          <p class="answer"><code>make dev-up</code> sinh secret, cài git hook, rồi chạy <code>docker compose up --build --wait</code> và cuối cùng chạy job seed. Cờ <code>--wait</code> chỉ trả về khi mọi healthcheck xanh. Postgres lên trước, tiếp đến job tạo role, hai job migrate, rồi các service theo chuỗi phụ thuộc. Worker chờ migrate-orders, catalog và Redis healthy; storefront chờ catalog và order-service.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/local-stack.html" title="Workflow: thứ tự khởi động" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/local-stack.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>postgres</b> báo healthy bằng <code>pg_isready</code> qua TCP, tránh báo sớm khi image còn khởi tạo.</li>
+            <li><b>db-roles</b> chạy xong thì hai job <b>migrate-*</b> chạy dbmate.</li>
+            <li><b>catalog-cart-api</b> chờ migrate-catalog, rồi <b>order-service</b> chờ migrate-orders và catalog healthy.</li>
+            <li><b>worker</b> chờ migrate-orders, catalog healthy và Redis healthy; không đi qua ingress hay cổng host.</li>
+            <li><b>storefront</b> chờ cả hai API healthy, và mở thêm cổng metrics <code>127.0.0.1:9464</code> cho test.</li>
+            <li><b>seed</b> nạp 12 sản phẩm sau khi <code>--wait</code> xong; hai sản phẩm có stock 1 phục vụ test tranh chấp.</li>
+          </ol>
+
+          <details class="evidence"><summary>Evidence: 11 locations in 4 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>dev-up</code> — <code>Makefile:23-25</code> — secrets, hooks, up --wait, seed</li>
+            <li><code>postgres</code> — <code>compose.yaml:11</code> — image postgres:18-alpine, healthcheck TCP</li>
+            <li><code>redis</code> — <code>compose.yaml:30</code> — AOF, noeviction, requirepass</li>
+            <li><code>db-roles</code> — <code>compose.yaml:50</code> — chờ postgres healthy</li>
+            <li><code>migrate-orders</code> — <code>compose.yaml:78</code> — dbmate cho schema orders</li>
+            <li><code>order-service</code> — <code>compose.yaml:112</code> — chờ migrate-orders và catalog healthy</li>
+            <li><code>worker</code> — <code>compose.yaml:136</code> — chờ migrate-orders, catalog, redis</li>
+            <li><code>storefront</code> — <code>compose.yaml:164</code> — chờ catalog và order-service healthy</li>
+            <li><code>seed</code> — <code>compose.yaml:191</code> — job trong profile jobs</li>
+            <li><code>secrets</code> — <code>scripts/secrets.sh:18-26</code> — các secret ngẫu nhiên, không ghi đè giá trị cũ</li>
+            <li><code>runtime stage</code> — <code>apps/order-service/Dockerfile:29</code> — chạy bằng user node</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: thêm worker; Redis nay có service phụ thuộc; số dòng compose theo <code>3ae3d50</code>. storefront mở cổng metrics 9464 trên loopback.</p>
+
+        </article>
+
+        <article class="discovery" id="d-tests">
+
+          <header>
+            <h4>Test: gọi HTTP vào stack thật, đọc DB để chốt kết quả</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Test chạy thế nào, và chứng minh được điều gì?</p>
+
+          <p class="answer">Bộ test là Vitest chạy tuần tự vào stack Compose đang chạy thật: gọi HTTP tới các service, đọc DB bằng từng danh tính qua cổng 55432, và điều khiển container (dừng Redis, kill worker, thêm replica) bằng <code>docker compose</code>. Test chỉ đi qua các seam công khai nên sống sót khi viết lại nội bộ. Hiện có 22 file test: cô lập DB, idempotency, tranh chấp kho, crash worker, Redis outage, admin, storefront, log, metric và cờ lỗi Checkout. CI chạy chúng bằng <code>make test</code> với secret sinh tạm.</p>
+
+          <ol class="steps">
+            <li><b>make test</b> cài dependency, bật stack, typecheck, rồi chạy <code>pnpm test:integration</code>.</li>
+            <li><b>Vitest</b> chạy từng file một vì có file dừng và bật lại container.</li>
+            <li><b>Helper</b> <code>asIdentity</code> mở kết nối bằng superuser, catalog hoặc orders để kiểm tra quyền và đọc end state.</li>
+            <li><b>Helper</b> <code>compose()</code> chạy lệnh docker compose cho test log, shutdown, replica và Redis.</li>
+            <li><b>ci.yml</b> chạy <code>make test</code> khi có thay đổi code hay test.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Mình không chạy bộ test trong phiên này, nên doc không khẳng định chúng đang xanh.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 9 locations in 9 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>test</code> — <code>Makefile:31-34</code> — install, dev-up, typecheck, test:integration</li>
+            <li><code>vitest config</code> — <code>tests/integration/vitest.config.ts:5-11</code> — fileParallelism false</li>
+            <li><code>compose</code> — <code>tests/integration/src/stack.ts:9</code> — chạy docker compose như Makefile</li>
+            <li><code>asIdentity</code> — <code>tests/integration/src/db.ts:11</code> — kết nối Postgres host cổng 55432</li>
+            <li><code>Postgres host port</code> — <code>compose.yaml:20-21</code> — chỉ loopback</li>
+            <li><code>test:integration</code> — <code>package.json:11</code> — script gốc</li>
+            <li><code>CI integration</code> — <code>./.github/workflows/ci.yml:132-133</code> — make test với secret tạm</li>
+            <li><code>Redis outage</code> — <code>tests/integration/src/reconciliation.test.ts:16</code> — dừng Redis rồi bật lại</li>
+            <li><code>contention</code> — <code>tests/integration/src/settle-resilience.test.ts:23</code> — 20 Order tranh một đơn vị</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: tăng từ 11 lên 22 file test; thêm phạm vi worker, Redis, admin, log, metric và cờ lỗi.</p>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-observability">
+        <h3>Quan sát &amp; phục hồi</h3>
+
+        <article class="discovery" id="d-observability">
+
+          <header>
+            <h4>Quan sát: metric và log có giới hạn, alert nằm trong Git</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Shop được quan sát bằng gì, và alert đi từ metric tới người trực ra sao?</p>
+
+          <p class="answer">Mỗi đơn vị phát metric theo route template và log JSON có <code>requestId</code>; Prometheus của kube-prometheus-stack scrape cả bốn đơn vị cùng Traefik mỗi 15 giây. Hai rule trong Git (5xx trên 5% và Order PENDING quá 60 giây) đi qua Alertmanager tới Discord và alert-catcher trong cluster. Grafana nạp dashboard từ ConfigMap trong Git, còn Argo CD triển khai cả stack này.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/observability.html" title="Architecture: quan sát và alert" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/observability.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>Prometheus</b> scrape mỗi 15 giây: ba API và worker qua PodMonitor <code>shop-services</code> (<code>/metrics</code>), storefront qua cổng riêng 9464 (không sau Service hay Ingress), và Traefik ở kube-system, nơi đo request rate và lỗi phía rìa. Nhãn là route template, không bao giờ là id.</li>
+            <li><b>Prometheus</b> đánh giá hai rule: <code>ShopServerErrorRatioHigh</code> (5xx trên 5% trong 2 phút, tối thiểu 0,1 req/s, giữ 1 phút, bỏ route health và metrics) và <code>ShopOldestPendingOrderStale</code> (gauge tuổi Order PENDING trên 60 giây). PodMonitor, rule và dashboard nằm trong <code>deploy/base</code> nên Argo CD đưa chúng cùng shop-dev; chart là Application <code>monitoring</code> riêng.</li>
+            <li><b>Alertmanager</b> chờ 10 giây rồi gửi mọi alert tới cả Discord (URL đọc từ file Secret mount) và <code>alert-catcher</code>, kèm resolved; catcher in mỗi thông báo thành một dòng JSON và giữ 500 bản ghi gần nhất ở <code>GET /alerts</code>.</li>
+            <li><b>Grafana</b> nạp dashboard <code>shop-overview</code> (16 panel) từ ConfigMap có nhãn <code>grafana_dashboard</code> và truy vấn Prometheus; chỉ vào được bằng port-forward.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Doc này không mở Grafana hay cluster; việc 18 target lên và dashboard hiển thị đúng chỉ có trong ghi chú ticket 09, còn cấu hình thì đọc được từ Git. Chủ repo xác nhận được.</li><li>Log và <code>requestId</code> chỉ đọc được qua container runtime, không có log store hay tracing (README ghi rõ), nên nối một request qua các service là thao tác thủ công.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 24 locations in 22 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>loggingOptions</code> — <code>packages/service-kit/src/logging.ts:10-27</code> — log JSON, requestId từ x-request-id, request theo route template</li>
+            <li><code>registerMetrics</code> — <code>packages/service-kit/src/metrics.ts:9-29</code> — histogram theo route template, không theo id</li>
+            <li><code>orderMetrics</code> — <code>apps/order-service/src/metrics.ts:9-22</code> — gauge tuổi Order PENDING cũ nhất, đọc DB lúc scrape</li>
+            <li><code>workerMetrics</code> — <code>apps/worker/src/metrics.ts:14-49</code> — counter settled, retry, exhausted, requeued và gauge queue depth</li>
+            <li><code>proxy</code> — <code>apps/storefront/proxy.ts:13-34</code> — requestId, log JSON chỉ ghi path</li>
+            <li><code>register</code> — <code>apps/storefront/instrumentation.ts:1-23</code> — metrics của storefront trên cổng 9464 riêng</li>
+            <li><code>backendFetch</code> — <code>apps/storefront/lib/backend.ts:19-24</code> — chuyển x-request-id sang API</li>
+            <li><code>metrics port</code> — <code>deploy/base/apps/storefront.yaml:49</code> — cổng metrics riêng, không qua Service hay Ingress</li>
+            <li><code>PodMonitor</code> — <code>deploy/base/observability/podmonitors.yaml:1-30</code> — ba API và worker qua cổng http, storefront qua cổng metrics</li>
+            <li><code>Traefik PodMonitor</code> — <code>deploy/monitoring/config/traefik-podmonitor.yaml:1-15</code> — đo request rate và lỗi ở rìa</li>
+            <li><code>shop-alerts</code> — <code>deploy/base/observability/alerts.yaml:13-33</code> — hai rule: 5xx trên 5% và Order PENDING quá 60 giây</li>
+            <li><code>defaultRules</code> — <code>deploy/monitoring/values.yaml:8-9</code> — rule mặc định của chart bị tắt</li>
+            <li><code>retention</code> — <code>deploy/monitoring/values.yaml:18-19</code> — giữ 1 ngày, tối đa 1 GB</li>
+            <li><code>alertmanager route</code> — <code>deploy/monitoring/values.yaml:43-63</code> — mọi alert tới cả Discord và alert-catcher, kèm resolved</li>
+            <li><code>Application monitoring</code> — <code>deploy/monitoring/application.yaml:6-38</code> — chart ghim 92.3.0 do Argo CD triển khai, tự sync</li>
+            <li><code>shop-dashboards</code> — <code>deploy/base/kustomization.yaml:18-25</code> — ConfigMap có nhãn grafana_dashboard cho sidecar của Grafana</li>
+            <li><code>shop-overview</code> — <code>deploy/base/observability/dashboards/shop-overview.json:32</code> — dashboard nằm trong Git</li>
+            <li><code>Handler</code> — <code>deploy/monitoring/config/alert_catcher.py:15-47</code> — alert-catcher: POST in ra JSON, GET /alerts trả bản ghi</li>
+            <li><code>monitoring secrets</code> — <code>scripts/cluster-secrets.sh:25-38</code> — Grafana admin và webhook Discord từ file secret cục bộ</li>
+            <li><code>route template</code> — <code>tests/integration/src/metrics.test.ts:6</code> — metric theo route, không chứa id</li>
+            <li><code>storefront logs</code> — <code>tests/integration/src/storefront-logs.test.ts:9</code> — requestId nối log storefront với log catalog-cart-api</li>
+            <li><code>memory</code> — <code>docs/evidence/2026-10-10-k3d-memory.md:16-19</code> — monitoring tốn khoảng 882 MiB</li>
+            <li><code>Status 09</code> — <code>./.scratch/shopify-devops-poc/issues/09-observability-and-alerting.md:7</code> — resolved</li>
+            <li><code>no log store</code> — <code>README.md:165-166</code> — log đọc qua container runtime, chưa có log store hay tracing</li>
+            </ul>
+          </details>
+
+        </article>
+
+        <article class="discovery" id="d-stale-alert">
+
+          <header>
+            <h4>Alert Pending: worker dừng, gauge ở order-service vẫn tăng</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Làm sao chứng minh alert Order kẹt PENDING thật sự bắn, rồi tự hết?</p>
+
+          <p class="answer"><code>make drill-stale-pending</code> dừng worker trong cluster, đặt một Order rồi chờ <code>ShopOldestPendingOrderStale</code> tới alert-catcher. Gauge tuổi Order PENDING cũ nhất do order-service đọc từ DB lúc scrape, nên nó vẫn tăng khi worker chết; quá 60 giây thì alert bắn. Bật lại worker, Order được settle, gauge về 0 và RESOLVED tới catcher. Discord chỉ kiểm bằng mắt.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/stale-alert.html" title="Sequence: alert drill Order PENDING" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/stale-alert.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>drill</b> tạm tắt automated sync của Argo CD (self-heal sẽ đưa replicas về 1 trong vài giây) rồi scale worker về 0; <code>trap EXIT</code> luôn khôi phục.</li>
+            <li><b>order-service</b> nhận một Checkout approve qua storefront; không có worker nên Order ở PENDING.</li>
+            <li><b>Prometheus</b> scrape order-service; gauge chạy <code>SELECT min(created_at)</code> của Order PENDING ngay lúc scrape, không dựa vào worker.</li>
+            <li><b>Prometheus</b> thấy gauge trên 60 giây và đặt alert firing.</li>
+            <li><b>Alertmanager</b> gửi FIRING tới alert-catcher và Discord; drill chờ ở catcher tối đa 240 giây, vì Discord không kiểm tự động được.</li>
+            <li><b>drill</b> bật lại worker và automated sync.</li>
+            <li><b>worker</b> settle Order từ PENDING sang CONFIRMED.</li>
+            <li><b>Prometheus</b> thấy gauge về 0 và alert chuyển resolved.</li>
+            <li><b>Alertmanager</b> gửi RESOLVED; drill in trạng thái Order rồi báo OK.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Script chỉ assert ở alert-catcher; README ghi Discord kiểm bằng mắt và ticket 09 chỉ ghi Discord đã nhận. Chưa có kiểm tự động cho receiver thật, và chủ repo cho biết có định làm không.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 14 locations in 10 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>restore</code> — <code>scripts/drill-stale-pending.sh:20-24</code> — trap EXIT: scale worker về 1 và áp lại automated sync</li>
+            <li><code>pause and stop</code> — <code>scripts/drill-stale-pending.sh:27-30</code> — tạm tắt automated sync, scale worker về 0</li>
+            <li><code>place Order</code> — <code>scripts/drill-stale-pending.sh:32-33</code> — Checkout approve qua storefront, Order ở PENDING</li>
+            <li><code>wait firing</code> — <code>scripts/drill-stale-pending.sh:35-38</code> — chờ FIRING tới catcher tối đa 240 giây</li>
+            <li><code>wait resolved</code> — <code>scripts/drill-stale-pending.sh:40-52</code> — bật lại worker rồi chờ RESOLVED tới catcher</li>
+            <li><code>caught</code> — <code>scripts/alert-catcher.sh:5-14</code> — đọc log của alert-catcher theo alertname, trạng thái và namespace</li>
+            <li><code>place_checkout</code> — <code>scripts/checkout.sh:6-18</code> — Checkout qua storefront như trình duyệt</li>
+            <li><code>orderMetrics</code> — <code>apps/order-service/src/metrics.ts:9-22</code> — gauge SELECT min(created_at) của Order PENDING lúc scrape</li>
+            <li><code>ShopOldestPendingOrderStale</code> — <code>deploy/base/observability/alerts.yaml:28-33</code> — max gauge trên 60 giây</li>
+            <li><code>alertmanager route</code> — <code>deploy/monitoring/values.yaml:43-63</code> — group_wait 10 s, gửi tới Discord và catcher</li>
+            <li><code>drill-stale-pending</code> — <code>Makefile:65-67</code> — target chạy drill</li>
+            <li><code>secrets newline</code> — <code>scripts/secrets.sh:11-12</code> — thêm newline cuối file trước khi nối khoá, sau lần drill đầu Discord trả 401</li>
+            <li><code>drill result</code> — <code>./.scratch/shopify-devops-poc/issues/09-observability-and-alerting.md:26</code> — mốc giờ FIRING 10:39:31, catcher 10:39:42, RESOLVED 10:40:01</li>
+            <li><code>README</code> — <code>README.md:155-156</code> — drill chỉ chạy từ laptop</li>
+            </ul>
+          </details>
+
+        </article>
+
+        <article class="discovery" id="d-bad-release">
+
+          <header>
+            <h4>Bad release: cờ lỗi vào Git, alert báo, git revert cứu</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">Một release lỗi được phát hiện và khôi phục thế nào, và bước nào tự động, bước nào do người?</p>
+
+          <p class="answer">Cờ <code>FAULT_CHECKOUT_ERRORS=true</code> trong overlay dev làm order-service trả 500 cho mọi Checkout mà vẫn ready, nên probe và CI đều không thấy. Argo CD tự áp commit; alert bắn 1 phút 34 giây sau khi fault live. Operator quyết định <code>git revert</code>, Argo CD đưa Checkout chạy lại sau 2 phút 14 giây, và alert RESOLVED 2 phút 12 giây nữa. Số đo là run 2, đo trước khi rule có <code>keep_firing_for</code>.</p>
+
+          <div class="diagram-frame small">
+            <iframe src="diagrams/bad-release.html" title="Workflow: bad release và revert" loading="lazy"></iframe>
+          </div>
+
+          <a class="open-link" href="diagrams/bad-release.html">Mở diagram toàn màn hình →</a>
+
+          <ol class="steps">
+            <li><b>Operator</b> merge PR #13 đổi <code>shop-env</code> trong overlay dev; CI xanh vì cấu hình hợp lệ. Image không đổi, vì commit chỉ đụng <code>deploy/</code> nên release không chạy. Argo CD poll, sync và roll cả bốn Deployment do hash <code>shop-env</code> đổi.</li>
+            <li><b>order-service</b> ném lỗi ở đầu route <code>/checkout</code> nên trả 500 trong khi <code>/health/ready</code> vẫn 200; histogram ghi 5xx trên route đó, và sau <code>for: 1m</code> alert FIRING tại catcher và Discord. <code>make smoke MODE=fault</code> giữ mỗi giây một Checkout cho tới lúc đó.</li>
+            <li><b>Operator</b> quyết rollback bằng <code>git revert</code> thành PR #14; <code>MODE=recover</code> chạy ngay, vẫn mỗi giây một Checkout.</li>
+            <li><b>Argo CD</b> sync commit revert, pod order-service mới sẵn sàng; Checkout đầu tiên thành công sau 100 lần thất bại.</li>
+            <li><b>Alertmanager</b> chỉ gửi RESOLVED khi lỗi cũ rời cửa sổ 2 phút; drill chỉ tin một RESOLVED kết thúc sau Checkout thành công đầu tiên, rồi chạy kiểm tra thường (Checkout Confirmed).</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>Alert cần lưu lượng tối thiểu nên có thể tự hết khi traffic tụt: run 1 hết 36 giây trước khi revert tới pod. Rule sau đó thêm <code>keep_firing_for: 1m</code>, nhưng evidence ghi nó vẫn không chặn bắn lại sau khi sửa, làm mọi resolve trễ một phút, và một lull dài hơn vẫn kết thúc alert. Đây là đánh đổi chủ ý (ADR-0005): resolve trễ một phút để không báo "đã xong" sai. Chưa có lần drill nào chạy với rule mới, và alert vẫn hết khi traffic về 0, vì chưa có alert "không có traffic" (ngoài phạm vi POC).</li><li>Chỉ có hai lần chạy trên một laptop, nên các mốc thời gian là mẫu đơn, không phải phân phối.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 18 locations in 14 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>checkoutFault</code> — <code>apps/order-service/src/config.ts:10-11</code> — cờ đọc từ FAULT_CHECKOUT_ERRORS</li>
+            <li><code>fault throw</code> — <code>apps/order-service/src/app.ts:57</code> — ném lỗi trước mọi xử lý Checkout khi cờ bật</li>
+            <li><code>buildApp wiring</code> — <code>apps/order-service/src/server.ts:12</code> — cờ truyền vào buildApp</li>
+            <li><code>error handler</code> — <code>packages/service-kit/src/service.ts:33-40</code> — lỗi 5xx thành 500 internal_error</li>
+            <li><code>fault flag test</code> — <code>tests/integration/src/checkout-fault.test.ts:33</code> — 500 mọi Checkout nhưng /health/ready vẫn 200</li>
+            <li><code>5xx recorded</code> — <code>tests/integration/src/checkout-fault.test.ts:42</code> — 5xx đếm trên route /checkout</li>
+            <li><code>ShopServerErrorRatioHigh</code> — <code>deploy/base/observability/alerts.yaml:13-27</code> — 5xx trên 5%, tối thiểu 0,1 req/s, for 1m, keep_firing_for 1m</li>
+            <li><code>shop-env</code> — <code>deploy/base/apps/order-service.yaml:43-45</code> — envFrom shop-env: đổi ConfigMap thì pod roll</li>
+            <li><code>dev overlay</code> — <code>deploy/overlays/dev/kustomization.yaml:9-13</code> — HEAD không còn FAULT_CHECKOUT_ERRORS; 55fc76a thêm, f96dc45 gỡ</li>
+            <li><code>release paths-ignore</code> — <code>./.github/workflows/release.yml:5-9</code> — commit chỉ đổi deploy/ không build lại image</li>
+            <li><code>smoke fault</code> — <code>scripts/smoke.sh:42-54</code> — mỗi giây một Checkout đến khi catcher nhận FIRING</li>
+            <li><code>smoke recover</code> — <code>scripts/smoke.sh:56-74</code> — chờ Checkout chạy lại, rồi chờ RESOLVED sau lần thành công đầu</li>
+            <li><code>Run 2</code> — <code>docs/evidence/2026-10-10-bad-release-drill.md:23-33</code> — mốc giờ run 2, tự động hay operator</li>
+            <li><code>Run 1</code> — <code>docs/evidence/2026-10-10-bad-release-drill.md:54-61</code> — alert hết khi traffic tụt, rồi bắn lại</li>
+            <li><code>keep_firing_for</code> — <code>docs/evidence/2026-10-10-bad-release-drill.md:66-72</code> — rule thêm sau run 2; không chặn re-fire, trễ resolve một phút</li>
+            <li><code>ADR-0005</code> — <code>docs/adr/0005-server-error-alert-keeps-firing-through-a-lull.md:5</code> — vì sao giữ keep_firing_for 1m, và nó không giải quyết gì</li>
+            <li><code>known limit</code> — <code>README.md:160-163</code> — alert cần traffic tối thiểu; keep_firing_for chỉ qua lull đến một phút</li>
+            <li><code>Status 10</code> — <code>./.scratch/shopify-devops-poc/issues/10-bad-release-drill-and-evidence.md:7</code> — resolved</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: open question về <code>keep_firing_for</code> nay trỏ tới ADR-0005 (quyết định của chủ repo).</p>
+
+        </article>
+      </section>
+
+      <section class="group" id="g-roadmap">
+        <h3>Tiến độ &amp; kế hoạch</h3>
+
+        <article class="discovery" id="d-status">
+
+          <header>
+            <h4>Tiến độ: ticket 01-10 xong, POC đủ phạm vi spec</h4>
+            <span class="updated">Updated 2026-10-10 · <code>3ae3d50</code></span>
+          </header>
+
+          <p class="question">So với spec, repo đã có gì và còn thiếu gì?</p>
+
+          <p class="answer">Cả mười ticket đều resolved; phần mới nhất là quan sát và alert (09), cờ lỗi Checkout, drill bad-release và README (10). Doc này không chạy test, cluster hay drill; số đo thời gian lấy từ tài liệu evidence của repo. Phần còn lại là các giới hạn README đã ghi: chưa có staging, chưa có log store, và drill chỉ chạy từ laptop.</p>
+
+          <ol class="steps">
+            <li><b>01 đến 03</b>: skeleton, Cart, Checkout, resolved.</li>
+            <li><b>04 và 05</b>: worker, Inventory effect, dispatcher và reconcile, resolved.</li>
+            <li><b>06 Merchant</b>: đăng nhập, thêm sản phẩm, Fulfill, resolved.</li>
+            <li><b>07 và 08</b>: CI, GHCR, Argo CD, k3d, resolved; đo bộ nhớ ghi ở docs/evidence.</li>
+            <li><b>09</b>: kube-prometheus-stack, dashboard, hai alert, drill dừng worker (xem Quan sát và Alert Pending), resolved.</li>
+            <li><b>10</b>: cờ lỗi Checkout, drill git revert, README tái lập (xem Bad release), resolved.</li>
+          </ol>
+
+          <div class="open-questions">
+            <h5>Open questions</h5>
+            <ul><li>README ghi Discord chỉ được kiểm bằng mắt và drill chỉ chạy từ laptop vì runner GitHub không với tới cluster. Chưa rõ đó là giới hạn chủ ý của POC hay việc sẽ tự động hoá sau; chủ repo trả lời được.</li></ul>
+          </div>
+
+          <details class="evidence"><summary>Evidence: 11 locations in 11 files · verified at <code>3ae3d50</code></summary>
+            <ul>
+            <li><code>Status 01</code> — <code>./.scratch/shopify-devops-poc/issues/01-walking-skeleton.md:7</code> — resolved</li>
+            <li><code>Status 04</code> — <code>./.scratch/shopify-devops-poc/issues/04-worker-settles-orders.md:7</code> — resolved</li>
+            <li><code>Status 05</code> — <code>./.scratch/shopify-devops-poc/issues/05-reconciliation-and-queue-outage.md:7</code> — resolved</li>
+            <li><code>Status 06</code> — <code>./.scratch/shopify-devops-poc/issues/06-merchant.md:7</code> — resolved</li>
+            <li><code>Status 07</code> — <code>./.scratch/shopify-devops-poc/issues/07-ci-pipeline.md:7</code> — resolved</li>
+            <li><code>Status 08</code> — <code>./.scratch/shopify-devops-poc/issues/08-gitops-to-k3d.md:7</code> — resolved</li>
+            <li><code>Status 09</code> — <code>./.scratch/shopify-devops-poc/issues/09-observability-and-alerting.md:7</code> — resolved</li>
+            <li><code>Status 10</code> — <code>./.scratch/shopify-devops-poc/issues/10-bad-release-drill-and-evidence.md:7</code> — resolved</li>
+            <li><code>known limits</code> — <code>README.md:151-171</code> — staging chưa áp dụng, drill từ laptop, Discord kiểm bằng mắt, chưa có log store</li>
+            <li><code>k3d memory</code> — <code>docs/evidence/2026-10-10-k3d-memory.md:1</code> — đo bộ nhớ của ticket 08 và 09</li>
+            <li><code>bad-release drill</code> — <code>docs/evidence/2026-10-10-bad-release-drill.md:1</code> — bằng chứng của ticket 10</li>
+            </ul>
+          </details>
+
+          <p class="changes">Changed 2026-10-10: ticket 09 và 10 đã resolved và commit; bỏ open question về working tree đang thay đổi.</p>
+
+        </article>
+      </section>
+
+    </section>
+  </main>
+</div>
+</body>
+</html>

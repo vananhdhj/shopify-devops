@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Merchant: mật khẩu ở storefront, service token ở sau lưng",
+    "output": "docs/architecture/shopify-devops/diagrams/merchant.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread"
+  },
+  "participants": [
+    {
+      "id": "merchant",
+      "type": "external",
+      "label": "Merchant",
+      "sublabel": "trình duyệt"
+    },
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "/admin"
+    },
+    {
+      "id": "orders",
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "/admin/orders"
+    }
+  ],
+  "messages": [
+    {
+      "id": "signin",
+      "from": "merchant",
+      "to": "storefront",
+      "y": 170,
+      "label": "① POST /admin/session · password",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cookie",
+      "from": "storefront",
+      "to": "merchant",
+      "y": 205,
+      "label": "scrypt khớp → 303 + cookie ký HMAC, 8 giờ",
+      "variant": "return"
+    },
+    {
+      "id": "list",
+      "from": "merchant",
+      "to": "storefront",
+      "y": 245,
+      "label": "② GET /admin · cookie"
+    },
+    {
+      "id": "list-api",
+      "from": "storefront",
+      "to": "orders",
+      "y": 280,
+      "label": "GET /admin/orders · x-admin-token"
+    },
+    {
+      "id": "list-ok",
+      "from": "orders",
+      "to": "storefront",
+      "y": 315,
+      "label": "Confirmed trước, tối đa 200",
+      "variant": "return"
+    },
+    {
+      "id": "fulfill",
+      "from": "merchant",
+      "to": "storefront",
+      "y": 355,
+      "label": "③ POST …/fulfillment"
+    },
+    {
+      "id": "patch",
+      "from": "storefront",
+      "to": "orders",
+      "y": 390,
+      "label": "PATCH status FULFILLED · x-admin-token",
+      "variant": "emphasis"
+    },
+    {
+      "id": "patched",
+      "from": "orders",
+      "to": "storefront",
+      "y": 425,
+      "label": "200 | 409 chưa Confirmed",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Hai credential tách nhau",
+      "items": [
+        "Mật khẩu người chỉ tới storefront",
+        "API chỉ thấy ADMIN_SERVICE_TOKEN"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Session không lưu server",
+      "items": [
+        "Đổi hash mật khẩu hoặc SESSION_SECRET là đăng xuất hết",
+        "Form post khác site bị từ chối"
+      ]
+    }
+  ]
+}

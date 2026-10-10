@@ -1,0 +1,303 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Quan sát: metric theo route, alert vào hai receiver",
+    "output": "docs/architecture/shopify-devops/diagrams/observability.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "metrics :9464",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
+      "id": "orders",
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "/metrics :4002",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "/metrics :4001",
+      "pos": [
+        40,
+        260
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "ops :4003",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
+      "id": "traefik",
+      "type": "external",
+      "label": "Traefik",
+      "sublabel": "kube-system :9100",
+      "pos": [
+        40,
+        440
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
+      "id": "argocd",
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "Git là nguồn",
+      "pos": [
+        400,
+        520
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "prom",
+      "type": "database",
+      "label": "Prometheus",
+      "sublabel": "15 s · giữ 1 ngày",
+      "pos": [
+        400,
+        230
+      ],
+      "size": [
+        170,
+        160
+      ]
+    },
+    {
+      "id": "alertmanager",
+      "type": "backend",
+      "label": "Alertmanager",
+      "sublabel": "group_wait 10 s",
+      "pos": [
+        690,
+        180
+      ],
+      "size": [
+        160,
+        56
+      ]
+    },
+    {
+      "id": "grafana",
+      "type": "frontend",
+      "label": "Grafana",
+      "sublabel": "dashboard từ Git",
+      "pos": [
+        690,
+        340
+      ],
+      "size": [
+        160,
+        56
+      ]
+    },
+    {
+      "id": "catcher",
+      "type": "backend",
+      "label": "alert-catcher",
+      "sublabel": "GET /alerts",
+      "pos": [
+        970,
+        140
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "discord",
+      "type": "external",
+      "label": "Discord",
+      "sublabel": "webhook từ file secret",
+      "pos": [
+        970,
+        230
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "Operator",
+      "sublabel": "port-forward :8082",
+      "pos": [
+        970,
+        340
+      ],
+      "size": [
+        150,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "shop-dev (4 đơn vị của shop)",
+      "wraps": [
+        "storefront",
+        "orders",
+        "catalog",
+        "worker"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "monitoring (kube-prometheus-stack)",
+      "wraps": [
+        "prom",
+        "alertmanager",
+        "grafana",
+        "catcher"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "scrape-storefront",
+      "from": "storefront",
+      "to": "prom",
+      "label": "① :9464",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "scrape-orders",
+      "from": "orders",
+      "to": "prom",
+      "label": "① /metrics",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scrape-catalog",
+      "from": "catalog",
+      "to": "prom",
+      "label": "① /metrics",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scrape-worker",
+      "from": "worker",
+      "to": "prom",
+      "label": "① /metrics",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scrape-traefik",
+      "from": "traefik",
+      "to": "prom",
+      "label": "① :9100",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rules",
+      "from": "argocd",
+      "to": "prom",
+      "label": "rule · dashboard từ Git",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "fire",
+      "from": "prom",
+      "to": "alertmanager",
+      "label": "② firing",
+      "variant": "emphasis"
+    },
+    {
+      "id": "to-catcher",
+      "from": "alertmanager",
+      "to": "catcher",
+      "label": "③ webhook",
+      "variant": "emphasis"
+    },
+    {
+      "id": "to-discord",
+      "from": "alertmanager",
+      "to": "discord",
+      "label": "③ Discord",
+      "variant": "emphasis"
+    },
+    {
+      "id": "query",
+      "from": "grafana",
+      "to": "prom",
+      "label": "④ PromQL"
+    },
+    {
+      "id": "view",
+      "from": "operator",
+      "to": "grafana",
+      "label": "xem",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Nhãn có giới hạn",
+      "items": [
+        "Metric theo route template, không bao giờ theo id",
+        "Log JSON mang requestId; storefront chuyển x-request-id sang API",
+        "Storefront chỉ log path, không log query string"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Hai alert, cả hai đều có việc để làm",
+      "items": [
+        "ShopServerErrorRatioHigh: 5xx trên 5%, tối thiểu 0,1 req/s, for 1m, giữ thêm 1m",
+        "ShopOldestPendingOrderStale: Order PENDING quá 60 s",
+        "Rule mặc định của chart bị tắt (defaultRules.create=false)"
+      ]
+    }
+  ]
+}

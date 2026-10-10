@@ -1,0 +1,168 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Từ commit đến cluster: CI, GHCR, digest, Argo CD",
+    "output": "docs/architecture/shopify-devops/diagrams/gitops.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "gh",
+      "label": "GitHub Actions"
+    },
+    {
+      "id": "repo",
+      "label": "Registry + Git"
+    },
+    {
+      "id": "cluster",
+      "label": "k3d trên laptop"
+    }
+  ],
+  "mainPath": [
+    "pr",
+    "merge",
+    "build",
+    "image",
+    "bump",
+    "overlay",
+    "argo",
+    "pods"
+  ],
+  "nodes": [
+    {
+      "id": "pr",
+      "lane": "gh",
+      "col": 0,
+      "type": "external",
+      "label": "Pull request",
+      "sublabel": "ci.yml"
+    },
+    {
+      "id": "merge",
+      "lane": "gh",
+      "col": 1,
+      "type": "security",
+      "label": "Merge vào main",
+      "sublabel": "cần ci-ok",
+      "width": 130
+    },
+    {
+      "id": "build",
+      "lane": "gh",
+      "col": 2,
+      "type": "backend",
+      "label": "release.yml",
+      "sublabel": "amd64 + arm64 native"
+    },
+    {
+      "id": "image",
+      "lane": "repo",
+      "col": 2,
+      "type": "cloud",
+      "label": "GHCR image",
+      "sublabel": "digest, tag sha-commit"
+    },
+    {
+      "id": "bump",
+      "lane": "gh",
+      "col": 3,
+      "type": "backend",
+      "label": "deploy-dev",
+      "sublabel": "ghi digest, deploy key",
+      "width": 150
+    },
+    {
+      "id": "overlay",
+      "lane": "repo",
+      "col": 4,
+      "type": "database",
+      "label": "overlays/dev",
+      "sublabel": "kustomization.yaml",
+      "width": 140
+    },
+    {
+      "id": "argo",
+      "lane": "cluster",
+      "col": 4,
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "poll 60 s, auto-sync"
+    },
+    {
+      "id": "pods",
+      "lane": "cluster",
+      "col": 5,
+      "type": "backend",
+      "label": "shop-dev",
+      "sublabel": "pod theo digest"
+    }
+  ],
+  "edges": [
+    {
+      "from": "pr",
+      "to": "merge",
+      "label": "① ci-ok"
+    },
+    {
+      "from": "merge",
+      "to": "build",
+      "label": "② push",
+      "variant": "emphasis"
+    },
+    {
+      "from": "build",
+      "to": "image",
+      "label": "③ push",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "image",
+      "to": "bump",
+      "label": "④ digest"
+    },
+    {
+      "from": "bump",
+      "to": "overlay",
+      "label": "⑤ commit",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "overlay",
+      "to": "argo",
+      "label": "⑥ poll",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "argo",
+      "to": "pods",
+      "label": "⑦ sync",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Rollback là git revert",
+      "items": [
+        "Argo CD tự sửa mọi chỉnh tay (selfHeal)",
+        "Không dùng kubectl rollout undo"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Không lặp vô hạn",
+      "items": [
+        "release bỏ qua commit chỉ đổi deploy/",
+        "Deploy key là danh tính duy nhất vượt branch protection"
+      ]
+    }
+  ]
+}

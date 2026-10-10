@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Checkout: một transaction ghi Order, items và outbox",
+    "output": "docs/architecture/shopify-devops/diagrams/checkout.html",
+    "column_fit": "spread",
+    "quality_profile": "showcase"
+  },
+  "participants": [
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "POST /orders (form)"
+    },
+    {
+      "id": "orders",
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "POST /checkout"
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "nguồn giá"
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "schema orders"
+    }
+  ],
+  "messages": [
+    {
+      "id": "post-checkout",
+      "from": "client",
+      "to": "orders",
+      "y": 170,
+      "label": "① cartToken (cookie) + checkoutKey + scenario",
+      "variant": "emphasis"
+    },
+    {
+      "id": "prior",
+      "from": "orders",
+      "to": "pg",
+      "y": 205,
+      "label": "② SELECT theo checkout_key"
+    },
+    {
+      "id": "prior-none",
+      "from": "pg",
+      "to": "orders",
+      "y": 235,
+      "label": "chưa có (có thì trả Order cũ)",
+      "variant": "return"
+    },
+    {
+      "id": "fetch-cart",
+      "from": "orders",
+      "to": "catalog",
+      "y": 270,
+      "label": "③ GET /carts/:id · timeout 3s"
+    },
+    {
+      "id": "cart-priced",
+      "from": "catalog",
+      "to": "orders",
+      "y": 302,
+      "label": "Cart + giá server",
+      "variant": "return"
+    },
+    {
+      "id": "tx",
+      "from": "orders",
+      "to": "pg",
+      "y": 337,
+      "label": "④ BEGIN · INSERT orders, order_items, outbox · COMMIT",
+      "variant": "emphasis"
+    },
+    {
+      "id": "tx-ok",
+      "from": "pg",
+      "to": "orders",
+      "y": 369,
+      "label": "ok, hoặc 23505 unique",
+      "variant": "return"
+    },
+    {
+      "id": "accepted",
+      "from": "orders",
+      "to": "client",
+      "y": 405,
+      "label": "⑤ 202 orderId + orderToken (HMAC)",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Giá do server",
+      "items": [
+        "Giá lấy từ catalog lúc Checkout",
+        "Client chỉ gửi cartToken, key, scenario"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Outbox là cầu nối",
+      "items": [
+        "Order, items, outbox cùng một transaction",
+        "Worker đọc outbox rồi settle (xem Settle)"
+      ]
+    }
+  ]
+}

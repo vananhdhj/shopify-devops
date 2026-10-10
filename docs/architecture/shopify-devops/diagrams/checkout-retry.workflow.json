@@ -1,0 +1,162 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Checkout an toàn khi retry: ba lớp chặn",
+    "output": "docs/architecture/shopify-devops/diagrams/checkout-retry.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Đường chính"
+    },
+    {
+      "id": "early",
+      "label": "Trả lời sớm",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "req",
+    "key",
+    "cart",
+    "tx",
+    "accepted"
+  ],
+  "nodes": [
+    {
+      "id": "req",
+      "lane": "main",
+      "col": 0,
+      "type": "external",
+      "label": "POST /checkout",
+      "sublabel": "key + cart + scenario"
+    },
+    {
+      "id": "key",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "Tra checkout_key",
+      "sublabel": "priorCheckout",
+      "width": 130
+    },
+    {
+      "id": "cart",
+      "lane": "main",
+      "col": 2,
+      "type": "backend",
+      "label": "Đọc Cart",
+      "sublabel": "catalog-cart-api"
+    },
+    {
+      "id": "tx",
+      "lane": "main",
+      "col": 3,
+      "type": "database",
+      "label": "Transaction",
+      "sublabel": "order + items + outbox"
+    },
+    {
+      "id": "accepted",
+      "lane": "main",
+      "col": 4,
+      "type": "external",
+      "label": "202 PENDING",
+      "sublabel": "orderId + orderToken"
+    },
+    {
+      "id": "replay",
+      "lane": "early",
+      "col": 1,
+      "type": "security",
+      "label": "Key đã có",
+      "sublabel": "hash khớp → Order cũ; khác → 409",
+      "width": 170
+    },
+    {
+      "id": "nocart",
+      "lane": "early",
+      "col": 2,
+      "type": "security",
+      "label": "404 / 422",
+      "sublabel": "cart lạ hoặc rỗng"
+    },
+    {
+      "id": "dup",
+      "lane": "early",
+      "col": 3,
+      "type": "security",
+      "label": "409 đã có Order",
+      "sublabel": "unique source_cart_id",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "from": "req",
+      "to": "key"
+    },
+    {
+      "from": "key",
+      "to": "cart",
+      "label": "chưa có"
+    },
+    {
+      "from": "cart",
+      "to": "tx"
+    },
+    {
+      "from": "tx",
+      "to": "accepted",
+      "variant": "emphasis"
+    },
+    {
+      "from": "key",
+      "to": "replay",
+      "label": "đã có",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "cart",
+      "to": "nocart",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "tx",
+      "to": "dup",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Retry cùng key",
+      "items": [
+        "Cùng hash trả đúng Order cũ",
+        "Race cùng key bị unique chặn, rồi tra lại"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Hai cách bị từ chối",
+      "items": [
+        "Key cũ nhưng Cart hoặc scenario đổi: 409",
+        "Cart đã thành Order qua key khác: 409 (ADR-0001)"
+      ]
+    }
+  ]
+}

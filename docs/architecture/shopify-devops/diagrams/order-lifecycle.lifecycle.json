@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Vòng đời Order: worker quyết, Merchant giao",
+    "output": "docs/architecture/shopify-devops/diagrams/order-lifecycle.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Đường thành công"
+    },
+    {
+      "id": "terminal",
+      "label": "Bị từ chối"
+    }
+  ],
+  "states": [
+    {
+      "id": "pending",
+      "type": "start",
+      "label": "PENDING",
+      "sublabel": "đã nhận, chưa quyết",
+      "lane": "main",
+      "col": 0,
+      "tag": "order-service"
+    },
+    {
+      "id": "confirmed",
+      "type": "success",
+      "label": "CONFIRMED",
+      "sublabel": "đã trừ kho, payment ok",
+      "lane": "main",
+      "col": 2,
+      "tag": "worker"
+    },
+    {
+      "id": "fulfilled",
+      "type": "success",
+      "label": "FULFILLED",
+      "sublabel": "Merchant đã gửi hàng",
+      "lane": "main",
+      "col": 4,
+      "tag": "Merchant"
+    },
+    {
+      "id": "rej_stock",
+      "type": "failure",
+      "label": "REJECTED_OUT_OF_STOCK",
+      "sublabel": "không trừ một phần",
+      "lane": "terminal",
+      "col": 1,
+      "width": 190,
+      "tag": "worker"
+    },
+    {
+      "id": "rej_pay",
+      "type": "failure",
+      "label": "REJECTED_PAYMENT",
+      "sublabel": "đã nhả kho",
+      "lane": "terminal",
+      "col": 3,
+      "width": 170,
+      "tag": "worker"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "pending",
+      "to": "confirmed",
+      "label": "approve / slow",
+      "variant": "emphasis"
+    },
+    {
+      "from": "confirmed",
+      "to": "fulfilled",
+      "label": "Merchant Fulfill"
+    },
+    {
+      "from": "pending",
+      "to": "rej_stock",
+      "label": "hết hàng",
+      "variant": "security"
+    },
+    {
+      "from": "pending",
+      "to": "rej_pay",
+      "label": "decline",
+      "variant": "security",
+      "route": "bottom-channel"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "DB tự canh gác",
+      "items": [
+        "Trigger orders_status_transition: chuyển lậu là 23514",
+        "order_events: mỗi trạng thái đạt tối đa một lần"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Hai tác nhân",
+      "items": [
+        "Worker: PENDING sang CONFIRMED hoặc REJECTED_*",
+        "ADR-0002: PENDING không hết hạn, không cancel"
+      ]
+    }
+  ]
+}
