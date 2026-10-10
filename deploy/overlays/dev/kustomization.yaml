@@ -12,19 +12,19 @@ configMapGenerator:
       - APP_ENV=dev
       - COOKIE_SECURE=false # plain http on the lab ingress
 patches:
-  - target: { kind: Ingress, name: storefront }
+  - target: {kind: Ingress, name: storefront}
     patch: |-
       - op: replace
         path: /spec/rules/0/host
         value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
-    digest: sha256:784a9e0326f33c1f04f998e489e5e91e7eb825e9750ce8106ca5f159e26dfbbb
+    digest: sha256:f161ac00c158abd6d0da36fd6cbdc2999490858e78d9bd5f2410303bc45a088c
   - name: ghcr.io/vananhdhj/shopify-devops/order-service
-    digest: sha256:8e0bdc185ecaea781d6e43b278b2a8bddcb6daeb860636e3eda580fca5b13894
+    digest: sha256:d4d2a78fd840eff70949891fba60b825551604e406a5ef9215a29f001ebba13c
   - name: ghcr.io/vananhdhj/shopify-devops/worker
-    digest: sha256:ba94934fbd8e4253620df4160d7b6fbebff379a010eb404a2bce02ab4ef6c62d
+    digest: sha256:33fab12e6e37395ca4272c57453e28e3e2246edcccc31df05fecf8ed409435c7
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
-    digest: sha256:49914a6e25dad78bcbc6c34aa2f56dadda52dae2f33cadede357abc53f895505
+    digest: sha256:6abedc30a8ebb86caa966a89d3bae9babd31f46861db39fa973a636fbc670ab1
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # set by the first release
+    digest: sha256:924921dd326b3700df6c7ac9814b7901f9452dc2b4a4f2c67d1c094fc4cccdf0 # set by the first release
