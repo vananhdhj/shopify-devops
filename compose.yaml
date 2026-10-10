@@ -95,6 +95,7 @@ services:
       dockerfile: apps/catalog-cart-api/Dockerfile
     environment:
       DATABASE_URL: postgres://catalog_app:${DB_CATALOG_PASSWORD}@postgres:5432/shop?sslmode=disable
+      INTERNAL_INVENTORY_TOKEN: ${INTERNAL_INVENTORY_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
       - "127.0.0.1:4001:4001"
@@ -127,6 +128,30 @@ services:
       migrate-orders:
         condition: service_completed_successfully
       catalog-cart-api:
+        condition: service_healthy
+
+  # No host port: the worker's listener is operational only, and the service can be scaled.
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      DATABASE_URL: postgres://order_app:${DB_ORDER_PASSWORD}@postgres:5432/shop?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      CATALOG_API_URL: http://catalog-cart-api:4001
+      INTERNAL_INVENTORY_TOKEN: ${INTERNAL_INVENTORY_TOKEN:?run make secrets}
+      APP_ENV: dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4003/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      migrate-orders:
+        condition: service_completed_successfully
+      catalog-cart-api:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   storefront:

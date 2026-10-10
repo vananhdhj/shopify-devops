@@ -13,3 +13,7 @@
 - [ ] Seam-1 test: admin endpoints on both APIs reject requests without the admin service token
 - [ ] Seam-1 test: marking a Pending or Rejected order as Fulfilled is refused
 - [ ] Credentials and session cookies never appear in logs
+
+## Comments
+
+- Carried from ticket 04 review: legal status transitions are enforced only by the worker's `WHERE status = 'PENDING'`. When the Merchant's Confirmed → Fulfilled action arrives, enforce the full transition table in the database (e.g. a trigger on `orders.orders.status`) so no code path can make an illegal transition.

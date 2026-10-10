@@ -24,12 +24,17 @@ export async function waitUntilCatalogReady(): Promise<void> {
     .toBe(200);
 }
 
-/** Polls a URL until it answers 200; for setup hooks, where expect.poll is unavailable. */
-export async function waitForOk(url: string, timeoutMs = 30_000): Promise<void> {
+/** Polls until `check` passes; for setup hooks and multi-step waits, where expect.poll doesn't fit. */
+export async function waitFor(check: () => Promise<boolean>, what: string, timeoutMs = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while ((await statusOf(url)) !== 200) {
-    if (Date.now() > deadline) throw new Error(`${url} not ready after ${timeoutMs}ms`);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error(`${what}: not true after ${timeoutMs}ms`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
+}
+
+/** Polls a URL until it answers 200. */
+export async function waitForOk(url: string, timeoutMs = 30_000): Promise<void> {
+  await waitFor(async () => (await statusOf(url)) === 200, `${url} ready`, timeoutMs);
 }
 

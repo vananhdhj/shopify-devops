@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import type { CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
+import { withTransaction } from "@shop/service-kit";
 import { fetchCart } from "./catalog-client.ts";
 
 export type CheckoutResult =
@@ -40,34 +41,33 @@ export async function acceptCheckout(db: Pool, catalogApiUrl: string, request: C
   if (!cart) return { outcome: "refused", reason: "cart_not_found" };
   if (cart.items.length === 0) return { outcome: "refused", reason: "cart_empty" };
 
-  const client = await db.connect();
   try {
-    await client.query("BEGIN");
-    const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO orders.orders (checkout_key, request_hash, source_cart_id, payment_scenario, subtotal_minor, currency)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [request.checkoutKey, requestHash(request), cart.id, request.paymentScenario, cart.subtotalMinor, cart.currency],
-    );
-    const orderId = rows[0]!.id;
-    await client.query(
-      `INSERT INTO orders.order_items (order_id, product_id, name, unit_price_minor, quantity)
-       SELECT $1, * FROM unnest($2::uuid[], $3::text[], $4::int[], $5::int[])`,
-      [
-        orderId,
-        cart.items.map((item) => item.productId),
-        cart.items.map((item) => item.name),
-        cart.items.map((item) => item.priceMinor),
-        cart.items.map((item) => item.quantity),
-      ],
-    );
-    await client.query(
-      "INSERT INTO orders.outbox (order_id, event_type, payload) VALUES ($1, 'order.accepted', $2)",
-      [orderId, { orderId }],
-    );
-    await client.query("COMMIT");
+    const orderId = await withTransaction(db, async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO orders.orders (checkout_key, request_hash, source_cart_id, payment_scenario, subtotal_minor, currency)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [request.checkoutKey, requestHash(request), cart.id, request.paymentScenario, cart.subtotalMinor, cart.currency],
+      );
+      const id = rows[0]!.id;
+      await client.query(
+        `INSERT INTO orders.order_items (order_id, product_id, name, unit_price_minor, quantity)
+         SELECT $1, * FROM unnest($2::uuid[], $3::text[], $4::int[], $5::int[])`,
+        [
+          id,
+          cart.items.map((item) => item.productId),
+          cart.items.map((item) => item.name),
+          cart.items.map((item) => item.priceMinor),
+          cart.items.map((item) => item.quantity),
+        ],
+      );
+      await client.query(
+        "INSERT INTO orders.outbox (order_id, event_type, payload) VALUES ($1, 'order.accepted', $2)",
+        [id, { orderId: id }],
+      );
+      return id;
+    });
     return { outcome: "accepted", orderId };
   } catch (err) {
-    await client.query("ROLLBACK");
     // A concurrent retry with the same key, or another Checkout of the same Cart, won the race.
     const constraint = (err as { code?: string; constraint?: string }).code === "23505"
       ? (err as { constraint?: string }).constraint
@@ -75,7 +75,5 @@ export async function acceptCheckout(db: Pool, catalogApiUrl: string, request: C
     if (constraint === "orders_checkout_key_key") return (await priorCheckout(db, request))!;
     if (constraint === "orders_source_cart_id_key") return { outcome: "refused", reason: "cart_already_ordered" };
     throw err;
-  } finally {
-    client.release();
   }
 }

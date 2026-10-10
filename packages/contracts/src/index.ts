@@ -76,3 +76,29 @@ export interface Order {
   currency: string;
   createdAt: string;
 }
+
+export type InventoryEffectAction = "deduct" | "release";
+
+export type InventoryEffectOutcome = "applied" | "insufficient_stock" | "nothing_to_release";
+
+export interface InventoryEffectLine {
+  productId: string;
+  quantity: number;
+}
+
+/**
+ * Body of the catalog's internal POST /internal/inventory-effects (worker only). A release
+ * returns exactly what the Order's applied deduction took, so its `items` are ignored.
+ */
+export interface InventoryEffectRequest {
+  orderId: string;
+  action: InventoryEffectAction;
+  items: InventoryEffectLine[];
+}
+
+export interface InventoryEffectResult {
+  orderId: string;
+  action: InventoryEffectAction;
+  outcome: InventoryEffectOutcome;
+}
+

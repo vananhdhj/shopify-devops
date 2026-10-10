@@ -2,3 +2,9 @@ packages:
   - apps/*
   - packages/*
   - tests/*
+
+# Dependency install scripts run only when listed here as true.
+allowBuilds:
+  # Optional native speed-up for BullMQ's msgpack encoding; the pure-JS fallback is used instead,
+  # so images need no native build toolchain.
+  msgpackr-extract: false

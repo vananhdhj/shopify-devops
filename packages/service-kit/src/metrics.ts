@@ -6,8 +6,7 @@ import { quietRoute } from "./routes.ts";
  * Exposes Prometheus metrics at /metrics. Requests are labelled by route template
  * (`/products/:id`), never the raw URL, so ids cannot explode label cardinality.
  */
-export function registerMetrics(app: FastifyInstance): void {
-  const registry = new Registry();
+export function registerMetrics(app: FastifyInstance, registry: Registry = new Registry()): void {
   collectDefaultMetrics({ register: registry });
 
   const duration = new Histogram({

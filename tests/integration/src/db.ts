@@ -1,14 +1,5 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import pg from "pg";
-
-const secretsFile = fileURLToPath(new URL("../../../.secrets/dev.env", import.meta.url));
-
-function secret(name: string): string {
-  const line = readFileSync(secretsFile, "utf8").split("\n").find((l) => l.startsWith(`${name}=`));
-  if (!line) throw new Error(`${name} missing from .secrets/dev.env (run make secrets)`);
-  return line.slice(name.length + 1);
-}
+import { secret } from "./secrets.ts";
 
 const identities = {
   superuser: ["postgres", "DB_SUPERUSER_PASSWORD"],

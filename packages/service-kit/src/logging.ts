@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FastifyRequest, FastifyServerOptions } from "fastify";
+import { LogController, type FastifyRequest, type FastifyServerOptions } from "fastify";
 
 /**
  * Structured JSON logs: every line carries service, environment, and severity;
@@ -21,7 +21,7 @@ export function loggingOptions(service: string, environment: string): FastifySer
       },
     },
     requestIdHeader: "x-request-id",
-    requestIdLogLabel: "requestId",
+    logController: new LogController({ requestIdLogLabel: "requestId" }),
     genReqId: () => randomUUID(),
   };
 }

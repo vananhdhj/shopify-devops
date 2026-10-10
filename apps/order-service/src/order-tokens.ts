@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { secretsEqual } from "@shop/service-kit";
 
 /**
  * An Order token is an HMAC of the order id under a server secret. Nothing token-shaped is
@@ -10,7 +11,5 @@ export function orderTokenFor(orderId: string, secret: string): string {
 }
 
 export function isValidOrderToken(orderId: string, token: string, secret: string): boolean {
-  const expected = Buffer.from(orderTokenFor(orderId, secret));
-  const given = Buffer.from(token);
-  return given.length === expected.length && timingSafeEqual(given, expected);
+  return secretsEqual(token, orderTokenFor(orderId, secret));
 }

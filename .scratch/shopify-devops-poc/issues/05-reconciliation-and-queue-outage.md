@@ -12,3 +12,7 @@
 - [ ] Seam-1 test: deleting a dispatched job from the queue still ends with a terminal Order and exactly one deduction
 - [ ] Redis runs with persistence and a non-evicting memory policy in both Compose and the cluster configuration
 - [ ] There is no expiry status and no cancel action
+
+## Comments
+
+- Carried from ticket 04 review: reconciliation is the long-term retry loop. Settle jobs make 10 quick attempts and are removed as soon as they fail for good (`removeOnFail: true`), so their stable event id is free to be re-enqueued. Test that an Order whose job exhausted its attempts is eventually settled by reconciliation.
