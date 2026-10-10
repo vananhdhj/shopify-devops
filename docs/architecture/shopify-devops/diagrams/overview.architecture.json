@@ -137,7 +137,7 @@
       "id": "discord",
       "type": "external",
       "label": "Discord",
-      "sublabel": "webhook + alert-catcher",
+      "sublabel": "webhook · kênh riêng",
       "pos": [
         880,
         640
@@ -259,7 +259,7 @@
   "cards": [
     {
       "dot": "cyan",
-      "title": "Ba tiến trình, hai ranh giới dữ liệu",
+      "title": "Bốn đơn vị, hai ranh giới dữ liệu",
       "items": [
         "catalog-cart-api sở hữu sản phẩm, giá, Cart, Stock",
         "order-service và worker dùng chung danh tính order_app",

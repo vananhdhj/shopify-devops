@@ -104,30 +104,6 @@
       "type": "backend",
       "label": "worker",
       "sublabel": "/health/ready :4003"
-    },
-    {
-      "id": "worker",
-      "lane": "api",
-      "col": 5,
-      "type": "backend",
-      "label": "worker",
-      "sublabel": "/health/ready :4003"
-    },
-    {
-      "id": "worker",
-      "lane": "api",
-      "col": 5,
-      "type": "backend",
-      "label": "worker",
-      "sublabel": "/health/ready :4003"
-    },
-    {
-      "id": "worker",
-      "lane": "api",
-      "col": 5,
-      "type": "backend",
-      "label": "worker",
-      "sublabel": "/health/ready :4003"
     }
   ],
   "edges": [
@@ -166,30 +142,6 @@
       "from": "storefront",
       "to": "seed",
       "variant": "dashed"
-    },
-    {
-      "from": "redis",
-      "to": "worker",
-      "label": "healthy",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "from": "redis",
-      "to": "worker",
-      "label": "healthy",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "from": "redis",
-      "to": "worker",
-      "label": "healthy",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
     },
     {
       "from": "redis",

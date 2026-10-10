@@ -156,7 +156,8 @@
       "title": "Least privilege",
       "items": [
         "Runtime role không có DDL, không DROP",
-        "UPDATE chỉ theo cột: stock, status, dispatched_at",
+        "UPDATE theo cột trên products, orders, outbox: stock, status, dispatched_at",
+        "Riêng Cart: catalog_app sửa cả dòng carts, cart_items và xoá dòng cart_items",
         "Không có FK xuyên schema"
       ]
     },
