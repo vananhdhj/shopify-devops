@@ -9,5 +9,6 @@ const app = buildApp({
   catalogApiUrl: config.catalogApiUrl,
   orderTokenSecret: config.orderTokenSecret,
   adminServiceToken: config.adminServiceToken,
+  checkoutFault: config.checkoutFault,
 });
 await runService(app, db, config.port);
