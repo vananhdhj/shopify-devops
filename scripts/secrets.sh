@@ -21,6 +21,7 @@ add_if_missing ORDER_TOKEN_SECRET
 add_if_missing INTERNAL_INVENTORY_TOKEN
 add_if_missing ADMIN_SERVICE_TOKEN
 add_if_missing SESSION_SECRET
+add_if_missing GRAFANA_ADMIN_PASSWORD
 
 # The Merchant's password, readable enough to type; only its scrypt hash reaches the storefront.
 # To change it: edit ADMIN_PASSWORD, delete the ADMIN_PASSWORD_HASH line, and re-run.
