@@ -4,7 +4,7 @@ CLUSTER := shop
 CONTEXT := k3d-$(CLUSTER)
 NAMESPACE := shop-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending
 
 ## Generate local secrets into .secrets/dev.env (never overwrites existing values), and copy
 ## them into the lab cluster as a Secret when the cluster is running
@@ -59,4 +59,8 @@ bootstrap-gitops: cluster-up
 ## Check a deployed environment through its ingress (default: the lab cluster's dev storefront)
 smoke:
 	@scripts/smoke.sh
+
+## Alert drill: stop the worker on the lab cluster and watch ShopOldestPendingOrderStale fire and resolve
+drill-stale-pending:
+	@scripts/drill-stale-pending.sh
 
