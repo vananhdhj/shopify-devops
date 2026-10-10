@@ -1,16 +1,9 @@
-import Fastify, { type FastifyError, type FastifyReply, type FastifyServerOptions } from "fastify";
+import type { FastifyReply } from "fastify";
 import type { Pool } from "pg";
 import type { ProductList } from "@shop/contracts";
+import { createService, isUuid } from "@shop/service-kit";
 import { createCart, getCart, setCartItemQuantity, type Missing } from "./carts.ts";
-import { registerMetrics } from "./metrics.ts";
 import { findProduct, listProducts } from "./products.ts";
-import { quietRoute } from "./routes.ts";
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUuid(value: string): boolean {
-  return uuidPattern.test(value);
-}
 
 function notFound(reply: FastifyReply, missing: Missing) {
   return reply.code(404).send({ error: `${missing}_not_found`, message: `${missing} not found` });
@@ -26,34 +19,11 @@ const setQuantityBody = {
 
 export interface AppDeps {
   db: Pool;
+  environment: string;
 }
 
-export function buildApp(deps: AppDeps, options: FastifyServerOptions = {}) {
-  // No type coercion: a quantity sent as "2" is a client error, not a number.
-  const app = Fastify({ ...options, ajv: { customOptions: { coerceTypes: false } } });
-  registerMetrics(app);
-
-  app.setErrorHandler((err: FastifyError, req, reply) => {
-    const status = err.statusCode ?? 500;
-    if (status < 500) {
-      return reply.code(status).send({ error: "invalid_request", message: err.message });
-    }
-    req.log.error({ err }, "request failed");
-    return reply.code(500).send({ error: "internal_error", message: "internal error" });
-  });
-
-  // Liveness says only that the process can answer; it must not depend on PostgreSQL,
-  // or a database outage would turn into a restart storm.
-  app.get("/health/live", quietRoute, async () => ({ status: "ok" }));
-
-  app.get("/health/ready", quietRoute, async (_req, reply) => {
-    try {
-      await deps.db.query("SELECT 1");
-      return { status: "ready" };
-    } catch {
-      return reply.code(503).send({ status: "not_ready" });
-    }
-  });
+export function buildApp(deps: AppDeps) {
+  const app = createService({ name: "catalog-cart-api", environment: deps.environment, db: deps.db });
 
   app.get("/products", async (): Promise<ProductList> => {
     return { products: await listProducts(deps.db) };

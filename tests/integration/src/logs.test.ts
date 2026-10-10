@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { catalogApiUrl } from "./http.ts";
+import { catalogApiUrl, orderServiceUrl } from "./http.ts";
+import { seedProducts } from "./seed.ts";
+import { cartWith, checkout, newCheckoutKey } from "./shopping.ts";
 import { compose } from "./stack.ts";
 
-function logLinesWith(correlationId: string): Record<string, unknown>[] {
-  return compose("logs", "--no-log-prefix", "--since", "2m", "catalog-cart-api")
+function logLinesWith(correlationId: string, service = "catalog-cart-api"): Record<string, unknown>[] {
+  return compose("logs", "--no-log-prefix", "--since", "2m", service)
     .split("\n")
     .flatMap((line) => {
       try {
@@ -36,5 +38,20 @@ describe("catalog-cart API logs", () => {
       .poll(() => logLinesWith(correlationId)[0], { timeout: 5_000 })
       .toMatchObject({ req: { method: "GET", route: "/carts/:id" } });
     expect(JSON.stringify(logLinesWith(correlationId))).not.toContain(cartToken);
+  });
+
+  it("never logs an Order token, whether returned by Checkout or presented to read an Order", async () => {
+    const correlationId = `test-${randomUUID()}`;
+    const cart = await cartWith({ [seedProducts.notebookSet]: 1 });
+    const { body } = await checkout({ cartToken: cart.id, checkoutKey: newCheckoutKey(), paymentScenario: "approve" });
+    await fetch(`${orderServiceUrl}/orders/${body.orderId}`, {
+      headers: { "x-request-id": correlationId, "x-order-token": body.orderToken },
+    });
+
+    await expect
+      .poll(() => logLinesWith(correlationId, "order-service")[0], { timeout: 5_000 })
+      .toMatchObject({ service: "order-service", req: { route: "/orders/:id" } });
+    const recent = compose("logs", "--no-log-prefix", "--since", "2m", "order-service");
+    expect(recent).not.toContain(body.orderToken);
   });
 });

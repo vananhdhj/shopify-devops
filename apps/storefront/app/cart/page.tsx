@@ -3,12 +3,18 @@ import Link from "next/link";
 import { getCart } from "@/lib/catalog";
 import { cartCookie } from "@/lib/cart-cookie";
 import { formatPrice } from "@/lib/money";
+import { Notice } from "@/app/notice";
 
 export const dynamic = "force-dynamic";
 
+const notices = {
+  "not-added": "That product couldn't be added to your cart.",
+  "already-ordered": "That cart was already ordered, so we started a new one.",
+};
+
 export default async function CartPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
-  const notice = error === "not-added" ? <p className="notice">That product couldn't be added to your cart.</p> : null;
+  const notice = <Notice code={error} messages={notices} />;
   const token = (await cookies()).get(cartCookie.name)?.value;
   const cart = token ? await getCart(token) : undefined;
 
@@ -66,6 +72,9 @@ export default async function CartPage({ searchParams }: { searchParams: Promise
         </tbody>
       </table>
       <p className="subtotal">Subtotal: {formatPrice(cart.subtotalMinor, cart.currency)}</p>
+      <p className="checkout-link">
+        <Link href="/checkout">Checkout</Link>
+      </p>
     </>
   );
 }

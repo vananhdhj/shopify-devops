@@ -32,3 +32,47 @@ export interface Cart {
   currency: string;
 }
 
+
+/** The simulated payment outcome chosen at Checkout; no money or card data exists anywhere. */
+export type PaymentScenario = "approve" | "decline" | "slow";
+
+export type OrderStatus = "PENDING" | "CONFIRMED" | "REJECTED_OUT_OF_STOCK" | "REJECTED_PAYMENT" | "FULFILLED";
+
+export interface CheckoutRequest {
+  cartToken: string;
+  /** Client-generated; retries of one Checkout reuse it and get the same Order back. */
+  checkoutKey: string;
+  paymentScenario: PaymentScenario;
+}
+
+/** Why a Checkout created no Order. Distinct from a Rejected order, which exists and is terminal. */
+export type CheckoutRefusal = "cart_not_found" | "cart_empty" | "checkout_key_reused" | "cart_already_ordered";
+
+/** Every `error` code POST /checkout can answer with. */
+export type CheckoutError = CheckoutRefusal | "dependency_unavailable" | "invalid_request";
+
+/** Returned with 202: the Order exists and is Pending, not yet confirmed. */
+export interface CheckoutAccepted {
+  orderId: string;
+  orderToken: string;
+  status: OrderStatus;
+}
+
+/** One line of an Order's immutable snapshot, priced as it was at Checkout. */
+export interface OrderItem {
+  productId: string;
+  name: string;
+  unitPriceMinor: number;
+  quantity: number;
+  lineTotalMinor: number;
+}
+
+export interface Order {
+  id: string;
+  status: OrderStatus;
+  paymentScenario: PaymentScenario;
+  items: OrderItem[];
+  subtotalMinor: number;
+  currency: string;
+  createdAt: string;
+}

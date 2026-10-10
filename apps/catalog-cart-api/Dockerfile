@@ -9,13 +9,15 @@ WORKDIR /repo
 FROM base AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/
+COPY packages/service-kit/package.json packages/service-kit/
 COPY apps/catalog-cart-api/package.json apps/catalog-cart-api/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @shop/catalog-cart-api...
 COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
+COPY packages/service-kit packages/service-kit
 COPY apps/catalog-cart-api apps/catalog-cart-api
-RUN pnpm --filter @shop/catalog-cart-api build \
+RUN pnpm --filter "@shop/catalog-cart-api..." build \
  && pnpm --filter @shop/catalog-cart-api deploy --prod /out
 
 FROM node:24-alpine AS runtime

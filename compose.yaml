@@ -16,6 +16,9 @@ services:
       POSTGRES_DB: shop
     volumes:
       - pgdata:/var/lib/postgresql
+    # Host access for tests that check identity isolation and end state; loopback only.
+    ports:
+      - "127.0.0.1:55432:5432"
     healthcheck:
       # TCP, not the Unix socket: during first-run init the image runs a temporary
       # socket-only server, which would otherwise report healthy before the real one starts.
@@ -50,6 +53,7 @@ services:
       <<: *db-env
       DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?run make secrets}
       DB_CATALOG_PASSWORD: ${DB_CATALOG_PASSWORD:?run make secrets}
+      DB_ORDER_PASSWORD: ${DB_ORDER_PASSWORD:?run make secrets}
     volumes:
       - ./db/roles.sh:/roles.sh:ro
     entrypoint: ["sh", "/roles.sh"]
@@ -66,6 +70,20 @@ services:
       DBMATE_NO_DUMP_SCHEMA: "true"
     volumes:
       - ./db/catalog/migrations:/migrations:ro
+    command: ["--wait", "up"]
+    depends_on:
+      db-roles:
+        condition: service_completed_successfully
+
+  migrate-orders:
+    image: ghcr.io/amacneil/dbmate:2
+    environment:
+      DATABASE_URL: postgres://migrator:${DB_MIGRATOR_PASSWORD}@postgres:5432/shop?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /migrations
+      DBMATE_MIGRATIONS_TABLE: orders.schema_migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db/orders/migrations:/migrations:ro
     command: ["--wait", "up"]
     depends_on:
       db-roles:
@@ -89,12 +107,35 @@ services:
       migrate-catalog:
         condition: service_completed_successfully
 
+  order-service:
+    build:
+      context: .
+      dockerfile: apps/order-service/Dockerfile
+    environment:
+      DATABASE_URL: postgres://order_app:${DB_ORDER_PASSWORD}@postgres:5432/shop?sslmode=disable
+      CATALOG_API_URL: http://catalog-cart-api:4001
+      ORDER_TOKEN_SECRET: ${ORDER_TOKEN_SECRET:?run make secrets}
+      APP_ENV: dev
+    ports:
+      - "127.0.0.1:4002:4002"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4002/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      migrate-orders:
+        condition: service_completed_successfully
+      catalog-cart-api:
+        condition: service_healthy
+
   storefront:
     build:
       context: .
       dockerfile: apps/storefront/Dockerfile
     environment:
       CATALOG_API_URL: http://catalog-cart-api:4001
+      ORDER_SERVICE_URL: http://order-service:4002
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:
@@ -104,6 +145,8 @@ services:
       retries: 30
     depends_on:
       catalog-cart-api:
+        condition: service_healthy
+      order-service:
         condition: service_healthy
 
   # One-shot job run by `make seed` / `make dev-up`; a profile keeps `up --wait` from

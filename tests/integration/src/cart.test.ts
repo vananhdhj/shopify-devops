@@ -109,11 +109,11 @@ describe("cart", () => {
 
 describe("cart across API replicas", () => {
   const replicaName = "shopify-devops-catalog-replica";
-  const replicaUrl = "http://127.0.0.1:4002";
+  const replicaUrl = "http://127.0.0.1:4011";
 
   beforeAll(async () => {
     compose("run", "--detach", "--rm", "--no-deps", "--name", replicaName,
-      "--publish", "127.0.0.1:4002:4001", "catalog-cart-api");
+      "--publish", "127.0.0.1:4011:4001", "catalog-cart-api");
     await waitForOk(`${replicaUrl}/health/ready`);
   });
 

@@ -16,4 +16,6 @@ add_if_missing() {
 add_if_missing DB_SUPERUSER_PASSWORD
 add_if_missing DB_MIGRATOR_PASSWORD
 add_if_missing DB_CATALOG_PASSWORD
+add_if_missing DB_ORDER_PASSWORD
+add_if_missing ORDER_TOKEN_SECRET
 add_if_missing REDIS_PASSWORD

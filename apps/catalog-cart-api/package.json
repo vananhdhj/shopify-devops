@@ -9,6 +9,7 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@shop/service-kit": "workspace:*",
     "fastify": "^5.12.5",
     "pg": "^8.23.1",
     "prom-client": "^15.1.3"

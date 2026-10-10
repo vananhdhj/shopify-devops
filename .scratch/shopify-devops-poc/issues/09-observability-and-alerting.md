@@ -17,3 +17,5 @@
 ## Comments
 
 - Carried from ticket 01 review: storefront logs become structured JSON (service, environment, severity, request ID), and the storefront forwards `x-request-id` to the APIs so one request can be followed across services.
+- Carried from ticket 03 review: the buyer's Order link carries the Order token as `?token=` (ADR-0004), so storefront request logs must record paths without query strings; add a test like the order-service one asserting no Order token appears in storefront logs.
+

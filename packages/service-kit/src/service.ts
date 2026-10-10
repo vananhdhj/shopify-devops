@@ -1,0 +1,87 @@
+import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import pg from "pg";
+import { loggingOptions } from "./logging.ts";
+import { registerMetrics } from "./metrics.ts";
+import { quietRoute } from "./routes.ts";
+
+export interface ServiceOptions {
+  /** Service name stamped on every log line, e.g. "order-service". */
+  name: string;
+  environment: string;
+  /** Readiness fails while this database is unreachable. */
+  db: pg.Pool;
+}
+
+/**
+ * A Fastify instance with the conventions every API unit shares: structured JSON logs by
+ * route template, Prometheus metrics, `{ error, message }` error bodies that never echo
+ * internal errors, no request-body type coercion, and liveness/readiness probes.
+ */
+export function createService({ name, environment, db }: ServiceOptions): FastifyInstance {
+  // No type coercion: a quantity sent as "2" is a client error, not a number.
+  const app = Fastify({ ...loggingOptions(name, environment), ajv: { customOptions: { coerceTypes: false } } });
+  registerMetrics(app);
+
+  app.setErrorHandler((err: FastifyError, req, reply) => {
+    const status = err.statusCode ?? 500;
+    if (status < 500) {
+      return reply.code(status).send({ error: "invalid_request", message: err.message });
+    }
+    req.log.error({ err }, "request failed");
+    return reply.code(500).send({ error: "internal_error", message: "internal error" });
+  });
+
+  // Liveness says only that the process can answer; it must not depend on PostgreSQL,
+  // or a database outage would turn into a restart storm.
+  app.get("/health/live", quietRoute, async () => ({ status: "ok" }));
+
+  app.get("/health/ready", quietRoute, async (_req, reply) => {
+    try {
+      await db.query("SELECT 1");
+      return { status: "ready" };
+    } catch {
+      return reply.code(503).send({ status: "not_ready" });
+    }
+  });
+
+  return app;
+}
+
+/** A pool with bounded connect and query time, so a database outage fails fast. */
+export function createPool(connectionString: string): pg.Pool {
+  return new pg.Pool({ connectionString, connectionTimeoutMillis: 2_000, query_timeout: 5_000 });
+}
+
+const drainTimeoutMs = 8_000;
+
+/**
+ * Listens, then on SIGTERM/SIGINT stops accepting requests (Fastify answers 503 while
+ * closing, which also fails readiness), lets in-flight requests finish, and exits. A drain
+ * that overruns the bound exits non-zero so it is visible rather than silently killed.
+ */
+export async function runService(app: FastifyInstance, db: pg.Pool, port: number): Promise<void> {
+  // Idle clients emit errors when PostgreSQL goes away; without a listener the process would crash.
+  db.on("error", (err) => app.log.warn({ err }, "idle database client error"));
+
+  await app.listen({ host: "0.0.0.0", port });
+
+  let shuttingDown = false;
+  async function shutdown(signal: NodeJS.Signals): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    app.log.info({ signal }, "shutting down");
+
+    const deadline = setTimeout(() => {
+      app.log.error({ drainTimeoutMs }, "drain timed out");
+      process.exit(1);
+    }, drainTimeoutMs);
+    deadline.unref();
+
+    await app.close();
+    await db.end();
+    process.exit(0);
+  }
+
+  process.once("SIGTERM", (signal) => void shutdown(signal));
+  process.once("SIGINT", (signal) => void shutdown(signal));
+}

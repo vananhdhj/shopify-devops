@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 
 export const catalogApiUrl = process.env.CATALOG_API_URL ?? "http://127.0.0.1:4001";
+export const orderServiceUrl = process.env.ORDER_SERVICE_URL ?? "http://127.0.0.1:4002";
 export const storefrontUrl = process.env.STOREFRONT_URL ?? "http://127.0.0.1:3000";
 
 export async function getJson<T>(url: string): Promise<{ status: number; body: T }> {

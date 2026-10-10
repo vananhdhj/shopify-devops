@@ -1,8 +1,4 @@
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`missing required environment variable ${name}`);
-  return value;
-}
+import { requiredEnv as required } from "@shop/service-kit";
 
 export const config = {
   port: Number(process.env.PORT ?? 4001),

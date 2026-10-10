@@ -101,14 +101,14 @@ Around that app, build one thin pass through every core DevOps layer: GitHub Act
 - A Cart's id doubles as its cart token (a random v4 UUID). To keep tokens and ids out of logs, every API logs requests by route template (`/carts/:id`), never the raw URL; handlers log the ids they need explicitly.
 - The shop sells in a single currency (USD), enforced by a database constraint on products. The internal endpoint accepts only the worker's internal service token and has bounded timeouts.
 - Order service: Checkout, read Order by Order token, admin list Orders, admin set Order status (only Confirmed → Fulfilled).
-- Checkout request carries Cart token, Checkout key, and Payment scenario. It reads Cart contents and current prices from the catalog server-side, then returns `202` with the Order ID and Order token. Conflicts return `409`: same Checkout key with a different request hash, or a Cart that already became an Order.
+- Checkout request carries Cart token, Checkout key, and Payment scenario. It reads Cart contents and current prices from the catalog server-side, then returns `202` with the Order ID and Order token. Conflicts return `409`: same Checkout key with a different request hash, or a Cart that already became an Order. An unknown Cart returns `404`, an empty Cart `422`, invalid input `400`, and an unreachable catalog `503`. The cart token is normalised to lower case before hashing.
 - Each API unit exposes liveness, readiness, and metrics endpoints outside the business routes; the worker has a private operational listener. Liveness tests the process only; readiness reflects whether the unit can serve, and a failing readiness check never acknowledges unfinished queue work.
 
 ### Data model
 
 - One PostgreSQL instance, two schemas, one runtime identity per schema, plus a migration identity. The migration identity owns both schemas and their tables; runtime identities receive only the table privileges their slice needs, so a compromised service can change rows but never alter or drop tables. The catalog identity cannot read or write order tables; the order identity cannot write catalog tables. Both denials are tested.
 - `catalog`: products (price in integer minor units, stock never negative), carts, cart items (quantity positive), inventory effects (unique per Order and action).
-- `orders`: orders (unique Checkout key with stored request hash; unique source Cart ID per ADR-0001; status; Payment scenario; hashed Order token), order items (immutable item and price snapshot), outbox (stable event ID), order events (unique event ID, append-only status history).
+- `orders`: orders (unique Checkout key with stored request hash; unique source Cart ID per ADR-0001; status; Payment scenario). The Order token is not stored: it is an HMAC of the order id (ADR-0004), order items (immutable item and price snapshot), outbox (stable event ID), order events (unique event ID, append-only status history).
 - No cross-schema foreign keys; product IDs and Order IDs are plain references across the boundary.
 - Plain SQL migrations run by dbmate: a one-shot service in Compose, an Argo CD PreSync job in the cluster. Migrations are backward-compatible so an image rollback never needs a schema rollback.
 
@@ -127,7 +127,7 @@ Around that app, build one thin pass through every core DevOps layer: GitHub Act
 ### Merchant authentication and secrets
 
 - The storefront verifies one admin password against a stored hash and issues a signed, httpOnly session cookie. It calls the APIs' admin endpoints with a separate admin service token. The human password never reaches the APIs.
-- A `make secrets` command generates random values into a gitignored local secrets file and creates the Kubernetes Secrets: database credentials per identity, admin password hash, session signing key, admin service token, internal inventory token, Grafana admin password, and the Discord webhook URL. Compose reads the same file. Argo CD applications reference Secrets by name but never manage them. Rotation means rerunning the command and restarting the affected pods.
+- A `make secrets` command generates random values into a gitignored local secrets file and creates the Kubernetes Secrets: database credentials per identity, admin password hash, session signing key, admin service token, internal inventory token, Grafana admin password, and the Discord webhook URL. Compose reads the same file. Argo CD applications reference Secrets by name but never manage them. Rotation means rerunning the command and restarting the affected pods. `ORDER_TOKEN_SECRET` is excluded from routine rotation because rotating it invalidates outstanding Order links (ADR-0004).
 - Gitleaks runs in CI and as a pre-commit hook from the first commit.
 
 ### Local development

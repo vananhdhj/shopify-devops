@@ -13,8 +13,10 @@ describe("catalog-cart API shutdown", () => {
       expect(exitCode).toBe("0");
       expect(elapsedMs).toBeLessThan(8_000);
     } finally {
-      compose("start", "catalog-cart-api");
+      // Restart only this container: `compose start` would re-run role bootstrap and
+      // migrations first, which on a fresh stack can outlast the test's budget.
+      compose("up", "--detach", "--no-deps", "--wait", "catalog-cart-api");
       await waitUntilCatalogReady();
     }
-  });
+  }, 60_000);
 });

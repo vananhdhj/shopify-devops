@@ -64,3 +64,11 @@ button {
 .product-card form { padding: 0 16px 16px; margin-top: -8px; }
 .notice { padding: 8px 12px; border-radius: 6px; background: #fff4e5; border: 1px solid #f0c27b; }
 
+.summary { padding-left: 20px; }
+.checkout-form fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 16px 0; }
+.checkout-form label { display: block; padding: 4px 0; }
+.status { font-weight: 600; }
+.hint { color: var(--muted); font-size: 0.9rem; }
+
+.checkout-link { text-align: right; font-weight: 600; }
+

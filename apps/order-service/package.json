@@ -1,0 +1,20 @@
+{
+  "name": "@shop/order-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc --noEmit -p .",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@shop/service-kit": "workspace:*",
+    "fastify": "^5.12.5",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@shop/contracts": "workspace:*",
+    "@types/pg": "^8.23.1"
+  }
+}
