@@ -102,15 +102,19 @@ jobs:
           curl -fsSLO "${base}/CHECKSUMS"
           grep " kubeconform-linux-amd64.tar.gz$" CHECKSUMS | sha256sum --check
           tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
-      - name: Render and validate the dev and staging overlays
+      - name: Render and validate the overlays, monitoring config, and Argo CD Applications
+        env:
+          # Custom resources (PodMonitor, PrometheusRule, Application) validate against the
+          # community CRD schema catalog instead of being skipped.
+          CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
         run: |
-          for overlay in dev staging; do
-            kubectl kustomize "deploy/overlays/${overlay}" >"${overlay}.yaml"
-            ./kubeconform -strict -summary -kubernetes-version 1.35.0 "${overlay}.yaml"
-          done
+          for overlay in dev staging; do kubectl kustomize "deploy/overlays/${overlay}" >"${overlay}.yaml"; done
+          kubectl kustomize deploy/monitoring/config >monitoring.yaml
+          ./kubeconform -strict -summary -kubernetes-version 1.35.0 -schema-location default -schema-location "$CRD_SCHEMAS" \
+            dev.yaml staging.yaml monitoring.yaml deploy/argocd/shop-dev.yaml deploy/monitoring/application.yaml
       - name: Every workload image is pinned by digest
         run: |
-          unpinned="$(grep -hE '^\s+image:' dev.yaml staging.yaml | grep -v '@sha256:' || true)"
+          unpinned="$(grep -hE '^\s+image:' dev.yaml staging.yaml monitoring.yaml | grep -v '@sha256:' || true)"
           if [ -n "$unpinned" ]; then echo "::error::images without a digest:"; echo "$unpinned"; exit 1; fi
 
   integration:

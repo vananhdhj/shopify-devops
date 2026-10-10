@@ -15,3 +15,11 @@ resources:
   - apps/storefront.yaml
   - observability/podmonitors.yaml
   - observability/alerts.yaml
+configMapGenerator:
+  # Picked up by Grafana's dashboard sidecar (label grafana_dashboard=1) from any namespace.
+  - name: shop-dashboards
+    files:
+      - observability/dashboards/shop-overview.json
+    options:
+      labels:
+        grafana_dashboard: "1"

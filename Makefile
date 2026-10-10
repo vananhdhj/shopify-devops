@@ -52,8 +52,9 @@ bootstrap-gitops: cluster-up
 	  --version $(ARGOCD_CHART_VERSION) --namespace argocd --create-namespace \
 	  --kube-context $(CONTEXT) --values deploy/argocd/values.yaml --wait --timeout 10m
 	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE)
-	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml
+	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml -f deploy/monitoring/application.yaml
 	@echo "Argo CD UI: kubectl --context $(CONTEXT) -n argocd port-forward svc/argocd-server 8081:80"
+	@echo "Grafana:    kubectl --context $(CONTEXT) -n monitoring port-forward svc/monitoring-grafana 8082:80  (admin / GRAFANA_ADMIN_PASSWORD)"
 
 ## Check a deployed environment through its ingress (default: the lab cluster's dev storefront)
 smoke:
