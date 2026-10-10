@@ -1,0 +1,222 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "make dev-up: thứ tự khởi động của Compose",
+    "output": "docs/architecture/shopify-devops/diagrams/local-stack.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "infra",
+      "label": "Hạ tầng + job một lần"
+    },
+    {
+      "id": "api",
+      "label": "API"
+    },
+    {
+      "id": "edge",
+      "label": "Giao diện + seed"
+    }
+  ],
+  "mainPath": [
+    "postgres",
+    "roles",
+    "migrate",
+    "catalog",
+    "orders",
+    "storefront",
+    "seed"
+  ],
+  "nodes": [
+    {
+      "id": "postgres",
+      "lane": "infra",
+      "col": 0,
+      "type": "database",
+      "label": "postgres",
+      "sublabel": "pg_isready TCP"
+    },
+    {
+      "id": "redis",
+      "lane": "infra",
+      "col": 5,
+      "type": "messagebus",
+      "label": "redis",
+      "sublabel": "AOF · requirepass"
+    },
+    {
+      "id": "roles",
+      "lane": "infra",
+      "col": 1,
+      "type": "security",
+      "label": "db-roles",
+      "sublabel": "role + schema"
+    },
+    {
+      "id": "migrate",
+      "lane": "infra",
+      "col": 2,
+      "type": "backend",
+      "label": "migrate-*",
+      "sublabel": "dbmate up, hai schema"
+    },
+    {
+      "id": "catalog",
+      "lane": "api",
+      "col": 3,
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "/health/ready",
+      "width": 140
+    },
+    {
+      "id": "orders",
+      "lane": "api",
+      "col": 4,
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "/health/ready",
+      "width": 140
+    },
+    {
+      "id": "storefront",
+      "lane": "edge",
+      "col": 4,
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "/healthz"
+    },
+    {
+      "id": "seed",
+      "lane": "edge",
+      "col": 5,
+      "type": "cloud",
+      "label": "seed",
+      "sublabel": "make dev-up, sau --wait",
+      "tag": "job"
+    },
+    {
+      "id": "worker",
+      "lane": "api",
+      "col": 5,
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "/health/ready :4003"
+    },
+    {
+      "id": "worker",
+      "lane": "api",
+      "col": 5,
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "/health/ready :4003"
+    },
+    {
+      "id": "worker",
+      "lane": "api",
+      "col": 5,
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "/health/ready :4003"
+    },
+    {
+      "id": "worker",
+      "lane": "api",
+      "col": 5,
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "/health/ready :4003"
+    }
+  ],
+  "edges": [
+    {
+      "from": "postgres",
+      "to": "roles",
+      "label": "healthy"
+    },
+    {
+      "from": "roles",
+      "to": "migrate",
+      "label": "xong"
+    },
+    {
+      "from": "migrate",
+      "to": "catalog",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "catalog",
+      "to": "orders",
+      "label": "healthy"
+    },
+    {
+      "from": "orders",
+      "to": "storefront",
+      "label": "healthy",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "storefront",
+      "to": "seed",
+      "variant": "dashed"
+    },
+    {
+      "from": "redis",
+      "to": "worker",
+      "label": "healthy",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "redis",
+      "to": "worker",
+      "label": "healthy",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "redis",
+      "to": "worker",
+      "label": "healthy",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "redis",
+      "to": "worker",
+      "label": "healthy",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Chỉ trả về khi xanh",
+      "items": [
+        "up --wait chờ mọi healthcheck",
+        "Sau đó mới chạy seed"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Ba chi tiết",
+      "items": [
+        "order-service còn chờ migrate-orders xong",
+        "worker chờ migrate-orders, catalog và redis healthy",
+        "storefront chờ catalog-cart-api và order-service"
+      ]
+    }
+  ]
+}

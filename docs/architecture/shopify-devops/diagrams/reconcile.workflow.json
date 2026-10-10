@@ -1,0 +1,156 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Không mất Order khi queue hỏng: dispatch và reconcile",
+    "output": "docs/architecture/shopify-devops/diagrams/reconcile.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Đường chính"
+    },
+    {
+      "id": "recover",
+      "label": "Khôi phục",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "outbox",
+    "dispatch",
+    "queue",
+    "settle",
+    "done"
+  ],
+  "nodes": [
+    {
+      "id": "outbox",
+      "lane": "main",
+      "col": 0,
+      "type": "database",
+      "label": "orders.outbox",
+      "sublabel": "dispatched_at NULL",
+      "width": 130
+    },
+    {
+      "id": "dispatch",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "dispatchOutbox",
+      "sublabel": "mỗi 250 ms · 2 s timeout",
+      "width": 140
+    },
+    {
+      "id": "queue",
+      "lane": "main",
+      "col": 2,
+      "type": "messagebus",
+      "label": "Redis · BullMQ",
+      "sublabel": "jobId = event_id",
+      "width": 120
+    },
+    {
+      "id": "settle",
+      "lane": "main",
+      "col": 3,
+      "type": "backend",
+      "label": "settleOrder",
+      "sublabel": "10 lần, backoff",
+      "width": 110
+    },
+    {
+      "id": "done",
+      "lane": "main",
+      "col": 4,
+      "type": "external",
+      "label": "Order terminal",
+      "sublabel": "status là bằng chứng"
+    },
+    {
+      "id": "lost",
+      "lane": "recover",
+      "col": 3,
+      "type": "security",
+      "label": "Vẫn PENDING",
+      "sublabel": "job mất hoặc hết lần",
+      "width": 140
+    },
+    {
+      "id": "reconcile",
+      "lane": "recover",
+      "col": 0,
+      "type": "backend",
+      "label": "reconcileStalePending",
+      "sublabel": "quá 30 s, mỗi 10 s",
+      "width": 170
+    }
+  ],
+  "edges": [
+    {
+      "from": "outbox",
+      "to": "dispatch",
+      "label": "① poll"
+    },
+    {
+      "from": "dispatch",
+      "to": "queue",
+      "label": "② add"
+    },
+    {
+      "from": "queue",
+      "to": "settle",
+      "label": "③ job"
+    },
+    {
+      "from": "settle",
+      "to": "done",
+      "label": "④ xong",
+      "variant": "emphasis"
+    },
+    {
+      "from": "settle",
+      "to": "lost",
+      "label": "⑤ hết lần",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "lost",
+      "to": "reconcile",
+      "label": "⑥ stale"
+    },
+    {
+      "from": "reconcile",
+      "to": "outbox",
+      "label": "⑦ dispatched_at NULL",
+      "variant": "dashed",
+      "route": "drop",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Redis chết vẫn nhận đơn",
+      "items": [
+        "Checkout chỉ ghi outbox, không chạm Redis",
+        "Dispatcher thất bại thì lần sau thử lại"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Vòng lặp dài hạn",
+      "items": [
+        "Job hết lần bị xoá để giải phóng jobId",
+        "Reconcile xoá dispatched_at, dispatcher enqueue lại"
+      ]
+    }
+  ]
+}

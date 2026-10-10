@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Bad release: bật cờ lỗi, phát hiện, git revert, tự khôi phục",
+    "output": "docs/architecture/shopify-devops/diagrams/bad-release.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "operator",
+      "label": "Operator"
+    },
+    {
+      "id": "auto",
+      "label": "Tự động",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "fault",
+    "rollout",
+    "alert",
+    "revert",
+    "rollback",
+    "resolved"
+  ],
+  "nodes": [
+    {
+      "id": "fault",
+      "lane": "operator",
+      "col": 0,
+      "type": "external",
+      "label": "Merge PR #13",
+      "sublabel": "FAULT_CHECKOUT_ERRORS=true",
+      "width": 170
+    },
+    {
+      "id": "rollout",
+      "lane": "auto",
+      "col": 1,
+      "type": "backend",
+      "label": "Argo CD roll pod",
+      "sublabel": "Checkout 500, vẫn ready",
+      "width": 160
+    },
+    {
+      "id": "alert",
+      "lane": "auto",
+      "col": 2,
+      "type": "security",
+      "label": "FIRING",
+      "sublabel": "ShopServerErrorRatioHigh",
+      "width": 160
+    },
+    {
+      "id": "revert",
+      "lane": "operator",
+      "col": 3,
+      "type": "external",
+      "label": "git revert",
+      "sublabel": "PR #14, CI xanh",
+      "width": 130
+    },
+    {
+      "id": "rollback",
+      "lane": "auto",
+      "col": 4,
+      "type": "backend",
+      "label": "Argo CD sync lại",
+      "sublabel": "Checkout chạy được",
+      "width": 150
+    },
+    {
+      "id": "resolved",
+      "lane": "auto",
+      "col": 5,
+      "type": "external",
+      "label": "RESOLVED",
+      "sublabel": "hai receiver",
+      "width": 120
+    }
+  ],
+  "edges": [
+    {
+      "from": "fault",
+      "to": "rollout",
+      "label": "① cấu hình đổi",
+      "route": "drop"
+    },
+    {
+      "from": "rollout",
+      "to": "alert",
+      "label": "② 5xx trên 5%",
+      "variant": "emphasis"
+    },
+    {
+      "from": "alert",
+      "to": "revert",
+      "label": "③ operator quyết"
+    },
+    {
+      "from": "revert",
+      "to": "rollback",
+      "label": "④ merge"
+    },
+    {
+      "from": "rollback",
+      "to": "resolved",
+      "label": "⑤ cửa sổ 2 phút sạch",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Run 2 (quy tắc cũ, được nhận)",
+      "items": [
+        "Fault live đến FIRING: 1 phút 34 giây",
+        "FIRING đến Checkout chạy lại: 2 phút 14 giây",
+        "Checkout hỏng tổng cộng 3 phút 48 giây"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Run 1 (thí nghiệm hỏng)",
+      "items": [
+        "Alert tự hết vì traffic tụt dưới mức tối thiểu",
+        "Drill giữ traffic đều; rule nay thêm keep_firing_for 1m"
+      ]
+    }
+  ]
+}

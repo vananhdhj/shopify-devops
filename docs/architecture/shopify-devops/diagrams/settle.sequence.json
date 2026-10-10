@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Worker settle một Order: outbox, queue, kho, trạng thái",
+    "output": "docs/architecture/shopify-devops/diagrams/settle.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread"
+  },
+  "participants": [
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis",
+      "sublabel": "queue orders"
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "dispatcher + consumer"
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "/internal/inventory-effects"
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "orders + catalog"
+    }
+  ],
+  "messages": [
+    {
+      "id": "poll",
+      "from": "worker",
+      "to": "pg",
+      "y": 170,
+      "label": "① SELECT outbox chưa dispatch · SKIP LOCKED"
+    },
+    {
+      "id": "enqueue",
+      "from": "worker",
+      "to": "redis",
+      "y": 205,
+      "label": "② queue.add · jobId = event_id"
+    },
+    {
+      "id": "job",
+      "from": "redis",
+      "to": "worker",
+      "y": 240,
+      "label": "③ job settle-order {orderId}",
+      "variant": "return"
+    },
+    {
+      "id": "load",
+      "from": "worker",
+      "to": "pg",
+      "y": 275,
+      "label": "④ SELECT status, scenario, items"
+    },
+    {
+      "id": "deduct",
+      "from": "worker",
+      "to": "catalog",
+      "y": 310,
+      "label": "⑤ POST deduct · x-internal-token",
+      "variant": "emphasis"
+    },
+    {
+      "id": "stock",
+      "from": "catalog",
+      "to": "pg",
+      "y": 345,
+      "label": "lock hàng · UPDATE stock · INSERT effect"
+    },
+    {
+      "id": "outcome",
+      "from": "catalog",
+      "to": "worker",
+      "y": 380,
+      "label": "applied | insufficient_stock",
+      "variant": "return"
+    },
+    {
+      "id": "transition",
+      "from": "worker",
+      "to": "pg",
+      "y": 415,
+      "label": "⑥ UPDATE status + INSERT order_events",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Làm lại vẫn an toàn",
+      "items": [
+        "Effect khoá theo (Order, action)",
+        "UPDATE chỉ áp từ PENDING; job thừa là no-op"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Decline thì nhả kho trước",
+      "items": [
+        "Release lỗi thì Order vẫn PENDING và retry",
+        "Payment scenario lưu trên Order, không roll lại"
+      ]
+    }
+  ]
+}

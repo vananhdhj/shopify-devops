@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Shopify DevOps Lab: tổng quan hiện tại",
+    "output": "docs/architecture/shopify-devops/diagrams/overview.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "guest",
+      "type": "external",
+      "label": "Guest buyer",
+      "sublabel": "trình duyệt",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        120,
+        60
+      ]
+    },
+    {
+      "id": "merchant",
+      "type": "external",
+      "label": "Merchant",
+      "sublabel": "trình duyệt",
+      "pos": [
+        40,
+        440
+      ],
+      "size": [
+        120,
+        60
+      ]
+    },
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "Next.js :3000",
+      "pos": [
+        300,
+        240
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "orders",
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "Fastify :4002",
+      "pos": [
+        580,
+        60
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "Fastify :4001",
+      "pos": [
+        580,
+        240
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "BullMQ · ops :4003",
+      "pos": [
+        580,
+        440
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL 18",
+      "sublabel": "schema catalog + orders",
+      "pos": [
+        880,
+        240
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis 8",
+      "sublabel": "queue orders",
+      "pos": [
+        880,
+        440
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "monitoring",
+      "type": "cloud",
+      "label": "Monitoring",
+      "sublabel": "Prometheus · Alertmanager · Grafana",
+      "pos": [
+        560,
+        640
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "discord",
+      "type": "external",
+      "label": "Discord",
+      "sublabel": "webhook + alert-catcher",
+      "pos": [
+        880,
+        640
+      ],
+      "size": [
+        150,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Compose · hoặc k3d namespace shop-dev",
+      "wraps": [
+        "storefront",
+        "orders",
+        "catalog",
+        "worker",
+        "pg",
+        "redis"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browse",
+      "from": "guest",
+      "to": "storefront",
+      "label": "① HTTP :3000",
+      "variant": "emphasis"
+    },
+    {
+      "id": "checkout",
+      "from": "storefront",
+      "to": "orders",
+      "label": "② POST /checkout",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "orders-to-pg",
+      "from": "orders",
+      "to": "pg",
+      "label": "③ Order + outbox · order_app",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "worker-to-redis",
+      "from": "worker",
+      "to": "redis",
+      "label": "④ enqueue / consume",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-to-catalog",
+      "from": "worker",
+      "to": "catalog",
+      "label": "⑤ Inventory effect",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "worker-to-pg",
+      "from": "worker",
+      "to": "pg",
+      "label": "⑥ status · order_app",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "merchant-to-store",
+      "from": "merchant",
+      "to": "storefront",
+      "label": "⑦ sign-in · Fulfill",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "storefront-to-catalog",
+      "from": "storefront",
+      "to": "catalog",
+      "label": "HTTP server-side"
+    },
+    {
+      "id": "orders-to-catalog",
+      "from": "orders",
+      "to": "catalog",
+      "label": "GET /carts/:id",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "catalog-to-pg",
+      "from": "catalog",
+      "to": "pg",
+      "label": "SQL · catalog_app"
+    },
+    {
+      "id": "scrape",
+      "from": "monitoring",
+      "to": "worker",
+      "label": "scrape /metrics · 15 s",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "alert",
+      "from": "monitoring",
+      "to": "discord",
+      "label": "alert · FIRING, RESOLVED",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Ba tiến trình, hai ranh giới dữ liệu",
+      "items": [
+        "catalog-cart-api sở hữu sản phẩm, giá, Cart, Stock",
+        "order-service và worker dùng chung danh tính order_app",
+        "Không service nào gọi DB của lát kia"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Quan sát và drill",
+      "items": [
+        "Metric theo route template, 2 alert trong Git",
+        "Drill: dừng worker, và bật cờ lỗi Checkout rồi git revert",
+        "CI, GHCR, Argo CD: xem diagram gitops"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Một PostgreSQL, hai schema, ba danh tính",
+    "output": "docs/architecture/shopify-devops/diagrams/db-isolation.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "roles",
+      "type": "backend",
+      "label": "db-roles",
+      "sublabel": "roles.sh · superuser",
+      "pos": [
+        40,
+        140
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "migrator",
+      "type": "security",
+      "label": "migrator",
+      "sublabel": "sở hữu cả hai schema",
+      "tag": "dbmate",
+      "pos": [
+        330,
+        140
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "schema_catalog",
+      "type": "database",
+      "label": "schema catalog",
+      "sublabel": "products · carts · inventory_effects",
+      "pos": [
+        640,
+        40
+      ],
+      "size": [
+        190,
+        60
+      ]
+    },
+    {
+      "id": "schema_orders",
+      "type": "database",
+      "label": "schema orders",
+      "sublabel": "orders · items · outbox · order_events",
+      "pos": [
+        640,
+        260
+      ],
+      "size": [
+        190,
+        60
+      ]
+    },
+    {
+      "id": "catalog_app",
+      "type": "security",
+      "label": "catalog_app",
+      "sublabel": "runtime của catalog",
+      "pos": [
+        1030,
+        40
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "order_app",
+      "type": "security",
+      "label": "order_app",
+      "sublabel": "order-service + worker",
+      "pos": [
+        1030,
+        260
+      ],
+      "size": [
+        140,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "lát catalog",
+      "wraps": [
+        "schema_catalog",
+        "catalog_app"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "lát orders",
+      "wraps": [
+        "schema_orders",
+        "order_app"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "creates",
+      "from": "roles",
+      "to": "migrator",
+      "label": "tạo role + schema",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ddl-catalog",
+      "from": "migrator",
+      "to": "schema_catalog",
+      "label": "DDL",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "ddl-orders",
+      "from": "migrator",
+      "to": "schema_orders",
+      "label": "DDL",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "catalog-rw",
+      "from": "catalog_app",
+      "to": "schema_catalog",
+      "label": "SELECT · INSERT · UPDATE (stock)",
+      "variant": "security"
+    },
+    {
+      "id": "orders-rw",
+      "from": "order_app",
+      "to": "schema_orders",
+      "label": "SELECT · INSERT · UPDATE (status)",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Least privilege",
+      "items": [
+        "Runtime role không có DDL, không DROP",
+        "UPDATE chỉ theo cột: stock, status, dispatched_at",
+        "Không có FK xuyên schema"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Đã kiểm chứng",
+      "items": [
+        "db-identities.test.ts chạy bằng từng danh tính",
+        "catalog_app không đọc/ghi orders",
+        "order_app không sửa stock, Cart, snapshot"
+      ]
+    }
+  ]
+}

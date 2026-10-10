@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Alert drill: dừng worker, Order PENDING quá 60 s thì báo",
+    "output": "docs/architecture/shopify-devops/diagrams/stale-alert.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread"
+  },
+  "participants": [
+    { "id": "operator", "type": "external", "label": "Operator", "sublabel": "drill-stale-pending" },
+    { "id": "worker", "type": "backend", "label": "worker", "sublabel": "replicas 1 → 0 → 1" },
+    { "id": "orders", "type": "backend", "label": "order-service", "sublabel": "/metrics" },
+    { "id": "pg", "type": "database", "label": "PostgreSQL", "sublabel": "orders.orders" },
+    { "id": "prom", "type": "database", "label": "Prometheus", "sublabel": "rule mỗi 15 s" },
+    { "id": "alertmanager", "type": "backend", "label": "Alertmanager", "sublabel": "route" },
+    { "id": "receivers", "type": "external", "label": "Receivers", "sublabel": "catcher, Discord" }
+  ],
+  "messages": [
+    { "id": "stop", "from": "operator", "to": "worker", "y": 170, "label": "① scale worker=0 · tạm dừng auto-sync" },
+    { "id": "checkout", "from": "operator", "to": "orders", "y": 205, "label": "② Checkout approve → Order PENDING" },
+    { "id": "scrape", "from": "prom", "to": "orders", "y": 240, "label": "③ scrape /metrics" },
+    { "id": "age", "from": "orders", "to": "pg", "y": 275, "label": "SELECT tuổi Order PENDING cũ nhất" },
+    { "id": "gauge", "from": "orders", "to": "prom", "y": 310, "label": "orders_oldest_pending_age_seconds", "variant": "return" },
+    { "id": "fire", "from": "prom", "to": "alertmanager", "y": 345, "label": "④ lớn hơn 60 s: firing", "variant": "emphasis" },
+    { "id": "notify", "from": "alertmanager", "to": "receivers", "y": 380, "label": "⑤ FIRING · webhook + Discord", "variant": "emphasis" },
+    { "id": "restore", "from": "operator", "to": "worker", "y": 415, "label": "⑥ scale worker=1 · bật lại auto-sync" },
+    { "id": "settle", "from": "worker", "to": "pg", "y": 450, "label": "⑦ settle: PENDING → CONFIRMED" },
+    { "id": "clear", "from": "prom", "to": "alertmanager", "y": 485, "label": "⑧ gauge về 0: resolved" },
+    { "id": "resolved", "from": "alertmanager", "to": "receivers", "y": 520, "label": "⑨ RESOLVED", "variant": "return" }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Gauge đọc DB lúc scrape",
+      "items": [
+        "Nằm ở order-service, không ở worker",
+        "Worker chết thì gauge vẫn tăng và alert vẫn chạy"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Drill phải dừng self-heal",
+      "items": [
+        "Argo CD tự đưa replicas về 1 sau vài giây",
+        "Script tạm tắt automated sync và luôn khôi phục khi thoát"
+      ]
+    }
+  ]
+}

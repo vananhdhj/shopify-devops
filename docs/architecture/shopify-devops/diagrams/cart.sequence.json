@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Thêm vào Cart: cookie ở storefront, Cart ở catalog",
+    "output": "docs/architecture/shopify-devops/diagrams/cart.html",
+    "column_fit": "spread",
+    "quality_profile": "showcase"
+  },
+  "participants": [
+    { "id": "guest", "type": "external", "label": "Guest buyer", "sublabel": "trình duyệt" },
+    { "id": "storefront", "type": "frontend", "label": "storefront", "sublabel": "POST /cart/items" },
+    { "id": "catalog", "type": "backend", "label": "catalog-cart-api", "sublabel": "Fastify" },
+    { "id": "pg", "type": "database", "label": "PostgreSQL", "sublabel": "schema catalog" }
+  ],
+  "messages": [
+    { "id": "post-form", "from": "guest", "to": "storefront", "y": 170, "label": "① form POST productId + action", "variant": "emphasis" },
+    { "id": "get-cart", "from": "storefront", "to": "catalog", "y": 205, "label": "② GET /carts/:id (nếu có cookie)" },
+    { "id": "cart-back", "from": "catalog", "to": "storefront", "y": 235, "label": "Cart hiện tại hoặc 404", "variant": "return" },
+    { "id": "create-cart", "from": "storefront", "to": "catalog", "y": 270, "label": "③ POST /carts (nếu chưa có Cart)", "variant": "dashed" },
+    { "id": "put-qty", "from": "storefront", "to": "catalog", "y": 305, "label": "④ PUT /carts/:id/items/:productId", "variant": "emphasis" },
+    { "id": "write-lines", "from": "catalog", "to": "pg", "y": 340, "label": "⑤ UPDATE carts · UPSERT hoặc DELETE cart_items" },
+    { "id": "rows-ok", "from": "pg", "to": "catalog", "y": 372, "label": "ok", "variant": "return" },
+    { "id": "cart-priced", "from": "catalog", "to": "storefront", "y": 404, "label": "⑥ 200 Cart, giá hiện tại", "variant": "return" },
+    { "id": "redirect", "from": "storefront", "to": "guest", "y": 440, "label": "⑦ 303 /cart + Set-Cookie cart (httpOnly)", "variant": "return" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Không giữ hàng", "items": ["Thêm vào Cart không đụng tới stock", "Stock chỉ đổi qua Inventory effect (chưa có)"] },
+    { "dot": "amber", "title": "Có thể mất increment", "items": ["action=add là đọc rồi ghi", "Hai lần thêm đồng thời có thể mất một lần"] }
+  ]
+}

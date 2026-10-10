@@ -16,3 +16,4 @@ A retried Checkout must hand back the same Order token, because a buyer whose fi
 - Rotating `ORDER_TOKEN_SECRET` invalidates every Order link already handed out, so this secret is excluded from routine rotation in the POC. The upgrade path is a key-version prefix on tokens, accepting the previous key during a rotation window.
 - Anyone holding the secret can mint a token for any Order; it is a server-side secret like the database passwords and never leaves the order service.
 - Tokens travel in an `x-order-token` header to the API. The storefront's buyer-facing link carries the token as `?token=`, so storefront request logging must never record query strings.
+- Verified 2026-10-10: the storefront's request log (`apps/storefront/proxy.ts`) records the path only, and `tests/integration/src/storefront-logs.test.ts` fails if an Order token appears in the storefront's logs.
