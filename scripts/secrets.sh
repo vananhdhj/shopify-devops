@@ -28,6 +28,7 @@ add_if_missing GRAFANA_ADMIN_PASSWORD
 grep -q "^ADMIN_PASSWORD=" "$file" || echo "ADMIN_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=')" >>"$file"
 if ! grep -q "^ADMIN_PASSWORD_HASH=" "$file"; then
   password="$(grep "^ADMIN_PASSWORD=" "$file" | cut -d= -f2-)"
+  # shellcheck disable=SC2016 # a JavaScript template literal, not shell
   hash="$(ADMIN_PASSWORD="$password" node -e '
     const { randomBytes, scryptSync } = require("node:crypto");
     const salt = randomBytes(16);
