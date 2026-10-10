@@ -7,6 +7,8 @@ export interface WorkerMetrics {
   registry: Registry;
   settled: Counter<"outcome">;
   failures: Counter;
+  exhausted: Counter;
+  requeued: Counter;
 }
 
 /** Order-lifecycle metrics; queue depth and oldest Pending age are read fresh at scrape time. */
@@ -22,6 +24,16 @@ export function workerMetrics(db: Pool, queue: JobCounter): WorkerMetrics {
   const failures = new Counter({
     name: "worker_job_failures_total",
     help: "Failed job attempts; each is retried until attempts run out",
+    registers: [registry],
+  });
+  const exhausted = new Counter({
+    name: "worker_jobs_exhausted_total",
+    help: "Settle jobs that used every attempt and were removed, leaving the Order to reconciliation",
+    registers: [registry],
+  });
+  const requeued = new Counter({
+    name: "outbox_events_requeued_total",
+    help: "Reconciliation requeues of a stale Pending order's outbox event (one Order can count once per window)",
     registers: [registry],
   });
   new Gauge({
@@ -45,7 +57,7 @@ export function workerMetrics(db: Pool, queue: JobCounter): WorkerMetrics {
     },
   });
 
-  return { registry, settled, failures };
+  return { registry, settled, failures, exhausted, requeued };
 }
 
 export function recordSettlement(metrics: WorkerMetrics, settlement: Settlement): void {

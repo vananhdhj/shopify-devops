@@ -141,6 +141,11 @@ services:
       CATALOG_API_URL: http://catalog-cart-api:4001
       INTERNAL_INVENTORY_TOKEN: ${INTERNAL_INVENTORY_TOKEN:?run make secrets}
       APP_ENV: dev
+      # Short retry and reconciliation windows in dev, so failure drills finish in seconds.
+      SETTLE_ATTEMPTS: "5"
+      SETTLE_BACKOFF_MS: "250"
+      RECONCILE_INTERVAL_MS: "2000"
+      RECONCILE_STALE_AFTER_MS: "5000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4003/health/ready"]
       interval: 2s

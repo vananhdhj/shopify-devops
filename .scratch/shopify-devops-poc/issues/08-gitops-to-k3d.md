@@ -20,3 +20,4 @@
 ## Comments
 
 - Carried from ticket 01 review: schemas are created by the superuser role-bootstrap step (not dbmate) and migrations/seed are mounted from the host in Compose; the in-cluster migration job needs its own way to run role bootstrap and ship migration files.
+- Carried from ticket 05: the cluster's Redis must run with persistence (`--appendonly yes`), `--maxmemory-policy noeviction`, a password, and a persistent volume, exactly as in Compose; and the worker's retry/reconciliation settings (SETTLE_ATTEMPTS, SETTLE_BACKOFF_MS, RECONCILE_INTERVAL_MS, RECONCILE_STALE_AFTER_MS) must be set per environment (production-like defaults, not the short dev values).

@@ -5,18 +5,15 @@ import { dispatchOutbox } from "./dispatcher.ts";
 import { inventoryClient } from "./inventory-client.ts";
 import { recordSettlement, workerMetrics } from "./metrics.ts";
 import { ordersQueue, redisConnection, type SettleOrderJob } from "./queue.ts";
+import { reconcileStalePending } from "./reconcile.ts";
 import { settleOrder } from "./settle.ts";
-
-function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
-  return Promise.race([
-    work,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms).unref()),
-  ]);
-}
+import { withTimeout } from "./timeout.ts";
 
 const db = createPool(config.databaseUrl);
 const connection = redisConnection(config.redisUrl);
-const queue = new Queue<SettleOrderJob>(ordersQueue, { connection });
+// The producer side fails fast while Redis is unreachable instead of buffering commands in
+// memory: during a long outage the dispatcher would otherwise pile up abandoned enqueues.
+const queue = new Queue<SettleOrderJob>(ordersQueue, { connection: { ...connection, enableOfflineQueue: false } });
 const metrics = workerMetrics(db, queue);
 
 // Private operational listener: health and metrics only, no business endpoints.
@@ -50,24 +47,39 @@ const worker = new Worker<SettleOrderJob>(
 worker.on("failed", (job, err) => {
   metrics.failures.inc();
   ops.log.warn({ orderId: job?.data.orderId, attempt: job?.attemptsMade, err }, "settle attempt failed");
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    metrics.exhausted.inc();
+    ops.log.warn({ orderId: job.data.orderId }, "settle attempts exhausted; left to reconciliation");
+  }
 });
 
-let dispatching = true;
-async function dispatchLoop(): Promise<void> {
-  while (dispatching) {
+let running = true;
+/** Runs `step` every `intervalMs` until shutdown, logging (not throwing) failures. */
+async function every(intervalMs: number, taskName: string, step: () => Promise<void>): Promise<void> {
+  while (running) {
     try {
-      await dispatchOutbox(db, queue);
+      await step();
     } catch (err) {
-      ops.log.warn({ err }, "outbox dispatch failed; retrying");
+      ops.log.warn({ err }, `${taskName} failed; retrying`);
     }
-    await new Promise((resolve) => setTimeout(resolve, config.dispatchIntervalMs));
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }
-void dispatchLoop();
+
+void every(config.dispatchIntervalMs, "outbox dispatch", async () => {
+  await dispatchOutbox(db, queue, config.settleRetry);
+});
+void every(config.reconcileIntervalMs, "reconciliation", async () => {
+  const requeued = await reconcileStalePending(db, config.reconcileStaleAfterMs);
+  if (requeued > 0) {
+    metrics.requeued.inc(requeued);
+    ops.log.info({ requeued }, "requeueing stale Pending orders");
+  }
+});
 
 // On SIGTERM: stop dispatching and taking jobs, let active jobs finish, then close the rest.
 await runService(ops, db, config.opsPort, async () => {
-  dispatching = false;
+  running = false;
   await worker.close();
   await queue.close();
 });

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { secret } from "./secrets.ts";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -35,5 +36,10 @@ export function metricValue(metrics: string, name: string): number {
   const match = metrics.match(new RegExp(`^${name} ([\\d.e+-]+)$`, "m"));
   if (!match) throw new Error(`metric ${name} not found`);
   return Number(match[1]);
+}
+
+/** Runs a Redis command inside the queue's Redis, authenticated with the stack's password. */
+export function redisCli(...args: string[]): string {
+  return compose("exec", "-T", "redis", "redis-cli", "-a", secret("REDIS_PASSWORD"), "--no-auth-warning", ...args);
 }
 
