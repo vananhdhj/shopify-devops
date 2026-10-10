@@ -1,0 +1,31 @@
+# Which paths make which unit "affected". Anything shared by several units (contracts, service-kit,
+# lockfile, build and CI config) is `shared` and affects every service.
+shared:
+  - "packages/**"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "turbo.json"
+  - "tsconfig.base.json"
+  - "biome.jsonc"
+  - ".dockerignore"
+  - "compose.yaml"
+  - "Makefile"
+  - "scripts/**"
+  - ".github/**"
+catalog-cart-api:
+  - "apps/catalog-cart-api/**"
+  - "db/catalog/**"
+  - "db/seed/**"
+  - "db/roles.sh"
+order-service:
+  - "apps/order-service/**"
+  - "db/orders/**"
+  - "db/roles.sh"
+worker:
+  - "apps/worker/**"
+  - "db/orders/**"
+storefront:
+  - "apps/storefront/**"
+tests:
+  - "tests/**"

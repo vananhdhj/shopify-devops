@@ -28,7 +28,7 @@ const settlementFor: Record<Terminal, Settlement> = {
  */
 export async function settleOrder(deps: SettleDeps, orderId: string): Promise<Settlement> {
   const order = await loadOrder(deps.db, orderId);
-  if (!order || order.status !== "PENDING") return "already_settled";
+  if (order?.status !== "PENDING") return "already_settled";
 
   const deduction = await deps.inventory.deduct(orderId, order.items);
   if (deduction === "insufficient_stock") return finish(deps.db, orderId, "REJECTED_OUT_OF_STOCK");

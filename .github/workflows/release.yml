@@ -1,0 +1,81 @@
+name: release
+
+# On main: build each affected service image once, push it to GHCR, and record its digest.
+# Deploy-only commits (the digest bump of ADR-0003, ticket 08) never rebuild anything.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "deploy/**"
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Build and publish every service image
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.affected.outputs.services }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/path-filters.yml
+      - id: affected
+        run: .github/scripts/affected-services.sh '${{ steps.filter.outputs.changes }}' '${{ github.event_name == 'workflow_dispatch' && inputs.all }}'
+
+  publish:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.service }}:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Record the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.service }}
+        run: |
+          mkdir -p digests
+          jq -n --arg service "${{ matrix.service }}" --arg image "$IMAGE" --arg digest "$DIGEST" --arg commit "$GITHUB_SHA" \
+            '{service: $service, image: $image, digest: $digest, ref: "\($image)@\($digest)", commit: $commit}' \
+            >"digests/${{ matrix.service }}.json"
+          cat "digests/${{ matrix.service }}.json"
+          echo "### ${{ matrix.service }}: \`$IMAGE@$DIGEST\`" >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.service }}
+          path: digests/${{ matrix.service }}.json
