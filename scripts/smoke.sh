@@ -5,7 +5,11 @@
 # Modes for the bad-release drill (ShopServerErrorRatioHigh, read at the in-cluster alert catcher):
 #   check    (default) the storefront serves the catalog and a Checkout is Confirmed
 #   fault    with the fault release live: one Checkout attempt a second until the alert fires
-#   recover  after the revert: a Checkout every 5 s until the alert resolves, then `check`
+#   recover  after merging the revert: one Checkout attempt a second until Checkout works again, and
+#            on until the alert resolves, then `check`. The traffic never pauses: the alert needs a
+#            minimum request rate, so a lull would end it while Checkout is still broken.
+# Drill traffic uses the decline Payment scenario, whose Inventory effects deduct and then release
+# Stock, so hundreds of drill Orders leave the seeded Stock unchanged.
 set -euo pipefail
 
 mode="${1:-check}"
@@ -18,16 +22,10 @@ source "$(dirname "$0")/checkout.sh"
 # shellcheck source=scripts/alert-catcher.sh
 source "$(dirname "$0")/alert-catcher.sh"
 
-# Places Checkouts every <interval> seconds until the catcher has more <status> notifications
-# for the alert than <before>, or <attempts> run out. Counts outcomes in `accepted` and `failed`.
-traffic_until() { # traffic_until <status> <before> <interval> <attempts>
-  accepted=0 failed=0
-  for _ in $(seq 1 "$4"); do
-    if place_checkout "$base" approve >/dev/null 2>&1; then accepted=$((accepted + 1)); else failed=$((failed + 1)); fi
-    [ "$(caught_count "$alert" "$1")" -gt "$2" ] && return 0
-    sleep "$3"
-  done
-  return 1
+# One drill Checkout, counted in `accepted` or `failed`; succeeds only when the Checkout was accepted.
+accepted=0 failed=0
+attempt() {
+  if place_checkout "$base" decline >/dev/null 2>&1; then accepted=$((accepted + 1)); else failed=$((failed + 1)); return 1; fi
 }
 
 case "$mode" in
@@ -44,17 +42,34 @@ done
 if [ "$mode" = fault ]; then
   before="$(caught_count "$alert" firing)"
   echo "$(stamp) one Checkout attempt a second until $alert reaches the alert catcher..."
-  traffic_until firing "$before" 1 480 || fail "$alert never fired ($accepted accepted, $failed failed)"
+  for _ in $(seq 1 480); do
+    attempt || true
+    [ "$(caught_count "$alert" firing)" -gt "$before" ] && break
+    sleep 1
+  done
+  [ "$(caught_count "$alert" firing)" -gt "$before" ] || fail "$alert never fired ($accepted accepted, $failed failed)"
   echo "$(stamp) FIRING received: $(caught "$alert" firing | tail -n 1)"
   echo "smoke: OK - fault drill: $failed Checkouts failed, $accepted accepted; $alert fired at the alert catcher"
   exit 0
 fi
 
 if [ "$mode" = recover ]; then
-  before="$(caught_count "$alert" resolved)"
-  echo "$(stamp) one Checkout every 5 s until $alert resolves at the alert catcher..."
-  traffic_until resolved "$before" 5 120 || fail "$alert never resolved ($accepted accepted, $failed failed)"
-  echo "$(stamp) RESOLVED received: $(caught "$alert" resolved | tail -n 1)"
+  echo "$(stamp) one Checkout attempt a second until Checkout works again..."
+  for _ in $(seq 1 600); do attempt && break; sleep 1; done
+  [ "$accepted" -gt 0 ] || fail "Checkout never recovered ($failed attempts failed)"
+  recovered="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "$(stamp) Checkout recovered after $failed failed attempts"
+
+  # Only a resolution after the recovery counts: one before it would mean the alert ended for another reason.
+  resolved_after_recovery() { caught "$alert" resolved | jq -c --arg t "$recovered" 'select(.endsAt > $t)' | tail -n 1; }
+  echo "$(stamp) one Checkout a second until $alert resolves at the alert catcher..."
+  for _ in $(seq 1 600); do
+    attempt || true
+    [ -n "$(resolved_after_recovery)" ] && break
+    sleep 1
+  done
+  [ -n "$(resolved_after_recovery)" ] || fail "$alert never resolved after the recovery"
+  echo "$(stamp) RESOLVED received: $(resolved_after_recovery)"
   echo "$(stamp) recovery traffic: $accepted Checkouts accepted, $failed failed"
 fi
 
