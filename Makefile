@@ -56,9 +56,11 @@ bootstrap-gitops: cluster-up
 	@echo "Argo CD UI: kubectl --context $(CONTEXT) -n argocd port-forward svc/argocd-server 8081:80"
 	@echo "Grafana:    kubectl --context $(CONTEXT) -n monitoring port-forward svc/monitoring-grafana 8082:80  (admin / GRAFANA_ADMIN_PASSWORD)"
 
-## Check a deployed environment through its ingress (default: the lab cluster's dev storefront)
+## Check a deployed environment through its ingress (default: the lab cluster's dev storefront).
+## Bad-release drill: MODE=fault once the fault is live, MODE=recover after the revert.
+MODE ?= check
 smoke:
-	@scripts/smoke.sh
+	@scripts/smoke.sh $(MODE)
 
 ## Alert drill: stop the worker on the lab cluster and watch ShopOldestPendingOrderStale fire and resolve
 drill-stale-pending:

@@ -15,6 +15,8 @@ export interface AppDeps {
   orderTokenSecret: string;
   /** Presented by the storefront on behalf of the signed-in Merchant. */
   adminServiceToken: string;
+  /** Fails every Checkout with 500, standing in for a bad release in the rollback drill. */
+  checkoutFault?: boolean;
 }
 
 const statusChangeBody = {
@@ -52,6 +54,7 @@ export function buildApp(deps: AppDeps) {
     const refuse = (reason: CheckoutRefusal) =>
       reply.code(refusalStatus[reason]).send({ error: reason, message: reason.replaceAll("_", " ") });
 
+    if (deps.checkoutFault) throw new Error("checkout fault injected (FAULT_CHECKOUT_ERRORS)");
     if (!isUuid(req.body.cartToken)) return refuse("cart_not_found");
     try {
       const request = { ...req.body, cartToken: req.body.cartToken.toLowerCase() };

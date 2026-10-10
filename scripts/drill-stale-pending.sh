@@ -13,15 +13,9 @@ k() { kubectl --context "$context" "$@"; }
 stamp() { date -u +%H:%M:%S; }
 # shellcheck source=scripts/checkout.sh
 source "$(dirname "$0")/checkout.sh"
-
-caught() { # alert-catcher records for ShopOldestPendingOrderStale with the given status
-  k -n monitoring logs deploy/alert-catcher --since=30m 2>/dev/null |
-    jq -c --arg s "$1" --arg ns "$namespace" 'select(.alertname=="ShopOldestPendingOrderStale" and .status==$s and .namespace==$ns)' 2>/dev/null || true
-}
-wait_for() { # wait_for <status> <timeout-seconds>
-  for _ in $(seq 1 "$2"); do [ -n "$(caught "$1")" ] && return 0; sleep 1; done
-  return 1
-}
+# shellcheck source=scripts/alert-catcher.sh
+source "$(dirname "$0")/alert-catcher.sh"
+alert=ShopOldestPendingOrderStale
 
 restore() {
   k -n "$namespace" scale deploy/worker --replicas=1 >/dev/null
@@ -29,7 +23,7 @@ restore() {
 }
 trap restore EXIT
 
-already_firing="$(caught firing | wc -l | tr -d ' ')"
+already_firing="$(caught_count "$alert" firing)"
 echo "$(stamp) pausing Argo CD automated sync for $namespace and stopping the worker"
 k -n argocd patch application shop-dev --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}' >/dev/null
 k -n "$namespace" scale deploy/worker --replicas=0 >/dev/null
@@ -38,17 +32,17 @@ k -n "$namespace" wait --for=delete pod -l app.kubernetes.io/name=worker --timeo
 order="$(place_checkout "$base" approve)"
 echo "$(stamp) placed an Order with no worker to settle it: status $(order_status "$order")"
 
-echo "$(stamp) waiting for ShopOldestPendingOrderStale to reach the alert catcher (threshold 60 s)..."
-for _ in $(seq 1 240); do [ "$(caught firing | wc -l | tr -d ' ')" -gt "$already_firing" ] && break; sleep 1; done
-[ "$(caught firing | wc -l | tr -d ' ')" -gt "$already_firing" ] || { echo "FAIL: alert never fired"; exit 1; }
-echo "$(stamp) FIRING received: $(caught firing | tail -n 1)"
+echo "$(stamp) waiting for $alert to reach the alert catcher (threshold 60 s)..."
+for _ in $(seq 1 240); do [ "$(caught_count "$alert" firing)" -gt "$already_firing" ] && break; sleep 1; done
+[ "$(caught_count "$alert" firing)" -gt "$already_firing" ] || { echo "FAIL: alert never fired"; exit 1; }
+echo "$(stamp) FIRING received: $(caught "$alert" firing | tail -n 1)"
 
 echo "$(stamp) restoring the worker and Argo CD automated sync"
 restore
 trap - EXIT
-already_resolved_line="$(caught resolved | tail -n 1)"
+already_resolved_line="$(caught "$alert" resolved | tail -n 1)"
 for _ in $(seq 1 240); do
-  last="$(caught resolved | tail -n 1)"
+  last="$(caught "$alert" resolved | tail -n 1)"
   [ -n "$last" ] && [ "$last" != "$already_resolved_line" ] && break
   sleep 1
 done
