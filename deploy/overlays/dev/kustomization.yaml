@@ -19,12 +19,12 @@ patches:
         value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
-    digest: sha256:e46a93f1eca2919c78a178505c130252e9ded89cfb0d1f545c5522f7e7a9e5df
+    digest: sha256:c8e78cdceaa19cacec16331dddf8f743f78ac6abea23107d4470b0d4ac7c5b9d
   - name: ghcr.io/vananhdhj/shopify-devops/order-service
-    digest: sha256:9702d1f42842a98ff950b0bfe9f611a463c2a90f8f0196f6b3db3e619e4b3e17
+    digest: sha256:87298f627400e1ae84758a8b887035e3b8c7e2448fa16d18f53a5ae67e89fbcc
   - name: ghcr.io/vananhdhj/shopify-devops/worker
-    digest: sha256:031cc3953b82af23d02949a564a746d14e5ba9140518e2b440fb3eb9a0756671
+    digest: sha256:e9e2f38af107aec1153275f095dca32933d9d24ba6aaba3f888422f6c7b9bb60
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
-    digest: sha256:b28b2545caf334b78ba34463fcad22e7ddad56f1005a827ab0c90543d9bc16d2
+    digest: sha256:d708784f48626b3e2dd75bf908f4f1aefa5b1e8d702fcccca608060658b55d41
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:1e137198a0693307a2234034447002312a7548ad6aa62a58059a7b2901fb8979
+    digest: sha256:7ead8fc1b59dbe72ea069056bdb563892f1ca41bd70ea12daad4182217d8bf20
