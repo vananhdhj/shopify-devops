@@ -3,20 +3,10 @@ import { describe, expect, it } from "vitest";
 import { catalogApiUrl, orderServiceUrl } from "./http.ts";
 import { seedProducts } from "./seed.ts";
 import { cartWith, checkout, newCheckoutKey } from "./shopping.ts";
-import { compose } from "./stack.ts";
+import { compose, logLinesWith as logLinesOf } from "./stack.ts";
 
-function logLinesWith(correlationId: string, service = "catalog-cart-api"): Record<string, unknown>[] {
-  return compose("logs", "--no-log-prefix", "--since", "2m", service)
-    .split("\n")
-    .flatMap((line) => {
-      try {
-        return [JSON.parse(line) as Record<string, unknown>];
-      } catch {
-        return [];
-      }
-    })
-    .filter((entry) => entry.requestId === correlationId);
-}
+const logLinesWith = (correlationId: string, service = "catalog-cart-api") => logLinesOf(service, correlationId);
+
 
 describe("catalog-cart API logs", () => {
   it("writes JSON request logs carrying service, environment, severity, and the caller's correlation ID (x-request-id)", async () => {

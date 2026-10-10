@@ -1,0 +1,67 @@
+# In-cluster Alertmanager receiver for drills and smoke tests (see alert_catcher.py).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alert-catcher
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-catcher
+spec:
+  selector:
+    app.kubernetes.io/name: alert-catcher
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-catcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alert-catcher
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alert-catcher
+    spec:
+      serviceAccountName: alert-catcher
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alert-catcher
+          image: python:3.13-alpine@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+          command: ["python", "/app/alert_catcher.py"]
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 5m, memory: 24Mi }
+            limits: { memory: 64Mi }
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: alert-catcher

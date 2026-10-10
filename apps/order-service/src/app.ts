@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
 import { createService, isUuid, requireSecretHeader } from "@shop/service-kit";
 import { fulfillOrder, listOrders } from "./admin.ts";
+import { orderMetrics } from "./metrics.ts";
 import { CatalogUnavailableError } from "./catalog-client.ts";
 import { acceptCheckout } from "./checkout.ts";
 import { isValidOrderToken, orderTokenFor } from "./order-tokens.ts";
@@ -40,7 +41,12 @@ const refusalStatus: Record<CheckoutRefusal, number> = {
 };
 
 export function buildApp(deps: AppDeps) {
-  const app = createService({ name: "order-service", environment: deps.environment, db: deps.db });
+  const app = createService({
+    name: "order-service",
+    environment: deps.environment,
+    db: deps.db,
+    registry: orderMetrics(deps.db),
+  });
 
   app.post<{ Body: CheckoutRequest }>("/checkout", { schema: { body: checkoutBody } }, async (req, reply) => {
     const refuse = (reason: CheckoutRefusal) =>

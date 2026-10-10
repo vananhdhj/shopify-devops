@@ -1,4 +1,3 @@
-import type { Pool } from "pg";
 import type { JobCounter } from "./queue.ts";
 import { Counter, Gauge, Registry } from "prom-client";
 import type { Settlement } from "./settle.ts";
@@ -11,8 +10,8 @@ export interface WorkerMetrics {
   requeued: Counter;
 }
 
-/** Order-lifecycle metrics; queue depth and oldest Pending age are read fresh at scrape time. */
-export function workerMetrics(db: Pool, queue: JobCounter): WorkerMetrics {
+/** Settlement metrics; queue depth is read fresh at scrape time. (Oldest Pending age is the order service's.) */
+export function workerMetrics(queue: JobCounter): WorkerMetrics {
   const registry = new Registry();
 
   const settled = new Counter({
@@ -43,17 +42,6 @@ export function workerMetrics(db: Pool, queue: JobCounter): WorkerMetrics {
     async collect() {
       const counts = await queue.getJobCounts("waiting", "delayed", "active");
       this.set((counts.waiting ?? 0) + (counts.delayed ?? 0) + (counts.active ?? 0));
-    },
-  });
-  new Gauge({
-    name: "orders_oldest_pending_age_seconds",
-    help: "Age of the oldest Pending order, 0 when none",
-    registers: [registry],
-    async collect() {
-      const { rows } = await db.query<{ age: number | null }>(
-        "SELECT EXTRACT(EPOCH FROM now() - min(created_at))::float AS age FROM orders.orders WHERE status = 'PENDING'",
-      );
-      this.set(rows[0]?.age ?? 0);
     },
   });
 

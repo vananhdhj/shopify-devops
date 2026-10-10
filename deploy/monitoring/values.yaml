@@ -1,0 +1,88 @@
+# kube-prometheus-stack for the laptop lab (chart version pinned in application.yaml).
+# Trimmed to what the shop needs and what fits the memory budget: 1 day of metrics, no node
+# exporter (pod resources come from the kubelet's cAdvisor), none of the control-plane scrapes
+# k3s doesn't expose separately, and only the shop's own alert rules, so every alert that
+# reaches a human is one the runbook acts on.
+crds:
+  enabled: true
+defaultRules:
+  create: false
+kubeEtcd: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeProxy: { enabled: false }
+nodeExporter: { enabled: false }
+
+prometheus:
+  prometheusSpec:
+    retention: 1d
+    retentionSize: 1GB
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    # Pick up ServiceMonitors, PodMonitors, and PrometheusRules from every namespace,
+    # not only those labelled for this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 1Gi }
+
+alertmanager:
+  alertmanagerSpec:
+    # Mounted at /etc/alertmanager/secrets/alertmanager-discord/; created by `make secrets`
+    # from the local secrets file, never committed.
+    secrets:
+      - alertmanager-discord
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: alert-catcher
+      group_by: [alertname, namespace]
+      # Short lab timings, so drills see firing and resolved notifications within minutes.
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 4h
+      routes:
+        # Every alert goes to both receivers: Discord for the human, the catcher for tests.
+        - receiver: discord
+          continue: true
+        - receiver: alert-catcher
+    receivers:
+      - name: alert-catcher
+        webhook_configs:
+          - url: http://alert-catcher.monitoring.svc:8080/alerts
+            send_resolved: true
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/url
+            send_resolved: true
+
+grafana:
+  admin:
+    existingSecret: grafana-admin # created by `make secrets`
+    userKey: admin-user
+    passwordKey: admin-password
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL # the shop's dashboards live with the shop, in Git
+  resources:
+    requests: { cpu: 25m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+prometheusOperator:
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }

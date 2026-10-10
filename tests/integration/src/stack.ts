@@ -43,3 +43,17 @@ export function redisCli(...args: string[]): string {
   return compose("exec", "-T", "redis", "redis-cli", "-a", secret("REDIS_PASSWORD"), "--no-auth-warning", ...args);
 }
 
+/** JSON log lines a service wrote in the last two minutes that carry `correlationId` as requestId. */
+export function logLinesWith(service: string, correlationId: string): Record<string, unknown>[] {
+  return compose("logs", "--no-log-prefix", "--since", "2m", service)
+    .split("\n")
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as Record<string, unknown>];
+      } catch {
+        return [];
+      }
+    })
+    .filter((entry) => entry.requestId === correlationId);
+}
+

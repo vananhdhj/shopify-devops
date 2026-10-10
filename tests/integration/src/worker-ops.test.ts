@@ -6,14 +6,13 @@ import { checkoutOf, readOrder, settled } from "./shopping.ts";
 import { compose, restartService, workerMetrics } from "./stack.ts";
 
 describe("worker operations", () => {
-  it("exposes settled counts, queue depth, oldest Pending age, and failed attempts", async () => {
+  it("exposes settled counts, queue depth, and failed attempts", async () => {
     const { orderId, orderToken } = await checkoutOf({ [seedProducts.notebookSet]: 1 }, "approve");
     await settled(orderId, orderToken);
 
     const metrics = workerMetrics();
     expect(metrics).toMatch(/^orders_settled_total\{outcome="confirmed"\} [1-9]/m);
     expect(metrics).toMatch(/^orders_queue_depth \d+/m);
-    expect(metrics).toMatch(/^orders_oldest_pending_age_seconds [\d.]+/m);
     expect(metrics).toMatch(/^worker_job_failures_total \d+/m);
   });
 
