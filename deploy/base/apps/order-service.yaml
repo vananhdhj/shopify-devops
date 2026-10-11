@@ -42,6 +42,8 @@ spec:
               valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
             - name: TENANT_CONTEXT_SECRET
               valueFrom: { secretKeyRef: { name: shop-secrets, key: TENANT_CONTEXT_SECRET } }
+            - name: PLATFORM_CELL_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: PLATFORM_CELL_TOKEN } }
           envFrom:
             - configMapRef:
                 name: shop-env # generated per environment by the overlay

@@ -1,0 +1,27 @@
+# The dev control plane, deployed by Argo CD from main into its own namespace, as its own
+# Application: it syncs and fails apart from the cell it manages (shop-dev). Automated sync,
+# prune, and self-heal as for the cell; rollback is a Git revert.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/vananhdhj/shopify-devops.git
+    targetRevision: main
+    path: deploy/platform/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-dev # created, with its Secret, by `make secrets`
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

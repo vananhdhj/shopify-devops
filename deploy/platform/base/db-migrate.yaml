@@ -1,0 +1,50 @@
+# The control plane's database step of each release: roles, migrations, and the registry seed, as a
+# PreSync hook before any new control-plane pod is synced (apps/db-migrations/migrate-platform.sh).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: platform-db-migrate
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: platform-db-migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      serviceAccountName: platform-db-migrate
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70 # postgres in the image
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: db-migrate
+          image: ghcr.io/vananhdhj/shopify-devops/db-migrations
+          command: ["migrate-platform.sh"]
+          env:
+            - name: PGHOST
+              value: platform-db
+            - name: DB_PLATFORM_SUPERUSER_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform-secrets, key: DB_PLATFORM_SUPERUSER_PASSWORD } }
+            - name: DB_PLATFORM_MIGRATOR_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform-secrets, key: DB_PLATFORM_MIGRATOR_PASSWORD } }
+            - name: DB_PLATFORM_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform-secrets, key: DB_PLATFORM_APP_PASSWORD } }
+            - name: MERCHANT_CREDENTIALS
+              valueFrom: { secretKeyRef: { name: platform-secrets, key: MERCHANT_CREDENTIALS } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }

@@ -1,5 +1,6 @@
 # Router: the cell's edge and its only unit on the ingress. Maps <handle>.<base domain> to a tenant
-# from the static tenant table and proxies to the storefront with a signed tenant context (ADR-0011).
+# from the control plane's routing table and proxies to the storefront with a signed tenant context
+# (ADR-0011); the bare base domain goes to the control plane's signup pages.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -33,13 +34,13 @@ spec:
           env:
             - name: STOREFRONT_URL
               value: http://storefront:3000
-            - name: TENANTS_FILE
-              value: /config/tenants.json
             - name: TENANT_CONTEXT_SECRET
               valueFrom: { secretKeyRef: { name: shop-secrets, key: TENANT_CONTEXT_SECRET } }
+            - name: PLATFORM_ROUTER_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: PLATFORM_ROUTER_TOKEN } }
           envFrom:
             - configMapRef:
-                name: shop-env # generated per environment by the overlay (TENANT_BASE_DOMAIN)
+                name: shop-env # per environment: TENANT_BASE_DOMAIN and the control plane's addresses
           ports:
             - name: http
               containerPort: 8000
@@ -64,15 +65,9 @@ spec:
             requests: { cpu: 25m, memory: 64Mi }
             limits: { memory: 192Mi }
           volumeMounts:
-            - name: tenants
-              mountPath: /config
-              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: tenants
-          configMap:
-            name: shop-tenants
         - name: tmp
           emptyDir: {}
 ---
@@ -96,6 +91,16 @@ spec:
   ingressClassName: traefik
   rules:
     - host: "*.shop.example" # every shop of the environment; set by each overlay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: router
+                port:
+                  name: http
+    - host: shop.example # the platform's own address (signup pages); set by each overlay
       http:
         paths:
           - path: /

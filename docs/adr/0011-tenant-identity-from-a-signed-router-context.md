@@ -19,3 +19,7 @@ The router, the cell's only unit on the ingress, maps the request's host (`<hand
 - The worker settles Orders, not shop requests, so it has no context to pass on. The catalog's internal Inventory-effect endpoint takes the tenant from its body instead, trusted because only the worker holds the internal token.
 - Probe and scrape routes, and that internal route, are the only ones outside any tenant; service-kit refuses every other route without a context, so a new route cannot forget the check.
 - Unknown shop addresses get one fixed 404 from the router and never reach the storefront.
+
+## Amended 2026-10-11: the router reads the control plane
+
+The static tenant table is retired (Phase 2). The router loads its routing table from the control plane's internal listener at start and every 2 seconds, keeping the last good copy when the control plane is down (ADR-0013), and serves only active shops; a shop being set up or suspended gets a fixed page, and a deleted one answers like an unknown address. The tenant context now also carries the shop's credential version (ADR-0014). The bare base domain is forwarded, without any tenant context, to the control plane's public signup pages.

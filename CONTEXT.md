@@ -26,6 +26,34 @@ _Avoid_: Pod, cluster, shard, environment
 The person who runs the platform itself (cells, releases, incidents); never a Merchant of any tenant.
 _Avoid_: Admin, operator (alone), SRE
 
+**Control plane**:
+The part of the platform that knows every tenant and decides where and in what state each one is; it runs apart from every cell and never serves a buyer.
+_Avoid_: Admin backend, management API, master
+
+**Registry**:
+The control plane's record of every tenant: its handle, name, status, cell, and Merchant credential.
+_Avoid_: Tenant table, shop database, directory
+
+**Signup**:
+A prospective Merchant's request for a new tenant; one signup makes at most one tenant, however often it is retried.
+_Avoid_: Registration, onboarding, account creation
+
+**Provisioning**:
+The steps that turn a new tenant into a working shop: placing it in a cell, activating it, and checking it as a buyer would.
+_Avoid_: Setup, onboarding, deployment
+
+**Active shop**:
+A tenant that the routers serve to buyers and its Merchant can sign in to.
+_Avoid_: Live shop, enabled tenant
+
+**Suspended shop**:
+A tenant the platform operator has paused: nobody reaches it, its data is untouched, and its Pending orders still settle; it can be reinstated.
+_Avoid_: Disabled, blocked, frozen
+
+**Deleted shop**:
+A tenant whose data has been removed from its cell and verified gone; only its record in the registry remains, and its handle is never reused.
+_Avoid_: Removed, closed, archived
+
 ### People
 
 **Guest buyer**:
