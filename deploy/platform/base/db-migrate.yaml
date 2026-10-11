@@ -1,9 +1,14 @@
-# The control plane's database step of each release: roles, migrations, and the registry seed, as a
-# PreSync hook before any new control-plane pod is synced (apps/db-migrations/migrate-platform.sh).
+# The control plane's database step of each release: roles, migrations, and the registry seed
+# (apps/db-migrations/migrate-platform.sh). A Sync hook in wave -1, not a PreSync hook: on a fresh
+# namespace a PreSync hook runs before anything else exists, so neither its ServiceAccount nor the
+# database it migrates would be there yet (found on the first sync, 2026-10-11). Argo CD finishes
+# wave -2 (database, this ServiceAccount) before the hook, and the hook before wave 0 (the units).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: platform-db-migrate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 automountServiceAccountToken: false
 ---
 apiVersion: batch/v1
@@ -11,7 +16,8 @@ kind: Job
 metadata:
   name: platform-db-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 6

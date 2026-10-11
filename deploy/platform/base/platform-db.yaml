@@ -1,14 +1,19 @@
 # The registry's own PostgreSQL: no cell shares it, and it depends on no cell (db/platform/roles.sh).
+# Sync wave -2: it must be up before the migration (wave -1) and the control plane's units (wave 0).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: platform-db
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: platform-db
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   selector:
     app.kubernetes.io/name: platform-db
@@ -20,6 +25,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: platform-db
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   serviceName: platform-db
   replicas: 1
