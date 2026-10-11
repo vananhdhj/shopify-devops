@@ -5,7 +5,7 @@ CONTEXT := k3d-$(CLUSTER)
 NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete
 
 ## Generate local secrets into .secrets/dev.env (never overwrites existing values), and copy
 ## them into the lab cluster as a Secret when the cluster is running
@@ -66,6 +66,10 @@ smoke:
 ## Alert drill: stop the worker on the lab cluster and watch ShopOldestPendingOrderStale fire and resolve
 drill-stale-pending:
 	@scripts/drill-stale-pending.sh
+
+## Control-plane outage drill: platform-api stopped; existing shops keep serving, signups fail then recover
+drill-control-plane-outage:
+	@scripts/drill-control-plane-outage.sh
 
 ## The platform operator's shop actions (control plane, internal listener; PLATFORM_URL for the cluster)
 tenant-list:
