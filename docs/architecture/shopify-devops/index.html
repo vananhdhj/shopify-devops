@@ -283,10 +283,7 @@
             <li><b>catalog-cart-api</b>, <b>order-service</b> và <b>worker</b> nhận <code>DATABASE_URL</code> của đúng danh tính mình; hai cái sau cùng dùng <code>order_app</code>.</li>
           </ol>
 
-          <div class="open-questions">
-            <h5>Open questions</h5>
-            <ul><li>Vì order-service và worker chung <code>order_app</code>, DB không phân biệt được ai đổi status; chỉ trigger <code>orders_status_transition</code> giới hạn các chuyển hợp lệ. Spec đặt worker trong ranh giới order (<code>spec.md:94</code>) nhưng không nói vì sao không tách danh tính; chủ repo trả lời được.</li></ul>
-          </div>
+          <p class="changes">Decided 2026-10-11 (ADR-0006): danh tính DB theo ranh giới nghiệp vụ, không theo đơn vị triển khai; worker thuộc ranh giới order nên dùng chung <code>order_app</code>. Hệ quả: DB không phân biệt được ai đổi status, chỉ trigger <code>orders_status_transition</code> giới hạn các chuyển hợp lệ.</p>
 
           <details class="evidence"><summary>Evidence: 13 locations in 10 files · verified at <code>3ae3d50</code></summary>
             <ul>
@@ -628,10 +625,7 @@
             <li><b>storefront</b> hiển thị trạng thái bằng nhãn cho cả năm giá trị, ở trang Order và trang quản trị.</li>
           </ol>
 
-          <div class="open-questions">
-            <h5>Open questions</h5>
-            <ul><li><code>order_events</code> chỉ được ghi (worker và Merchant), không API, metric hay dashboard nào đọc nó, kể cả sau ticket 09 và 10; chỉ test truy vấn bảng này. Chưa rõ nó dành cho việc gì; chủ repo trả lời được.</li></ul>
-          </div>
+          <p class="changes">Decided 2026-10-11 (ADR-0008): <code>order_events</code> là lịch sử status chỉ-ghi, dùng để chống ghi trùng chuyển trạng thái và làm audit trail; không API hay metric nào đọc nó trong POC.</p>
 
           <details class="evidence"><summary>Evidence: 11 locations in 11 files · verified at <code>3ae3d50</code></summary>
             <ul>
@@ -778,10 +772,7 @@
             <li><b>storefront</b> cũng nhận form thêm sản phẩm (giá nhập theo cent) và chuyển tới catalog <code>POST /admin/products</code>; <code>catalog_app</code> chỉ INSERT bốn cột.</li>
           </ol>
 
-          <div class="open-questions">
-            <h5>Open questions</h5>
-            <ul><li>Storefront dùng một <code>ADMIN_SERVICE_TOKEN</code> chung cho cả catalog và order-service, nên lộ một nơi là lộ cả hai. Không thấy lý do tách hay không tách trong ADR hay spec; chủ repo trả lời được.</li></ul>
-          </div>
+          <p class="changes">Decided 2026-10-11 (ADR-0007): một <code>ADMIN_SERVICE_TOKEN</code> định danh người gọi (storefront), không định danh API đích. Hệ quả: lộ ở storefront hoặc một API là lộ admin endpoint của cả hai API.</p>
 
           <details class="evidence"><summary>Evidence: 16 locations in 13 files · verified at <code>3ae3d50</code></summary>
             <ul>
