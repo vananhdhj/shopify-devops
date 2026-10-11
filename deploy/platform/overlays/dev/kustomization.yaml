@@ -16,6 +16,6 @@ configMapGenerator:
       - CELL_ORDERS_URL=http://order-service.shop-dev:4002
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
-    digest: sha256:05fbafdff71f62977f40b738ea95ad7d57af40aad68a070a82eed22eb01b2f56
+    digest: sha256:8b178590821da3d1b5d59c79a8ec1e4e9b279c5c44d78c1aac8ae90af34fb20e
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:e87ecf62cf8dfdf42fda6c5d2033375e030470a6104f6bc9501d27625a5f543c
+    digest: sha256:759e32d9389caa11c56981e0acfab8b2afb7ecfd724855719969a035e38724ed
