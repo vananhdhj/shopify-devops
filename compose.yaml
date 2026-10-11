@@ -199,10 +199,10 @@ services:
       STOREFRONT_URL: http://storefront:3000
       TENANT_BASE_DOMAIN: shop.localhost
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
-      TENANTS_FILE: /config/tenants.json
+      # Registry mode: the routing table comes from the control plane.
+      PLATFORM_API_URL: http://platform-api:8101
+      PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
       APP_ENV: dev
-    volumes:
-      - ./deploy/base/tenants.json:/config/tenants.json:ro
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -213,6 +213,91 @@ services:
     depends_on:
       storefront:
         condition: service_healthy
+      platform-api:
+        condition: service_healthy
+
+  # The control plane: its own PostgreSQL, apart from the cell's, holding the tenant registry.
+  platform-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PLATFORM_SUPERUSER_PASSWORD:?run make secrets}
+      POSTGRES_DB: platform
+    volumes:
+      - platformdata:/var/lib/postgresql
+    # Host access for tests that read the registry; loopback only.
+    ports:
+      - "127.0.0.1:55433:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "platform"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  platform-roles:
+    image: postgres:18-alpine
+    environment:
+      PGHOST: platform-db
+      PGUSER: postgres
+      PGDATABASE: platform
+      PGPASSWORD: ${DB_PLATFORM_SUPERUSER_PASSWORD}
+      DB_PLATFORM_MIGRATOR_PASSWORD: ${DB_PLATFORM_MIGRATOR_PASSWORD:?run make secrets}
+      DB_PLATFORM_APP_PASSWORD: ${DB_PLATFORM_APP_PASSWORD:?run make secrets}
+    volumes:
+      - ./db/platform/roles.sh:/roles.sh:ro
+    entrypoint: ["sh", "/roles.sh"]
+    depends_on:
+      platform-db:
+        condition: service_healthy
+
+  migrate-platform:
+    image: ghcr.io/amacneil/dbmate:2
+    environment:
+      DATABASE_URL: postgres://platform_migrator:${DB_PLATFORM_MIGRATOR_PASSWORD}@platform-db:5432/platform?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /migrations
+      DBMATE_MIGRATIONS_TABLE: platform.schema_migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db/platform/migrations:/migrations:ro
+    command: ["--wait", "up"]
+    depends_on:
+      platform-roles:
+        condition: service_completed_successfully
+
+  # Enters the Phase 1 shops into the registry if they are missing; never undoes later changes.
+  platform-seed:
+    image: postgres:18-alpine
+    environment:
+      PGHOST: platform-db
+      PGUSER: platform_migrator
+      PGDATABASE: platform
+      PGPASSWORD: ${DB_PLATFORM_MIGRATOR_PASSWORD}
+      MERCHANT_CREDENTIALS: ${MERCHANT_CREDENTIALS:?run make secrets}
+    volumes:
+      - ./db/platform:/platform:ro
+    entrypoint: ["sh", "/platform/seed.sh"]
+    depends_on:
+      migrate-platform:
+        condition: service_completed_successfully
+
+  platform-api:
+    build:
+      context: .
+      dockerfile: apps/platform/Dockerfile
+    environment:
+      DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
+      PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
+      APP_ENV: dev
+    ports:
+      - "127.0.0.1:8101:8101" # internal listener, for tests; never on an ingress
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8101/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      platform-seed:
+        condition: service_completed_successfully
 
   # One-shot job run by `make seed` / `make dev-up`; a profile keeps `up --wait` from
   # treating its normal exit as a failure.
@@ -234,3 +319,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  platformdata:

@@ -6,6 +6,8 @@ import { tenants } from "./tenants.ts";
 export const catalogApiUrl = process.env.CATALOG_API_URL ?? "http://127.0.0.1:4001";
 export const orderServiceUrl = process.env.ORDER_SERVICE_URL ?? "http://127.0.0.1:4002";
 export const storefrontUrl = process.env.STOREFRONT_URL ?? "http://127.0.0.1:3000";
+/** The control plane's internal listener (never on an ingress; published on loopback for tests). */
+export const platformInternalUrl = process.env.PLATFORM_INTERNAL_URL ?? "http://127.0.0.1:8101";
 
 /** A signed tenant context for `tenant`, as the router would attach it. */
 export function tenantContextFor(tenant: Tenant): string {
