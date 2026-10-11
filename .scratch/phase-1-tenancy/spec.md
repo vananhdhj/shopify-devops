@@ -1,6 +1,6 @@
 # Spec: Phase 1 — two shops in one cell
 
-**Status:** ready-for-agent
+**Status:** resolved (2026-10-11: tickets 01–04 resolved; PRs #18 and #19 merged and deployed to the lab cluster)
 
 Background: the revised blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`, 2026-10-11) turns the single-merchant lab into a multi-tenant commerce platform. Phase 0 (the proof of concept in `.scratch/shopify-devops-poc/`) is complete and becomes one **cell**. This spec covers Phase 1: tenancy inside that one cell. Domain vocabulary is in `CONTEXT.md` (Tenant terms are added by this phase); ADRs 0001–0009 are binding except where this spec amends 0004, 0006, and 0007.
 
