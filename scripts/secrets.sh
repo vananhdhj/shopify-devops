@@ -24,6 +24,10 @@ add_if_missing INTERNAL_INVENTORY_TOKEN
 add_if_missing ADMIN_SERVICE_TOKEN
 add_if_missing SESSION_SECRET
 add_if_missing TENANT_CONTEXT_SECRET
+add_if_missing DB_PLATFORM_SUPERUSER_PASSWORD
+add_if_missing DB_PLATFORM_MIGRATOR_PASSWORD
+add_if_missing DB_PLATFORM_APP_PASSWORD
+add_if_missing PLATFORM_ROUTER_TOKEN
 add_if_missing GRAFANA_ADMIN_PASSWORD
 
 # One Merchant password per shop in the tenant table, readable enough to type, as

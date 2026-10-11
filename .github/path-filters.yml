@@ -30,6 +30,9 @@ storefront:
 router:
   - "apps/router/**"
   - "deploy/base/tenants.json"
+platform:
+  - "apps/platform/**"
+  - "db/platform/**"
 db-migrations:
   - "apps/db-migrations/**"
   - "db/**"

@@ -2,11 +2,12 @@ import replyFrom from "@fastify/reply-from";
 import Fastify from "fastify";
 import type { Registry } from "prom-client";
 import { loggingOptions, observeRequests } from "@shop/service-kit";
-import { signTenantContext, tenantContextHeader, type Tenant } from "@shop/tenancy";
+import { signTenantContext, tenantContextHeader } from "@shop/tenancy";
+import type { RouteSource } from "./routes.ts";
 
 export interface AppDeps {
   environment: string;
-  tenants: Tenant[];
+  routes: RouteSource;
   baseDomain: string;
   storefrontUrl: string;
   tenantContextSecret: string;
@@ -16,6 +17,9 @@ export interface AppDeps {
 
 /** Answered for every host that names no shop, identical whatever the host, so it reveals nothing. */
 const noShop = "No shop at this address.\n";
+const beingSetUp = "This shop is being set up. Try again in a few seconds.\n";
+const unavailable = "This shop is temporarily unavailable.\n";
+const starting = "The platform is starting. Try again in a few seconds.\n";
 
 /**
  * The shop handle a Host header names: the single label in front of the base domain
@@ -34,10 +38,10 @@ export function handleFor(host: string | undefined, baseDomain: string): string 
 /**
  * The cell's edge: resolves the request's host to a tenant and proxies the request to the
  * storefront with a freshly signed tenant context. A context sent by the client is dropped, so
- * the only tenant anything downstream believes is the one the router chose.
+ * the only tenant anything downstream believes is the one the router chose. Only an active shop
+ * is proxied; one being set up or suspended gets a fixed page, and a deleted one is unknown.
  */
 export function buildApp(deps: AppDeps) {
-  const tenantsByHandle = new Map(deps.tenants.map((tenant) => [tenant.handle, tenant]));
   const app = Fastify(loggingOptions("router", deps.environment));
   observeRequests(app, deps.registry);
 
@@ -53,9 +57,22 @@ export function buildApp(deps: AppDeps) {
     disableRequestLogging: true,
   });
 
+  const text = "text/plain; charset=utf-8";
   app.all("/*", async (req, reply) => {
-    const tenant = tenantsByHandle.get(handleFor(req.headers.host, deps.baseDomain) ?? "");
-    if (!tenant) return reply.code(404).type("text/plain; charset=utf-8").send(noShop);
+    if (!deps.routes.ready()) return reply.code(503).header("retry-after", "5").type(text).send(starting);
+    const handle = handleFor(req.headers.host, deps.baseDomain);
+    const tenant = handle === undefined ? undefined : deps.routes.lookup(handle);
+    switch (tenant?.status) {
+      case "ACTIVE":
+        break;
+      case "PROVISIONING":
+        return reply.code(503).header("retry-after", "5").type(text).send(beingSetUp);
+      case "SUSPENDED":
+        return reply.code(503).type(text).send(unavailable);
+      default:
+        // Unknown, being deleted, or deleted: indistinguishable from an address that never named a shop.
+        return reply.code(404).type(text).send(noShop);
+    }
 
     // The "request completed" line then names the shop the request was routed to.
     reply.log = req.log = req.log.child({ tenant: tenant.handle });

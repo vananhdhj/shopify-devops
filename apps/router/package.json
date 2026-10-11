@@ -14,5 +14,8 @@
     "@shop/tenancy": "workspace:*",
     "fastify": "^5.12.5",
     "prom-client": "^15.1.3"
+  },
+  "devDependencies": {
+    "@shop/contracts": "workspace:*"
   }
 }

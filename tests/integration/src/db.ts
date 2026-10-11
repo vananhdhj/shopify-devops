@@ -23,3 +23,20 @@ export async function asIdentity<T>(identity: keyof typeof identities, fn: (db: 
 export async function query<T extends pg.QueryResultRow>(sql: string, params: unknown[] = []): Promise<T[]> {
   return asIdentity("superuser", async (db) => (await db.query<T>(sql, params)).rows);
 }
+
+/** Reads or changes the control plane's registry as its database superuser (its own database). */
+export async function platformQuery<T extends pg.QueryResultRow>(sql: string, params: unknown[] = []): Promise<T[]> {
+  const client = new pg.Client({
+    host: "127.0.0.1",
+    port: 55433,
+    database: "platform",
+    user: "postgres",
+    password: secret("DB_PLATFORM_SUPERUSER_PASSWORD"),
+  });
+  await client.connect();
+  try {
+    return (await client.query<T>(sql, params)).rows;
+  } finally {
+    await client.end();
+  }
+}

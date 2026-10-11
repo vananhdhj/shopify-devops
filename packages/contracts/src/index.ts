@@ -134,3 +134,21 @@ export interface NewProduct {
   stock: number;
 }
 
+
+/** Where a shop stands in its lifecycle, as the control plane's registry records it. */
+export type TenantStatus = "PROVISIONING" | "ACTIVE" | "SUSPENDED" | "DELETING" | "DELETED";
+
+/** One shop as the router needs it: enough to route a request and sign its tenant context. */
+export interface TenantRoute {
+  id: string;
+  handle: string;
+  name: string;
+  status: TenantStatus;
+  /** Changes when the shop's Merchant credential changes; sessions are bound to it. */
+  credentialVersion: number;
+}
+
+/** The control plane's routing table: every shop that has not been deleted. */
+export interface TenantRouteTable {
+  tenants: TenantRoute[];
+}
