@@ -81,9 +81,19 @@ export function createService({
  * A pool with bounded connect and query time, so a database outage fails fast. The statement
  * timeout is enforced by PostgreSQL itself, so a query stuck on a lock is cancelled server-side
  * too, not merely abandoned by the client.
+ *
+ * Every client gets an `error` listener for its whole life. pg-pool listens only while a client
+ * is idle; a connection that dies while checked out (a database restart or failover), or just as
+ * it is handed over, would otherwise emit `error` with no listener and crash the process. The
+ * failure still reaches whoever is using the client: its queries reject, and a broken client is
+ * discarded on release rather than reused.
  */
 export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString, connectionTimeoutMillis: 2_000, query_timeout: 5_000, statement_timeout: 5_000 });
+  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 2_000, query_timeout: 5_000, statement_timeout: 5_000 });
+  pool.on("connect", (client) => {
+    client.on("error", () => {});
+  });
+  return pool;
 }
 
 const drainTimeoutMs = 8_000;
