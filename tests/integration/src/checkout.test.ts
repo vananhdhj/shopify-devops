@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { query } from "./db.ts";
-import { catalogApiUrl } from "./http.ts";
+import { api, catalogApiUrl } from "./http.ts";
 import { seedProducts } from "./seed.ts";
 import { cartWith, checkout, newCheckoutKey, readOrder } from "./shopping.ts";
 
@@ -85,7 +85,7 @@ describe("checkout", () => {
     const cart = await cartWith({ [seedProducts.notebookSet]: 1 });
     const accepted = await checkout({ cartToken: cart.id, checkoutKey: newCheckoutKey(), paymentScenario: "approve" });
 
-    await fetch(`${catalogApiUrl}/carts/${cart.id}/items/${seedProducts.notebookSet}`, {
+    await api(`${catalogApiUrl}/carts/${cart.id}/items/${seedProducts.notebookSet}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ quantity: 7 }),

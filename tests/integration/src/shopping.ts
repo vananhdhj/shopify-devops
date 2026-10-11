@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Cart, CheckoutAccepted, Order, PaymentScenario } from "@shop/contracts";
 import { query } from "./db.ts";
-import { catalogApiUrl, orderServiceUrl } from "./http.ts";
+import { api, catalogApiUrl, orderServiceUrl } from "./http.ts";
 
 /** Creates a Cart holding the given products and quantities, through the catalog API. */
 export async function cartWith(lines: Record<string, number>): Promise<Cart> {
-  const cart = (await (await fetch(`${catalogApiUrl}/carts`, { method: "POST" })).json()) as Cart;
+  const cart = (await (await api(`${catalogApiUrl}/carts`, { method: "POST" })).json()) as Cart;
   for (const [productId, quantity] of Object.entries(lines)) {
-    await fetch(`${catalogApiUrl}/carts/${cart.id}/items/${productId}`, {
+    await api(`${catalogApiUrl}/carts/${cart.id}/items/${productId}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ quantity }),
@@ -25,7 +25,7 @@ export async function checkout(body: {
   checkoutKey: string;
   paymentScenario: PaymentScenario | string;
 }): Promise<{ status: number; body: CheckoutAccepted & { error?: string } }> {
-  const res = await fetch(`${orderServiceUrl}/checkout`, {
+  const res = await api(`${orderServiceUrl}/checkout`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -38,7 +38,7 @@ export async function readOrder(
   orderToken?: string,
 ): Promise<{ status: number; body: Order & { error?: string } }> {
   const headers: Record<string, string> = orderToken ? { "x-order-token": orderToken } : {};
-  const res = await fetch(`${orderServiceUrl}/orders/${orderId}`, { headers });
+  const res = await api(`${orderServiceUrl}/orders/${orderId}`, { headers });
   return { status: res.status, body: (await res.json()) as Order & { error?: string } };
 }
 

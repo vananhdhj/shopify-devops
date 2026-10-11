@@ -1,7 +1,7 @@
-import type { Pool } from "pg";
 import type { Cart, CartItem } from "@shop/contracts";
+import type { Queryable } from "@shop/service-kit";
 
-// The shop sells in one currency; a database constraint keeps every Product in it.
+// Every shop sells in one currency; a database constraint keeps every Product in it.
 const shopCurrency = "USD";
 
 export type Missing = "cart" | "product";
@@ -25,20 +25,20 @@ function toCart(id: string, rows: CartItemRow[]): Cart {
   return { id, items, subtotalMinor, currency: shopCurrency };
 }
 
-export async function createCart(db: Pool): Promise<Cart> {
+export async function createCart(db: Queryable): Promise<Cart> {
   const { rows } = await db.query<{ id: string }>("INSERT INTO catalog.carts DEFAULT VALUES RETURNING id");
   return toCart(rows[0]!.id, []);
 }
 
 /** Reads a Cart with each line at its product's current price; undefined if the token is unknown. */
-export async function getCart(db: Pool, id: string): Promise<Cart | undefined> {
+export async function getCart(db: Queryable, id: string): Promise<Cart | undefined> {
   const exists = await db.query("SELECT 1 FROM catalog.carts WHERE id = $1", [id]);
   if (exists.rowCount === 0) return undefined;
 
   const { rows } = await db.query<CartItemRow>(
     `SELECT ci.product_id, p.name, p.price_minor, ci.quantity
        FROM catalog.cart_items ci
-       JOIN catalog.products p ON p.id = ci.product_id
+       JOIN catalog.products p ON p.tenant_id = ci.tenant_id AND p.id = ci.product_id
       WHERE ci.cart_id = $1
       ORDER BY p.name`,
     [id],
@@ -55,7 +55,7 @@ export type SetQuantityResult =
  * stock happens only at Checkout, through Inventory effects.
  */
 export async function setCartItemQuantity(
-  db: Pool,
+  db: Queryable,
   cartId: string,
   productId: string,
   quantity: number,
@@ -72,7 +72,7 @@ export async function setCartItemQuantity(
   } else {
     await db.query(
       `INSERT INTO catalog.cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)
-       ON CONFLICT (cart_id, product_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+       ON CONFLICT (tenant_id, cart_id, product_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
       [cartId, productId, quantity],
     );
   }

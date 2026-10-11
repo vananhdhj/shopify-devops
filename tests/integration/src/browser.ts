@@ -1,31 +1,44 @@
-import { storefrontUrl } from "./http.ts";
+import { shopFetch, shopHost } from "./router.ts";
 
-/** A minimal browser: remembers the cart cookie and submits forms the way an HTML form does. */
+/**
+ * A minimal browser at one shop's address (Harbor Goods unless told otherwise), through the
+ * router: remembers the one cookie it was last given and submits forms the way an HTML form does.
+ */
 export class Browser {
   private jar = "";
 
+  constructor(readonly handle = "harbor") {}
+
+  /** The shop's origin, as a browser on that address would send it with a form post. */
+  get origin(): string {
+    return `http://${shopHost(this.handle)}`;
+  }
+
   async submit(path: string, fields: Record<string, string>, origin?: string): Promise<Response> {
-    const res = await fetch(`${storefrontUrl}${path}`, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        cookie: this.jar,
-        ...(origin ? { origin } : {}),
+    const res = await shopFetch(
+      path,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: this.jar,
+          ...(origin ? { origin } : {}),
+        },
+        body: new URLSearchParams(fields).toString(),
       },
-      body: new URLSearchParams(fields),
-    });
+      this.handle,
+    );
     const setCookie = res.headers.get("set-cookie");
     if (setCookie) this.jar = setCookie.split(";")[0]!;
     return res;
   }
 
-  async get(path: string): Promise<Response> {
-    return fetch(`${storefrontUrl}${path}`, { redirect: "manual", headers: { cookie: this.jar } });
+  async get(path: string, headers: Record<string, string> = {}): Promise<Response> {
+    return shopFetch(path, { headers: { cookie: this.jar, ...headers } }, this.handle);
   }
 
   async html(path: string): Promise<string> {
-    return (await fetch(`${storefrontUrl}${path}`, { headers: { cookie: this.jar } })).text();
+    return (await this.get(path)).text();
   }
 
   /** Pretends the browser already holds a cookie, e.g. one naming a Cart that no longer exists. */

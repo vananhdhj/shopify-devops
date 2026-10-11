@@ -1,7 +1,15 @@
-import type { FastifyReply } from "fastify";
-import type { Pool } from "pg";
+import type { FastifyReply, FastifyRequest } from "fastify";
+import type { Pool, PoolClient } from "pg";
 import type { InventoryEffectRequest, InventoryEffectResult, NewProduct, ProductList } from "@shop/contracts";
-import { createService, isUuid, requireSecretHeader, uuidPatternSource } from "@shop/service-kit";
+import {
+  createService,
+  isUuid,
+  requireSecretHeader,
+  tenantOf,
+  uuidPatternSource,
+  withTenant,
+  withoutTenant,
+} from "@shop/service-kit";
 import { createCart, getCart, setCartItemQuantity, type Missing } from "./carts.ts";
 import { applyInventoryEffect } from "./inventory.ts";
 import { addProduct, findProduct, listProducts } from "./products.ts";
@@ -22,8 +30,9 @@ const uuidString = { type: "string", pattern: uuidPatternSource } as const;
 
 const inventoryEffectBody = {
   type: "object",
-  required: ["orderId", "action", "items"],
+  required: ["tenantId", "orderId", "action", "items"],
   properties: {
+    tenantId: uuidString,
     orderId: uuidString,
     action: { type: "string", enum: ["deduct", "release"] },
     items: {
@@ -56,28 +65,38 @@ export interface AppDeps {
   internalInventoryToken: string;
   /** Presented by the storefront on behalf of the signed-in Merchant. */
   adminServiceToken: string;
+  /** Verifies the tenant context every business request carries (from the router, via the storefront). */
+  tenantContextSecret: string;
 }
 
 export function buildApp(deps: AppDeps) {
-  const app = createService({ name: "catalog-cart-api", environment: deps.environment, db: deps.db });
+  const app = createService({
+    name: "catalog-cart-api",
+    environment: deps.environment,
+    db: deps.db,
+    tenantContextSecret: deps.tenantContextSecret,
+  });
+  // Every business query runs in a transaction scoped to the request's tenant.
+  const asTenant = <T>(req: FastifyRequest, work: (client: PoolClient) => Promise<T>) =>
+    withTenant(deps.db, tenantOf(req).id, work);
 
-  app.get("/products", async (): Promise<ProductList> => {
-    return { products: await listProducts(deps.db) };
+  app.get("/products", async (req): Promise<ProductList> => {
+    return { products: await asTenant(req, listProducts) };
   });
 
   app.get<{ Params: { id: string } }>("/products/:id", async (req, reply) => {
     // A malformed id names no product, so it is a 404 rather than a database type error.
-    const product = isUuid(req.params.id) ? await findProduct(deps.db, req.params.id) : undefined;
+    const product = isUuid(req.params.id) ? await asTenant(req, (db) => findProduct(db, req.params.id)) : undefined;
     if (!product) return notFound(reply, "product");
     return product;
   });
 
-  app.post("/carts", async (_req, reply) => {
-    return reply.code(201).send(await createCart(deps.db));
+  app.post("/carts", async (req, reply) => {
+    return reply.code(201).send(await asTenant(req, createCart));
   });
 
   app.get<{ Params: { id: string } }>("/carts/:id", async (req, reply) => {
-    const cart = isUuid(req.params.id) ? await getCart(deps.db, req.params.id) : undefined;
+    const cart = isUuid(req.params.id) ? await asTenant(req, (db) => getCart(db, req.params.id)) : undefined;
     if (!cart) return notFound(reply, "cart");
     return cart;
   });
@@ -90,20 +109,26 @@ export function buildApp(deps: AppDeps) {
       if (!isUuid(id)) return notFound(reply, "cart");
       if (!isUuid(productId)) return notFound(reply, "product");
 
-      const result = await setCartItemQuantity(deps.db, id, productId, req.body.quantity);
+      const result = await asTenant(req, (db) => setCartItemQuantity(db, id, productId, req.body.quantity));
       return result.outcome === "updated" ? result.cart : notFound(reply, result.missing);
     },
   );
 
-  // Internal: called by the worker only. Not reachable through ingress (only the storefront is
-  // exposed), and refused without the internal service token.
+  // Internal: called by the worker only. Not reachable through ingress (only the router is
+  // exposed), and refused without the internal service token. The worker settles Orders, not
+  // shop requests, so it carries no tenant context: the body names the Order's tenant, and the
+  // internal token, which only the worker holds, is what makes that claim trusted.
   app.post<{ Body: InventoryEffectRequest }>(
     "/internal/inventory-effects",
-    { preHandler: requireSecretHeader("x-internal-token", deps.internalInventoryToken), schema: { body: inventoryEffectBody } },
+    {
+      ...withoutTenant,
+      preHandler: requireSecretHeader("x-internal-token", deps.internalInventoryToken),
+      schema: { body: inventoryEffectBody },
+    },
     async (req) => {
-      const { orderId, action, items } = req.body;
-      const outcome = await applyInventoryEffect(deps.db, orderId.toLowerCase(), action, items);
-      req.log.info({ orderId, action, outcome }, "inventory effect");
+      const { tenantId, orderId, action, items } = req.body;
+      const outcome = await applyInventoryEffect(deps.db, tenantId.toLowerCase(), orderId.toLowerCase(), action, items);
+      req.log.info({ tenantId, orderId, action, outcome }, "inventory effect");
       const result: InventoryEffectResult = { orderId, action, outcome };
       return result;
     },
@@ -113,7 +138,7 @@ export function buildApp(deps: AppDeps) {
     "/admin/products",
     { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken), schema: { body: newProductBody } },
     async (req, reply) => {
-      const product = await addProduct(deps.db, req.body);
+      const product = await asTenant(req, (db) => addProduct(db, req.body));
       req.log.info({ productId: product.id }, "product added");
       return reply.code(201).send(product);
     },

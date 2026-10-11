@@ -4,6 +4,7 @@ import type { Registry } from "prom-client";
 import { loggingOptions } from "./logging.ts";
 import { registerMetrics } from "./metrics.ts";
 import { quietRoute } from "./routes.ts";
+import { requireTenantContext, withoutTenant } from "./tenant.ts";
 
 export interface ServiceOptions {
   /** Service name stamped on every log line, e.g. "order-service". */
@@ -20,6 +21,11 @@ export interface ServiceOptions {
    * when the unit records its real traffic in the same registry elsewhere (the router).
    */
   recordRequests?: boolean;
+  /**
+   * When set, every route except probes, scrapes, and routes marked `withoutTenant` requires a
+   * tenant context signed with this secret.
+   */
+  tenantContextSecret?: string;
 }
 
 /**
@@ -37,9 +43,11 @@ export function createService({
   readinessChecks = [],
   registry,
   recordRequests = true,
+  tenantContextSecret,
 }: ServiceOptions): FastifyInstance {
   // No type coercion: a quantity sent as "2" is a client error, not a number.
   const app = Fastify({ ...loggingOptions(name, environment), ajv: { customOptions: { coerceTypes: false } } });
+  if (tenantContextSecret) requireTenantContext(app, tenantContextSecret);
   registerMetrics(app, registry, recordRequests);
 
   app.setErrorHandler((err: FastifyError, req, reply) => {
@@ -53,9 +61,9 @@ export function createService({
 
   // Liveness says only that the process can answer; it must not depend on PostgreSQL,
   // or a database outage would turn into a restart storm.
-  app.get("/health/live", quietRoute, async () => ({ status: "ok" }));
+  app.get("/health/live", { ...quietRoute, ...withoutTenant }, async () => ({ status: "ok" }));
 
-  app.get("/health/ready", quietRoute, async (_req, reply) => {
+  app.get("/health/ready", { ...quietRoute, ...withoutTenant }, async (_req, reply) => {
     if (draining.has(app)) return reply.code(503).send({ status: "draining" });
     try {
       await db?.query("SELECT 1");

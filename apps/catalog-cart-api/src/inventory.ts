@@ -4,21 +4,23 @@ import type {
   InventoryEffectLine as EffectLine,
   InventoryEffectOutcome as EffectOutcome,
 } from "@shop/contracts";
-import { withTransaction } from "@shop/service-kit";
+import { withTenant } from "@shop/service-kit";
 
 /**
- * Applies one Inventory effect at most once per (Order, action). The Stock change and its
- * deduplication record commit together; a repeated request returns the recorded outcome
- * without touching Stock. A deduction takes every line or none. A release returns exactly
+ * Applies one Inventory effect at most once per (tenant, Order, action), to that tenant's Stock
+ * only: another shop's product is invisible here and counts as out of stock. The Stock change
+ * and its deduplication record commit together; a repeated request returns the recorded
+ * outcome without touching Stock. A deduction takes every line or none. A release returns exactly
  * what the Order's applied deduction took (the request's own items are ignored).
  */
 export async function applyInventoryEffect(
   db: Pool,
+  tenantId: string,
   orderId: string,
   action: EffectAction,
   items: EffectLine[],
 ): Promise<EffectOutcome> {
-  return withTransaction(db, async (client) => {
+  return withTenant(db, tenantId, async (client) => {
     // Serialise every effect for one Order, so a concurrent retry waits for the first attempt
     // and then reads its recorded outcome instead of racing it.
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [orderId]);

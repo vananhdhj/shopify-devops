@@ -37,19 +37,20 @@ const settleDeps = {
 const worker = new Worker<SettleOrderJob>(
   ordersQueue,
   async (job) => {
-    const settlement = await settleOrder(settleDeps, job.data.orderId);
+    const { tenantId, orderId } = job.data;
+    const settlement = await settleOrder(settleDeps, tenantId, orderId);
     recordSettlement(metrics, settlement);
-    ops.log.info({ orderId: job.data.orderId, settlement, attempt: job.attemptsMade + 1 }, "order settled");
+    ops.log.info({ tenantId, orderId, settlement, attempt: job.attemptsMade + 1 }, "order settled");
     return settlement;
   },
   { connection, concurrency: config.concurrency, lockDuration: 10_000, stalledInterval: 5_000 },
 );
 worker.on("failed", (job, err) => {
   metrics.failures.inc();
-  ops.log.warn({ orderId: job?.data.orderId, attempt: job?.attemptsMade, err }, "settle attempt failed");
+  ops.log.warn({ tenantId: job?.data.tenantId, orderId: job?.data.orderId, attempt: job?.attemptsMade, err }, "settle attempt failed");
   if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
     metrics.exhausted.inc();
-    ops.log.warn({ orderId: job.data.orderId }, "settle attempts exhausted; left to reconciliation");
+    ops.log.warn({ tenantId: job.data.tenantId, orderId: job.data.orderId }, "settle attempts exhausted; left to reconciliation");
   }
 });
 

@@ -25,31 +25,31 @@ function settleJobOptions(retry: RetryPolicy, jobId: string) {
 const enqueueTimeoutMs = 2_000;
 
 /**
- * Hands undispatched outbox events to the queue, using each event's stable id as the job id so
- * BullMQ ignores a duplicate while the job exists. SKIP LOCKED lets several worker replicas
- * dispatch side by side. The dispatch mark is only a hint: whether the Order was processed is
- * known from its status, never from this column.
+ * Hands undispatched outbox events of every tenant in the cell to the queue, using each event's
+ * stable id as the job id so BullMQ ignores a duplicate while the job exists. The events are
+ * claimed through a narrow database function (the order identity has no direct access to other
+ * tenants' outbox rows); its SKIP LOCKED row locks last until this transaction ends, so several
+ * worker replicas dispatch side by side. The dispatch mark is only a hint: whether the Order was
+ * processed is known from its status, never from this column.
  */
 export async function dispatchOutbox(db: Pool, queue: JobSink, retry: RetryPolicy): Promise<number> {
   return withTransaction(db, async (client) => {
-    const { rows } = await client.query<{ event_id: string; order_id: string }>(
-      `SELECT event_id, order_id FROM orders.outbox
-        WHERE dispatched_at IS NULL
-        ORDER BY created_at
-        LIMIT 50
-        FOR UPDATE SKIP LOCKED`,
+    const { rows } = await client.query<{ event_id: string; tenant_id: string; order_id: string }>(
+      "SELECT event_id, tenant_id, order_id FROM orders.claim_undispatched_events(50)",
     );
     for (const event of rows) {
       await withTimeout(
-        queue.add("settle-order", { orderId: event.order_id }, settleJobOptions(retry, event.event_id)),
+        queue.add(
+          "settle-order",
+          { tenantId: event.tenant_id, orderId: event.order_id },
+          settleJobOptions(retry, event.event_id),
+        ),
         enqueueTimeoutMs,
         "queue unreachable",
       );
     }
     if (rows.length > 0) {
-      await client.query("UPDATE orders.outbox SET dispatched_at = now() WHERE event_id = ANY($1::uuid[])", [
-        rows.map((event) => event.event_id),
-      ]);
+      await client.query("SELECT orders.mark_events_dispatched($1::uuid[])", [rows.map((event) => event.event_id)]);
     }
     return rows.length;
   });

@@ -7,3 +7,4 @@ export { withTransaction } from "./transactions.ts";
 export { quietRoute } from "./routes.ts";
 export { loggingOptions } from "./logging.ts";
 export { observeRequests } from "./metrics.ts";
+export { requireTenantContext, tenantOf, withTenant, withoutTenant, type Queryable } from "./tenant.ts";

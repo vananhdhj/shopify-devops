@@ -1,5 +1,5 @@
-import type { Pool } from "pg";
 import type { NewProduct, Product } from "@shop/contracts";
+import type { Queryable } from "@shop/service-kit";
 
 interface ProductRow {
   id: string;
@@ -23,14 +23,14 @@ function toProduct(row: ProductRow): Product {
   };
 }
 
-export async function listProducts(db: Pool): Promise<Product[]> {
+export async function listProducts(db: Queryable): Promise<Product[]> {
   const { rows } = await db.query<ProductRow>(
     `SELECT ${columns} FROM catalog.products ORDER BY name`,
   );
   return rows.map(toProduct);
 }
 
-export async function findProduct(db: Pool, id: string): Promise<Product | undefined> {
+export async function findProduct(db: Queryable, id: string): Promise<Product | undefined> {
   const { rows } = await db.query<ProductRow>(
     `SELECT ${columns} FROM catalog.products WHERE id = $1`,
     [id],
@@ -38,7 +38,7 @@ export async function findProduct(db: Pool, id: string): Promise<Product | undef
   return rows[0] && toProduct(rows[0]);
 }
 
-export async function addProduct(db: Pool, product: NewProduct): Promise<Product> {
+export async function addProduct(db: Queryable, product: NewProduct): Promise<Product> {
   const { rows } = await db.query<ProductRow>(
     `INSERT INTO catalog.products (name, description, price_minor, stock)
      VALUES ($1, $2, $3, $4) RETURNING ${columns}`,

@@ -10,14 +10,10 @@ import type { Pool } from "pg";
  * expire (ADR-0002): they are re-enqueued for as long as they stay Pending.
  */
 export async function reconcileStalePending(db: Pool, staleAfterMs: number): Promise<number> {
-  const { rowCount } = await db.query(
-    `UPDATE orders.outbox AS event
-        SET dispatched_at = NULL
-       FROM orders.orders AS o
-      WHERE o.id = event.order_id
-        AND o.status = 'PENDING'
-        AND event.dispatched_at < now() - make_interval(secs => $1::float / 1000)`,
+  // Spans every tenant in the cell, so it goes through a narrow database function.
+  const { rows } = await db.query<{ requeued: number }>(
+    "SELECT orders.requeue_stale_pending(make_interval(secs => $1::float / 1000)) AS requeued",
     [staleAfterMs],
   );
-  return rowCount ?? 0;
+  return rows[0]?.requeued ?? 0;
 }
