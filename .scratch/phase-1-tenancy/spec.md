@@ -85,7 +85,7 @@ Two seeded shops, **Harbor Goods** and **Meadow Supply**, run in the one cell, e
 ### Order tokens, Merchant credentials, sessions
 
 - The Order token becomes `HMAC(ORDER_TOKEN_SECRET, tenantId + ":" + orderId)` (amends ADR-0004). Phase 0 Order links stop working; the dev lab accepts that.
-- Each tenant has its own Merchant password. `make secrets` generates `MERCHANT_PASSWORD_<HANDLE>` for every tenant in the tenant table and assembles `MERCHANT_PASSWORD_HASHES` (`<tenantId>=<scrypt hash>,…`) for the storefront. `ADMIN_PASSWORD` and `ADMIN_PASSWORD_HASH` are retired.
+- Each tenant has its own Merchant password. `make secrets` generates `MERCHANT_PASSWORD_<HANDLE>` for every tenant in the tenant table and assembles `MERCHANT_CREDENTIALS` (`<tenantId>=<scrypt hash>,…`) for the storefront. `ADMIN_PASSWORD` and `ADMIN_PASSWORD_HASH` are retired.
 - The Merchant session signature covers the tenant id, so a session cookie copied to another shop's address is invalid there.
 - The admin service token stays one per cell (ADR-0007 holds within a cell); the tenant comes from the tenant context, never from the token.
 

@@ -4,6 +4,7 @@ import { asIdentity } from "./db.ts";
 import { seedProducts } from "./seed.ts";
 import { checkoutOf, readOrder, settled, statusChanges } from "./shopping.ts";
 import { compose, restartService } from "./stack.ts";
+import { tenants } from "./tenants.ts";
 
 describe("admin orders (order service)", () => {
   it("refuses the admin endpoints without the admin service token", async () => {
@@ -70,7 +71,12 @@ describe("admin orders (order service)", () => {
     const attempt = (orderId: string, status: string) =>
       asIdentity("orders", async (db) => {
         try {
-          await db.query("UPDATE orders.orders SET status = $2 WHERE id = $1", [orderId, status]);
+          // In the Order's own tenant, so row-level security lets the update reach the trigger.
+          await db.query("BEGIN");
+          await db.query("SELECT set_config('app.tenant_id', $1, true)", [tenants.harbor.id]);
+          const { rowCount } = await db.query("UPDATE orders.orders SET status = $2 WHERE id = $1", [orderId, status]);
+          await db.query("ROLLBACK");
+          if (rowCount !== 1) return `no row updated (${rowCount})`;
           return "allowed";
         } catch (err) {
           return (err as { code?: string }).code === "23514" ? "refused" : `error ${(err as Error).message}`;

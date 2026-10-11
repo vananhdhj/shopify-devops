@@ -3,7 +3,8 @@
 # Reports success only when every check passes.
 #
 # Modes for the bad-release drill (ShopServerErrorRatioHigh, read at the in-cluster alert catcher):
-#   check    (default) the storefront serves the catalog and a Checkout is Confirmed
+#   check    (default) both shops serve their own catalogs, an unknown shop gets the router's 404,
+#            and a Checkout at Harbor Goods is Confirmed
 #   fault    with the fault release live: one Checkout attempt a second until the alert fires
 #   recover  after merging the revert: one Checkout attempt a second until Checkout works again, and
 #            on until the alert resolves, then `check`. The traffic never pauses: the alert needs a
@@ -13,7 +14,9 @@
 set -euo pipefail
 
 mode="${1:-check}"
-base="${SHOP_URL:-http://shop.localhost:8080}"
+# Shops live at <handle>.<domain>; drills and the Checkout use Harbor Goods.
+domain="${SHOP_DOMAIN:-shop.localhost:8080}"
+base="${SHOP_URL:-http://harbor.$domain}"
 alert=ShopServerErrorRatioHigh
 fail() { echo "smoke: FAIL - $*" >&2; exit 1; }
 stamp() { date -u +%H:%M:%S; }
@@ -35,9 +38,21 @@ esac
 
 curl -fsS --max-time 10 "$base/healthz" | grep -q '"ok"' || fail "storefront health check at $base/healthz"
 page="$(curl -fsS --max-time 10 "$base/")" || fail "storefront home page at $base/"
-for product in "Last Lantern" "Canvas Tote"; do
-  grep -q "$product" <<<"$page" || fail "seeded product '$product' not on the home page"
+for product in "Harbor Goods" "Last Lantern" "Canvas Tote"; do
+  grep -q "$product" <<<"$page" || fail "'$product' not on Harbor Goods' home page"
 done
+
+if [ "$mode" != fault ]; then
+  # Each shop shows its own catalog and nothing of the other's.
+  meadow="$(curl -fsS --max-time 10 "http://meadow.$domain/")" || fail "Meadow Supply's home page at http://meadow.$domain/"
+  grep -q "Heirloom Sundial" <<<"$meadow" || fail "'Heirloom Sundial' not on Meadow Supply's home page"
+  if grep -q "Last Lantern" <<<"$meadow"; then fail "Harbor Goods' product on Meadow Supply's home page"; fi
+  if grep -q "Heirloom Sundial" <<<"$page"; then fail "Meadow Supply's product on Harbor Goods' home page"; fi
+
+  # An address that names no shop gets the router's fixed answer, never a storefront page.
+  unknown="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "http://nowhere.$domain/")"
+  [ "$unknown" = 404 ] || fail "unknown shop at http://nowhere.$domain/ answered $unknown, not 404"
+fi
 
 if [ "$mode" = fault ]; then
   before="$(caught_count "$alert" firing)"
@@ -83,4 +98,4 @@ for _ in $(seq 1 30); do
 done
 [ "$status" = "Confirmed" ] || fail "Order not Confirmed after 30 s (last status: ${status:-unknown})"
 
-echo "smoke: OK - $base serves the seeded catalog and a Checkout was Confirmed"
+echo "smoke: OK - both shops serve their own catalogs at $domain and a Checkout at $base was Confirmed"

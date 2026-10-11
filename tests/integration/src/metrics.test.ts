@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { catalogApiUrl, orderServiceUrl } from "./http.ts";
+import { api, catalogApiUrl, orderServiceUrl } from "./http.ts";
 import { seedProducts } from "./seed.ts";
 
 describe("catalog-cart API metrics", () => {
   it("records request durations by route template, never by raw id", async () => {
     const productId = seedProducts.enamelMug;
-    await fetch(`${catalogApiUrl}/products/${productId}`);
+    await api(`${catalogApiUrl}/products/${productId}`);
 
-    const res = await fetch(`${catalogApiUrl}/metrics`);
+    const res = await api(`${catalogApiUrl}/metrics`);
     const body = await res.text();
 
     expect(res.status).toBe(200);
@@ -18,7 +18,7 @@ describe("catalog-cart API metrics", () => {
   });
 
   it("reports the age of the oldest Pending order from the order service, which outlives a stopped worker", async () => {
-    const body = await (await fetch(`${orderServiceUrl}/metrics`)).text();
+    const body = await (await api(`${orderServiceUrl}/metrics`)).text();
     expect(body).toMatch(/^orders_oldest_pending_age_seconds [\d.e+-]+$/m);
   });
 

@@ -10,12 +10,14 @@ FROM base AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/service-kit/package.json packages/service-kit/
+COPY packages/tenancy/package.json packages/tenancy/
 COPY apps/worker/package.json apps/worker/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @shop/worker...
 COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
 COPY packages/service-kit packages/service-kit
+COPY packages/tenancy packages/tenancy
 COPY apps/worker apps/worker
 RUN pnpm --filter "@shop/worker..." build \
  && pnpm --filter @shop/worker deploy --prod /out

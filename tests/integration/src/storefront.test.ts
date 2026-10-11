@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { storefrontUrl } from "./http.ts";
+import { shopFetch } from "./router.ts";
 import { seedProducts, unknownProductId } from "./seed.ts";
 
 async function page(path: string): Promise<{ status: number; html: string }> {
-  const res = await fetch(`${storefrontUrl}${path}`);
+  const res = await shopFetch(path);
   return { status: res.status, html: await res.text() };
 }
 

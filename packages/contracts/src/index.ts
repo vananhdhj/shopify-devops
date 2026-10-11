@@ -91,6 +91,8 @@ export interface InventoryEffectLine {
  * returns exactly what the Order's applied deduction took, so its `items` are ignored.
  */
 export interface InventoryEffectRequest {
+  /** The Order's tenant; trusted because only the worker holds the internal token. */
+  tenantId: string;
   orderId: string;
   action: InventoryEffectAction;
   items: InventoryEffectLine[];

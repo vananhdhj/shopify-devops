@@ -15,3 +15,7 @@ The storefront is the only caller of the admin endpoints, acting for the signed-
 - Both APIs hold the token, so a compromised catalog-cart API can call the order service's admin endpoints (list and fulfill Orders), and the reverse.
 - Rotation is one rerun of `make secrets` and a restart of the storefront and both APIs.
 - Splitting later means two keys in `scripts/secrets.sh`, Compose and the three manifests, plus `apps/storefront/lib/admin-api.ts` picking the token by target.
+
+## Amended 2026-10-11: one token per cell, and it never names a tenant
+
+With many shops on the platform, the token still identifies one caller, the storefront, and is now understood as one token per cell: a cell's token is never valid in another cell (blueprint, Phase 3). It grants no tenant: the shop an admin request acts on comes only from the signed tenant context (ADR-0011), and each Merchant signs in with their own shop's password to a session valid only at that shop. A leaked token therefore exposes the admin endpoints of one cell, for tenants whose context the holder can also present.

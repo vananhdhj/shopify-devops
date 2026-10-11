@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
-import { createService, isUuid, requireSecretHeader } from "@shop/service-kit";
+import { createService, isUuid, requireSecretHeader, tenantOf, withTenant } from "@shop/service-kit";
+import { tenantContextHeader } from "@shop/tenancy";
 import { fulfillOrder, listOrders } from "./admin.ts";
 import { orderMetrics } from "./metrics.ts";
 import { CatalogUnavailableError } from "./catalog-client.ts";
@@ -15,6 +16,8 @@ export interface AppDeps {
   orderTokenSecret: string;
   /** Presented by the storefront on behalf of the signed-in Merchant. */
   adminServiceToken: string;
+  /** Verifies the tenant context every business request carries (from the router, via the storefront). */
+  tenantContextSecret: string;
   /** Fails every Checkout with 500, standing in for a bad release in the rollback drill. */
   checkoutFault?: boolean;
 }
@@ -48,6 +51,7 @@ export function buildApp(deps: AppDeps) {
     environment: deps.environment,
     db: deps.db,
     registry: orderMetrics(deps.db),
+    tenantContextSecret: deps.tenantContextSecret,
   });
 
   app.post<{ Body: CheckoutRequest }>("/checkout", { schema: { body: checkoutBody } }, async (req, reply) => {
@@ -58,12 +62,13 @@ export function buildApp(deps: AppDeps) {
     if (!isUuid(req.body.cartToken)) return refuse("cart_not_found");
     try {
       const request = { ...req.body, cartToken: req.body.cartToken.toLowerCase() };
-      const result = await acceptCheckout(deps.db, deps.catalogApiUrl, request);
+      const tenant = { id: tenantOf(req).id, context: String(req.headers[tenantContextHeader]) };
+      const result = await acceptCheckout(deps.db, deps.catalogApiUrl, tenant, request);
       if (result.outcome === "refused") return refuse(result.reason);
       req.log.info({ orderId: result.orderId }, "checkout accepted");
       const accepted: CheckoutAccepted = {
         orderId: result.orderId,
-        orderToken: orderTokenFor(result.orderId, deps.orderTokenSecret),
+        orderToken: orderTokenFor(tenant.id, result.orderId, deps.orderTokenSecret),
         status: "PENDING",
       };
       return reply.code(202).header("location", `/orders/${result.orderId}`).send(accepted);
@@ -74,26 +79,33 @@ export function buildApp(deps: AppDeps) {
     }
   });
 
-  // A wrong or missing Order token answers exactly like an unknown order: no existence leak.
+  // A wrong or missing Order token, or another shop's Order, answers exactly like an unknown
+  // order: no existence leak.
   app.get<{ Params: { id: string } }>("/orders/:id", async (req, reply) => {
     const { id } = req.params;
+    const tenantId = tenantOf(req).id;
     const token = req.headers["x-order-token"];
-    const authorised = isUuid(id) && typeof token === "string" && isValidOrderToken(id, token, deps.orderTokenSecret);
-    const order = authorised ? await findOrder(deps.db, id) : undefined;
+    const authorised =
+      isUuid(id) && typeof token === "string" && isValidOrderToken(tenantId, id, token, deps.orderTokenSecret);
+    const order = authorised ? await withTenant(deps.db, tenantId, (client) => findOrder(client, id)) : undefined;
     if (!order) return reply.code(404).send({ error: "order_not_found", message: "order not found" });
     return order;
   });
 
   const adminOnly = { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken) };
 
-  app.get("/admin/orders", adminOnly, async (): Promise<AdminOrderList> => listOrders(deps.db));
+  app.get("/admin/orders", adminOnly, async (req): Promise<AdminOrderList> =>
+    withTenant(deps.db, tenantOf(req).id, listOrders),
+  );
 
   app.patch<{ Params: { id: string }; Body: AdminStatusChange }>(
     "/admin/orders/:id/status",
     { ...adminOnly, schema: { body: statusChangeBody } },
     async (req, reply) => {
       const { id } = req.params;
-      const result = isUuid(id) ? await fulfillOrder(deps.db, id) : "order_not_found";
+      const result = isUuid(id)
+        ? await withTenant(deps.db, tenantOf(req).id, (client) => fulfillOrder(client, id))
+        : "order_not_found";
       if (result === "order_not_found") return reply.code(404).send({ error: result, message: "order not found" });
       if (result === "illegal_transition") {
         return reply.code(409).send({ error: result, message: "only a Confirmed order can be fulfilled" });

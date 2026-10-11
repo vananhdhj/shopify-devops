@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import type { OrderStatus, PaymentScenario } from "@shop/contracts";
-import { withTransaction } from "@shop/service-kit";
+import { type Queryable, withTenant } from "@shop/service-kit";
 import type { InventoryClient } from "./inventory-client.ts";
 import { simulatePayment } from "./payment.ts";
 
@@ -21,31 +21,31 @@ const settlementFor: Record<Terminal, Settlement> = {
 };
 
 /**
- * Moves a Pending order to its terminal state. Safe to run any number of times for one Order:
- * Inventory effects are deduplicated by (Order, action), the Payment scenario is stored, and
- * the status change only applies from PENDING. Any failure throws and the job retries, with
- * the Order still Pending.
+ * Moves a Pending order of one tenant to its terminal state. Safe to run any number of times for
+ * one Order: Inventory effects are deduplicated by (tenant, Order, action), the Payment scenario
+ * is stored, and the status change only applies from PENDING. Every query is scoped to the
+ * Order's tenant. Any failure throws and the job retries, with the Order still Pending.
  */
-export async function settleOrder(deps: SettleDeps, orderId: string): Promise<Settlement> {
-  const order = await loadOrder(deps.db, orderId);
+export async function settleOrder(deps: SettleDeps, tenantId: string, orderId: string): Promise<Settlement> {
+  const order = await withTenant(deps.db, tenantId, (client) => loadOrder(client, orderId));
   if (order?.status !== "PENDING") return "already_settled";
 
-  const deduction = await deps.inventory.deduct(orderId, order.items);
-  if (deduction === "insufficient_stock") return finish(deps.db, orderId, "REJECTED_OUT_OF_STOCK");
+  const deduction = await deps.inventory.deduct(tenantId, orderId, order.items);
+  if (deduction === "insufficient_stock") return finish(deps.db, tenantId, orderId, "REJECTED_OUT_OF_STOCK");
 
   const payment = await simulatePayment(order.paymentScenario, deps.slowPaymentDelayMs);
-  if (payment === "approved") return finish(deps.db, orderId, "CONFIRMED");
+  if (payment === "approved") return finish(deps.db, tenantId, orderId, "CONFIRMED");
 
   // Compensate before rejecting: if the release fails this throws, and the Order stays Pending.
-  await deps.inventory.release(orderId);
-  return finish(deps.db, orderId, "REJECTED_PAYMENT");
+  await deps.inventory.release(tenantId, orderId);
+  return finish(deps.db, tenantId, orderId, "REJECTED_PAYMENT");
 }
 
-async function finish(db: Pool, orderId: string, to: Terminal): Promise<Settlement> {
-  return (await transition(db, orderId, to)) ? settlementFor[to] : "already_settled";
+async function finish(db: Pool, tenantId: string, orderId: string, to: Terminal): Promise<Settlement> {
+  return (await transition(db, tenantId, orderId, to)) ? settlementFor[to] : "already_settled";
 }
 
-async function loadOrder(db: Pool, orderId: string) {
+async function loadOrder(db: Queryable, orderId: string) {
   const { rows } = await db.query<{ status: OrderStatus; payment_scenario: PaymentScenario }>(
     "SELECT status, payment_scenario FROM orders.orders WHERE id = $1",
     [orderId],
@@ -64,8 +64,8 @@ async function loadOrder(db: Pool, orderId: string) {
 }
 
 /** PENDING → `to` plus its status-history event, atomically; false if the Order already left PENDING. */
-async function transition(db: Pool, orderId: string, to: Terminal): Promise<boolean> {
-  return withTransaction(db, async (client) => {
+async function transition(db: Pool, tenantId: string, orderId: string, to: Terminal): Promise<boolean> {
+  return withTenant(db, tenantId, async (client) => {
     const updated = await client.query(
       "UPDATE orders.orders SET status = $2 WHERE id = $1 AND status = 'PENDING'",
       [orderId, to],

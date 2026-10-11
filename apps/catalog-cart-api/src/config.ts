@@ -6,4 +6,5 @@ export const config = {
   environment: process.env.APP_ENV ?? "dev",
   internalInventoryToken: required("INTERNAL_INVENTORY_TOKEN"),
   adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
+  tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
 };

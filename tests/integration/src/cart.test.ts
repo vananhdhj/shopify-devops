@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Cart, Product } from "@shop/contracts";
-import { catalogApiUrl, getJson, waitForOk } from "./http.ts";
+import { api, catalogApiUrl, getJson, waitForOk } from "./http.ts";
 import { compose, stopContainer } from "./stack.ts";
 import { seedProducts, unknownProductId } from "./seed.ts";
 
 async function createCart(): Promise<{ status: number; cart: Cart }> {
-  const res = await fetch(`${catalogApiUrl}/carts`, { method: "POST" });
+  const res = await api(`${catalogApiUrl}/carts`, { method: "POST" });
   return { status: res.status, cart: (await res.json()) as Cart };
 }
 
 async function getCart(id: string): Promise<{ status: number; body: unknown }> {
-  const res = await fetch(`${catalogApiUrl}/carts/${id}`);
+  const res = await api(`${catalogApiUrl}/carts/${id}`);
   return { status: res.status, body: await res.json() };
 }
 
@@ -19,7 +19,7 @@ async function setQuantity(
   productId: string,
   quantity: unknown,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const res = await fetch(`${catalogApiUrl}/carts/${cartId}/items/${productId}`, {
+  const res = await api(`${catalogApiUrl}/carts/${cartId}/items/${productId}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ quantity }),
@@ -125,7 +125,7 @@ describe("cart across API replicas", () => {
     const { cart } = await createCart();
     const updated = await setQuantity(cart.id, seedProducts.lastLantern, 2);
 
-    const fromReplica = await fetch(`${replicaUrl}/carts/${cart.id}`);
+    const fromReplica = await api(`${replicaUrl}/carts/${cart.id}`);
     expect(fromReplica.status).toBe(200);
     expect(await fromReplica.json()).toEqual(updated.body);
   });

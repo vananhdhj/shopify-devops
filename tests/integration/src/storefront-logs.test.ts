@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { Browser } from "./browser.ts";
-import { storefrontUrl } from "./http.ts";
+import { shopFetch } from "./router.ts";
 import { seedProducts } from "./seed.ts";
 import { compose, logLinesWith } from "./stack.ts";
 
 describe("storefront logs", () => {
   it("writes a JSON line per request with the correlation ID, and forwards that ID to the APIs", async () => {
     const correlationId = `test-${randomUUID()}`;
-    await fetch(`${storefrontUrl}/products/${seedProducts.lastLantern}`, { headers: { "x-request-id": correlationId } });
+    await shopFetch(`/products/${seedProducts.lastLantern}`, { headers: { "x-request-id": correlationId } });
 
     await expect
       .poll(() => logLinesWith("storefront", correlationId)[0], { timeout: 5_000 })
@@ -31,10 +31,10 @@ describe("storefront logs", () => {
     const checkoutKey = form.match(/name="checkoutKey" value="([^"]+)"/)![1]!;
     const placed = await browser.submit("/orders", { checkoutKey, paymentScenario: "approve" });
     const orderLink = placed.headers.get("location")!;
-    const token = new URL(orderLink, storefrontUrl).searchParams.get("token")!;
+    const token = new URL(orderLink, browser.origin).searchParams.get("token")!;
 
     const correlationId = `test-${randomUUID()}`;
-    await fetch(`${storefrontUrl}${orderLink}`, { headers: { "x-request-id": correlationId } });
+    await shopFetch(orderLink, { headers: { "x-request-id": correlationId } });
 
     await expect
       .poll(() => logLinesWith("storefront", correlationId)[0], { timeout: 5_000 })

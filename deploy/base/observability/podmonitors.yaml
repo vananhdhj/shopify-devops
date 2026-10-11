@@ -1,5 +1,5 @@
 # Prometheus scrapes every unit: the three Fastify units on their http port, the storefront on its
-# private metrics port (instrumentation.ts). Created before the monitoring CRDs exist on a fresh
+# private metrics port (instrumentation.ts), the router on its private ops port. Created before the monitoring CRDs exist on a fresh
 # cluster, so Argo CD skips the dry run until they do.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
@@ -27,4 +27,18 @@ spec:
       app.kubernetes.io/name: storefront
   podMetricsEndpoints:
     - port: metrics
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: router
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: router
+  podMetricsEndpoints:
+    - port: ops
       path: /metrics

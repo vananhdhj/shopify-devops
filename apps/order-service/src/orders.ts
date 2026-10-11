@@ -1,5 +1,5 @@
-import type { Pool } from "pg";
 import type { Order, OrderStatus, PaymentScenario } from "@shop/contracts";
+import type { Queryable } from "@shop/service-kit";
 
 interface OrderRow {
   id: string;
@@ -17,7 +17,7 @@ interface OrderItemRow {
   quantity: number;
 }
 
-export async function findOrder(db: Pool, id: string): Promise<Order | undefined> {
+export async function findOrder(db: Queryable, id: string): Promise<Order | undefined> {
   const orders = await db.query<OrderRow>(
     "SELECT id, status, payment_scenario, subtotal_minor, currency, created_at FROM orders.orders WHERE id = $1",
     [id],

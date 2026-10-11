@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import type { CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
-import { withTransaction } from "@shop/service-kit";
+import { type Queryable, withTenant } from "@shop/service-kit";
 import { fetchCart } from "./catalog-client.ts";
 
 export type CheckoutResult =
@@ -13,8 +13,8 @@ function requestHash(request: CheckoutRequest): string {
   return createHash("sha256").update(`${request.cartToken}\n${request.paymentScenario}`).digest("hex");
 }
 
-/** The Order a Checkout key already produced, judged against this request's hash. */
-async function priorCheckout(db: Pool, request: CheckoutRequest): Promise<CheckoutResult | undefined> {
+/** The Order a Checkout key already produced in this shop, judged against this request's hash. */
+async function priorCheckout(db: Queryable, request: CheckoutRequest): Promise<CheckoutResult | undefined> {
   const { rows } = await db.query<{ id: string; request_hash: string }>(
     "SELECT id, request_hash FROM orders.orders WHERE checkout_key = $1",
     [request.checkoutKey],
@@ -26,23 +26,36 @@ async function priorCheckout(db: Pool, request: CheckoutRequest): Promise<Checko
     : { outcome: "refused", reason: "checkout_key_reused" };
 }
 
+export interface CheckoutTenant {
+  id: string;
+  /** The request's signed tenant context, passed on to the catalog unchanged. */
+  context: string;
+}
+
 /**
- * Turns a Cart into a Pending order. A retry with the same Checkout key and request returns
- * the original Order; the same key with a different request, or a second Checkout of a Cart
- * that already became an Order, is refused. Order, item snapshot, and outbox event are
+ * Turns a Cart into a Pending order in one shop. A retry with the same Checkout key and request
+ * returns the original Order; the same key with a different request, or a second Checkout of a
+ * Cart that already became an Order, is refused. Checkout keys and Carts are scoped to the shop,
+ * so another shop's key or Cart is unknown here. Order, item snapshot, and outbox event are
  * written in one transaction. Callers pass the cart token already normalised to lower case,
  * so a retry that spells the same token differently hashes identically.
  */
-export async function acceptCheckout(db: Pool, catalogApiUrl: string, request: CheckoutRequest): Promise<CheckoutResult> {
-  const prior = await priorCheckout(db, request);
+export async function acceptCheckout(
+  db: Pool,
+  catalogApiUrl: string,
+  tenant: CheckoutTenant,
+  request: CheckoutRequest,
+): Promise<CheckoutResult> {
+  // The Cart is read over HTTP between these transactions, never while one is open.
+  const prior = await withTenant(db, tenant.id, (client) => priorCheckout(client, request));
   if (prior) return prior;
 
-  const cart = await fetchCart(catalogApiUrl, request.cartToken);
+  const cart = await fetchCart(catalogApiUrl, tenant.context, request.cartToken);
   if (!cart) return { outcome: "refused", reason: "cart_not_found" };
   if (cart.items.length === 0) return { outcome: "refused", reason: "cart_empty" };
 
   try {
-    const orderId = await withTransaction(db, async (client) => {
+    const orderId = await withTenant(db, tenant.id, async (client) => {
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO orders.orders (checkout_key, request_hash, source_cart_id, payment_scenario, subtotal_minor, currency)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -62,7 +75,7 @@ export async function acceptCheckout(db: Pool, catalogApiUrl: string, request: C
       );
       await client.query(
         "INSERT INTO orders.outbox (order_id, event_type, payload) VALUES ($1, 'order.accepted', $2)",
-        [id, { orderId: id }],
+        [id, { tenantId: tenant.id, orderId: id }],
       );
       return id;
     });
@@ -72,8 +85,10 @@ export async function acceptCheckout(db: Pool, catalogApiUrl: string, request: C
     const constraint = (err as { code?: string; constraint?: string }).code === "23505"
       ? (err as { constraint?: string }).constraint
       : undefined;
-    if (constraint === "orders_checkout_key_key") return (await priorCheckout(db, request))!;
-    if (constraint === "orders_source_cart_id_key") return { outcome: "refused", reason: "cart_already_ordered" };
+    if (constraint === "orders_tenant_checkout_key_key") {
+      return (await withTenant(db, tenant.id, (client) => priorCheckout(client, request)))!;
+    }
+    if (constraint === "orders_tenant_source_cart_key") return { outcome: "refused", reason: "cart_already_ordered" };
     throw err;
   }
 }

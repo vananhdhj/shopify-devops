@@ -206,6 +206,9 @@ importers:
       '@shop/service-kit':
         specifier: workspace:*
         version: link:../../packages/service-kit
+      '@shop/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
@@ -307,6 +310,9 @@ importers:
 
   packages/service-kit:
     dependencies:
+      '@shop/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       fastify:
         specifier: ^5.12.5
         version: 5.12.5

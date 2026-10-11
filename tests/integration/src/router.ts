@@ -40,3 +40,22 @@ export function viaRouter(
     req.end(body);
   });
 }
+
+/**
+ * A `fetch`-shaped request to a shop's storefront through the router (Harbor Goods unless told
+ * otherwise). Redirects are never followed, like `redirect: "manual"`.
+ */
+export async function shopFetch(
+  path: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+  handle = "harbor",
+): Promise<Response> {
+  const raw = await viaRouter(shopHost(handle), path, init);
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(raw.headers)) {
+    for (const one of Array.isArray(value) ? value : value === undefined ? [] : [value]) headers.append(name, one);
+  }
+  // A Response cannot carry a body with these statuses.
+  const body = [204, 304].includes(raw.status) ? null : raw.body;
+  return new Response(body, { status: raw.status, headers });
+}

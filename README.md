@@ -1,20 +1,43 @@
 # shopify-devops
 
-A deliberately small single-merchant shop, used as a DevOps lab: build it, ship it, watch it,
-break it, and recover it, with every claim backed by recorded evidence. This repository is the
-proof of concept for a larger portfolio plan. It answers two questions before that plan is
-attempted: can the order logic be made provably correct under retries, races, and crashes, and
-does a real delivery loop (CI, GitOps, monitoring, rollback) fit and work on one Apple M2 laptop
-with 16 GB of RAM? Both answers are yes; the numbers are under [Measured results](#measured-results).
+A small multi-tenant commerce platform, used as a DevOps lab: many shops, each run by its own
+merchant, on shared infrastructure. Build it, ship it, watch it, break it, and recover it, with
+every claim backed by recorded evidence. The commerce features stay deliberately narrow; the depth
+goes into what a platform for many businesses must get right: keeping every shop's data apart,
+and delivering and recovering without one shop's trouble reaching the others.
 
-## What the shop does
+The proof of concept (Phase 0) answered two questions: can the order logic be made provably
+correct under retries, races, and crashes, and does a real delivery loop (CI, GitOps, monitoring,
+rollback) fit and work on one Apple M2 laptop with 16 GB of RAM? Both answers are yes; the numbers
+are under [Measured results](#measured-results). Phase 1 runs two shops in one **cell** (one
+complete copy of the system), with the database itself keeping them apart.
+
+## The shops
+
+Two seeded shops, **Harbor Goods** and **Meadow Supply**, each at its own address
+(`harbor.shop.localhost`, `meadow.shop.localhost`), with its own catalog, Carts, Orders, and
+Merchant password. The static tenant table is [`deploy/base/tenants.json`](deploy/base/tenants.json).
+
+- A **router**, the only unit on the ingress, maps the address to a **tenant** and attaches a signed
+  **tenant context**; nothing downstream believes a shop named any other way
+  ([ADR-0011](docs/adr/0011-tenant-identity-from-a-signed-router-context.md)). An address that
+  names no shop gets one fixed 404.
+- Every shop-owned row carries a `tenant_id`, and PostgreSQL row-level security limits each service
+  to the tenant of its current transaction; a transaction with no tenant sees nothing
+  ([ADR-0010](docs/adr/0010-pooled-tenancy-with-row-level-security.md)). The worker's
+  cell-wide jobs reach other tenants only through four narrow database functions
+  ([ADR-0012](docs/adr/0012-cross-tenant-work-through-narrow-functions.md)).
+- An isolation suite proves on every pull request that no API path, token, password, session, or
+  database session of one shop reaches another's data.
+
+## What each shop does
 
 - A **Guest buyer** browses about a dozen seeded products, fills a **Cart** (no account), and
   checks out with a simulated **Payment scenario**: `approve`, `decline`, or `slow`.
 - **Checkout** answers at once with a **Pending** order and an **Order token** (the buyer's only
   key to read the Order). A worker then deducts **Stock** and runs the Payment scenario, ending in
   **Confirmed** or **Rejected** (out of stock, or payment declined, with the Stock released).
-- The **Merchant** signs in to add products and mark Confirmed orders as **Fulfilled**.
+- The shop's **Merchant** signs in to add products and mark Confirmed orders as **Fulfilled**.
 
 Correctness rules the tests prove: a retried Checkout (same Checkout key) returns the same Order;
 a Cart becomes at most one Order ([ADR-0001](docs/adr/0001-one-cart-becomes-at-most-one-order.md));
@@ -24,11 +47,12 @@ settled after it; Pending orders never expire ([ADR-0002](docs/adr/0002-pending-
 The domain vocabulary is defined in [CONTEXT.md](CONTEXT.md).
 
 ```
-browser ──> storefront (Next.js) ──┬──> catalog-cart API (Fastify) ──> PostgreSQL: catalog schema
-            only unit on ingress   └──> order service (Fastify) ─────> PostgreSQL: orders schema + outbox
-                                                                              │
-            worker ──< Redis (BullMQ queue) <── outbox dispatcher ────────────┘
-              └── Inventory effects (deduct / release, once per Order and action) ──> catalog-cart API
+browser ──> router ──> storefront (Next.js) ──┬──> catalog-cart API (Fastify) ──> PostgreSQL: catalog schema
+ <shop>.shop.localhost  every shop, behind    └──> order service (Fastify) ─────> PostgreSQL: orders schema + outbox
+ only unit on ingress   the router                                      (tenant_id + row-level security on every table)
+ host → tenant, signs the tenant context                                                     │
+                       worker ──< Redis (BullMQ queue) <── outbox dispatcher ────────────────┘
+                         └── Inventory effects (deduct / release, once per tenant, Order, and action) ──> catalog-cart API
 ```
 
 TypeScript on Node 24, pnpm workspaces with Turborepo; PostgreSQL 18, Redis 8.
@@ -68,12 +92,14 @@ GHCR images inherit the repository's public visibility; no manual step was neede
 
 ```sh
 make dev-up     # generates secrets, builds, starts, migrates, seeds; returns once healthy
-open http://127.0.0.1:3000
-make test       # typecheck + 101 service-HTTP tests against real PostgreSQL and Redis (~2.5 min)
+open http://harbor.shop.localhost:8000 http://meadow.shop.localhost:8000
+make test       # typecheck + the service-HTTP and isolation tests against real PostgreSQL and Redis (~4 min)
 make dev-down
 ```
 
-The Merchant signs in at `/admin/login` with `ADMIN_PASSWORD` from `.secrets/dev.env`.
+Each Merchant signs in at their shop's `/admin/login` with their own password from
+`.secrets/dev.env` (`MERCHANT_PASSWORD_HARBOR`, `MERCHANT_PASSWORD_MEADOW`). Every `*.localhost`
+name resolves to this machine, so no hosts-file entries are needed.
 
 ### On the lab cluster with GitOps
 
@@ -81,8 +107,8 @@ The Merchant signs in at `/admin/login` with `ADMIN_PASSWORD` from `.secrets/dev
 make secrets            # .secrets/dev.env (if not already there)
 make bootstrap-gitops   # k3d cluster, Argo CD, cluster Secrets, the shop-dev and monitoring apps
 kubectl --context k3d-shop -n argocd get applications   # wait for Synced / Healthy
-make smoke              # storefront serves the catalog and a Checkout is Confirmed
-open http://shop.localhost:8080
+make smoke              # both shops serve their own catalogs, an unknown shop gets 404, a Checkout is Confirmed
+open http://harbor.shop.localhost:8080 http://meadow.shop.localhost:8080
 ```
 
 Argo CD then deploys whatever `main` holds. Admin tools are reached only by port-forward:
@@ -131,20 +157,25 @@ The bad-release drill is written up step by step in
 - **Secrets never enter Git.** `make secrets` generates random values into `.secrets/dev.env`
   (git-ignored, mode 600) and copies them into Kubernetes Secrets; Argo CD Applications only
   reference Secrets by name. Gitleaks runs as a pre-commit hook (`make hooks`) and in CI.
-- **Merchant.** Only an scrypt hash of the password reaches the storefront, which issues a signed,
-  httpOnly session cookie. The APIs' admin endpoints require a separate admin service token; the
-  human password never reaches them. Admin pages and form posts refuse visitors without a session
-  and cross-site posts.
-- **Orders.** The Order token is an HMAC of the order id and is never stored
-  ([ADR-0004](docs/adr/0004-order-token-is-an-hmac-of-the-order-id.md)). A wrong token and an
-  unknown Order answer the same 404.
+- **Tenants.** A request's shop comes only from the router's signed tenant context; the storefront
+  and both APIs refuse requests without a valid one, and the database refuses any row outside the
+  transaction's tenant. Keys and foreign keys are tenant-scoped, so even the table owner cannot
+  put another shop's product in a Cart (tested).
+- **Merchants.** Each shop has its own password; only scrypt hashes reach the storefront, which
+  issues a signed, httpOnly session cookie valid at that shop only. The APIs' admin endpoints
+  require a separate admin service token, which never names a shop; the human password never
+  reaches them. Admin pages and form posts refuse visitors without a session and cross-site posts.
+- **Orders.** The Order token is an HMAC of the tenant id and order id and is never stored
+  ([ADR-0004](docs/adr/0004-order-token-is-an-hmac-of-the-order-id.md)). A wrong token, another
+  shop's Order, and an unknown Order answer the same 404.
 - **Least-privilege database.** A migration identity owns the schemas; each runtime identity has
   only the table privileges its service needs, and cross-schema access is denied (tested). Only
   the worker's internal token can change Stock.
 - **Logs and metrics** use route templates, never raw URLs, query strings, Order tokens,
   credentials, or request bodies (tested for each service).
-- **Exposure.** Only the storefront is on the ingress, bound to `127.0.0.1:8080`. Argo CD,
-  Grafana, PostgreSQL, and Redis are reachable only by port-forward.
+- **Exposure.** Only the router is on the ingress, bound to `127.0.0.1:8080`; its health and
+  metrics are on a private port. Argo CD, Grafana, PostgreSQL, and Redis are reachable only by
+  port-forward.
 - **Supply chain.** Actions are pinned to commit SHAs, downloaded tools are checksum-verified,
   images run as non-root and are deployed by digest only.
 
@@ -152,6 +183,11 @@ The bad-release drill is written up step by step in
 
 - One single-node k3d cluster on a laptop: no high availability, and the "dev" environment is the
   only one running. The staging overlay is rendered and validated in CI but never applied.
+- One cell. Shops are added by editing the static tenant table and the seed data; signup, a
+  control plane, and more cells come in later phases of the blueprint.
+- Metrics have no tenant dimension yet: dashboards and alerts are per cell, and the oldest-Pending
+  gauge spans every shop. Per-shop rate limits and queue fairness are not in place either, so one
+  busy shop can slow the others.
 - `make smoke` and the drills run only from the laptop, because GitHub-hosted runners cannot reach
   the cluster.
 - Argo CD polls Git (no webhook): about a minute passes between a merge and the start of its sync.
@@ -166,7 +202,7 @@ The bad-release drill is written up step by step in
   is checked by eye.
 - Pending orders never expire and cannot be cancelled (ADR-0002); two simultaneous "add" clicks
   from one buyer can lose an increment.
-- Out of scope for the POC: Loki, OpenTelemetry, policy gates, image scanning, Sealed Secrets,
+- Out of scope so far: Loki, OpenTelemetry, policy gates, image scanning, Sealed Secrets,
   network policies, autoscaling, load tests, data-recovery drills, progressive delivery, cloud
   infrastructure, and commerce breadth such as accounts, shipping, tax, and real payments.
 
@@ -210,9 +246,10 @@ Generated secrets stay in `.secrets/dev.env`; delete the folder to start from sc
 
 ## Repository map
 
-- `apps/`: storefront, catalog-cart-api, order-service, worker, db-migrations
-- `packages/`: shared API contracts and service plumbing
+- `apps/`: router, storefront, catalog-cart-api, order-service, worker, db-migrations
+- `packages/`: shared API contracts, service plumbing, and tenancy (the signed tenant context)
 - `tests/integration/`: the service-HTTP test suite
 - `deploy/`: Kustomize base and overlays, Argo CD Applications, monitoring, k3d config
 - `scripts/`: secrets, smoke and drills
 - `docs/adr/`: decisions; `docs/evidence/`: measurements and drill records
+- `.scratch/`: specs and tickets, one folder per phase

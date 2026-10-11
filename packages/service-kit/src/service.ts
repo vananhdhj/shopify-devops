@@ -4,6 +4,7 @@ import type { Registry } from "prom-client";
 import { loggingOptions } from "./logging.ts";
 import { registerMetrics } from "./metrics.ts";
 import { quietRoute } from "./routes.ts";
+import { requireTenantContext, withoutTenant } from "./tenant.ts";
 
 export interface ServiceOptions {
   /** Service name stamped on every log line, e.g. "order-service". */
@@ -20,6 +21,11 @@ export interface ServiceOptions {
    * when the unit records its real traffic in the same registry elsewhere (the router).
    */
   recordRequests?: boolean;
+  /**
+   * When set, every route except probes, scrapes, and routes marked `withoutTenant` requires a
+   * tenant context signed with this secret.
+   */
+  tenantContextSecret?: string;
 }
 
 /**
@@ -37,9 +43,11 @@ export function createService({
   readinessChecks = [],
   registry,
   recordRequests = true,
+  tenantContextSecret,
 }: ServiceOptions): FastifyInstance {
   // No type coercion: a quantity sent as "2" is a client error, not a number.
   const app = Fastify({ ...loggingOptions(name, environment), ajv: { customOptions: { coerceTypes: false } } });
+  if (tenantContextSecret) requireTenantContext(app, tenantContextSecret);
   registerMetrics(app, registry, recordRequests);
 
   app.setErrorHandler((err: FastifyError, req, reply) => {
@@ -53,9 +61,9 @@ export function createService({
 
   // Liveness says only that the process can answer; it must not depend on PostgreSQL,
   // or a database outage would turn into a restart storm.
-  app.get("/health/live", quietRoute, async () => ({ status: "ok" }));
+  app.get("/health/live", { ...quietRoute, ...withoutTenant }, async () => ({ status: "ok" }));
 
-  app.get("/health/ready", quietRoute, async (_req, reply) => {
+  app.get("/health/ready", { ...quietRoute, ...withoutTenant }, async (_req, reply) => {
     if (draining.has(app)) return reply.code(503).send({ status: "draining" });
     try {
       await db?.query("SELECT 1");
@@ -73,9 +81,19 @@ export function createService({
  * A pool with bounded connect and query time, so a database outage fails fast. The statement
  * timeout is enforced by PostgreSQL itself, so a query stuck on a lock is cancelled server-side
  * too, not merely abandoned by the client.
+ *
+ * Every client gets an `error` listener for its whole life. pg-pool listens only while a client
+ * is idle; a connection that dies while checked out (a database restart or failover), or just as
+ * it is handed over, would otherwise emit `error` with no listener and crash the process. The
+ * failure still reaches whoever is using the client: its queries reject, and a broken client is
+ * discarded on release rather than reused.
  */
 export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString, connectionTimeoutMillis: 2_000, query_timeout: 5_000, statement_timeout: 5_000 });
+  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 2_000, query_timeout: 5_000, statement_timeout: 5_000 });
+  pool.on("connect", (client) => {
+    client.on("error", () => {});
+  });
+  return pool;
 }
 
 const drainTimeoutMs = 8_000;

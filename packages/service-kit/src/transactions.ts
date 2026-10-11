@@ -12,7 +12,8 @@ export async function withTransaction<T>(db: pg.Pool, work: (client: pg.PoolClie
     await client.query("COMMIT");
     return result;
   } catch (err) {
-    await client.query("ROLLBACK");
+    // On a dead connection the rollback fails too; the original error is the one that matters.
+    await client.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
     client.release();

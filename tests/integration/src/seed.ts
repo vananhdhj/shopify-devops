@@ -1,4 +1,5 @@
 // Ids fixed by the seed data (db/seed/catalog.sql); tests use them as known-good expectations.
+// Harbor Goods' seed catalog (the first seeded shop, and the one tests use by default).
 export const seedProducts = {
   canvasTote: "00000000-0000-4000-8000-000000000001",
   linenApron: "00000000-0000-4000-8000-000000000003",
@@ -15,3 +16,12 @@ export const seedProducts = {
 } as const;
 
 export const unknownProductId = "00000000-0000-4000-8000-0000000000ff";
+
+// Meadow Supply's seed catalog (the second seeded shop).
+export const meadowProducts = {
+  seedPacketTrio: "00000000-0000-4000-8000-000000000101",
+  handTrowel: "00000000-0000-4000-8000-000000000102",
+  wateringCan: "00000000-0000-4000-8000-000000000103",
+  gardenTwine: "00000000-0000-4000-8000-000000000104",
+  heirloomSundial: "00000000-0000-4000-8000-000000000105",
+} as const;

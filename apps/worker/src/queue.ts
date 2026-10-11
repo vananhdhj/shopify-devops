@@ -3,6 +3,8 @@ import type { ConnectionOptions, JobsOptions } from "bullmq";
 export const ordersQueue = "orders";
 
 export interface SettleOrderJob {
+  /** The Order's tenant: every query the job runs is scoped to it. */
+  tenantId: string;
   orderId: string;
 }
 

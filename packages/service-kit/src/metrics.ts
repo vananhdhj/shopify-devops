@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { quietRoute } from "./routes.ts";
+import { withoutTenant } from "./tenant.ts";
 
 /**
  * Records every request's duration in `registry`, labelled by route template (`/products/:id`),
@@ -32,7 +33,7 @@ export function registerMetrics(app: FastifyInstance, registry: Registry = new R
   collectDefaultMetrics({ register: registry });
   if (recordRequests) observeRequests(app, registry);
 
-  app.get("/metrics", quietRoute, async (_req, reply) => {
+  app.get("/metrics", { ...quietRoute, ...withoutTenant }, async (_req, reply) => {
     reply.type(registry.contentType);
     return registry.metrics();
   });
