@@ -4,14 +4,14 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] Kubernetes: router Deployment and Service, tenant-table ConfigMap, Ingress for `*.shop.localhost` to the router, storefront no longer on the Ingress, new secrets wired
-- [ ] `make smoke` checks both shops at `harbor.shop.localhost:8080` and `meadow.shop.localhost:8080`, and the unknown-shop `404`
+- [x] `make smoke` checks both shops at `harbor.shop.localhost:8080` and `meadow.shop.localhost:8080`, and the unknown-shop `404`
 - [x] `CONTEXT.md` gains Tenant, Handle, Tenant context, Cell, and Platform operator, and the Merchant definition becomes per tenant
 - [x] ADRs: pooled tenancy with RLS as the isolation boundary; tenant identity from a signed router context; cross-tenant work only through narrow functions; amendments to ADR-0004 (tenant-bound Order token), ADR-0006 (role per schema, tenant per row), and ADR-0007 (token per cell, tenant from context)
 - [x] README describes the router, tenancy, and the isolation suite (the architecture doc is maintained by the author, outside this ticket)
-- [ ] Measured memory of the dev environment with the router, recorded in `docs/evidence/`
+- [x] Measured memory of the dev environment with the router, recorded in `docs/evidence/`
 
 ## Comments
 
@@ -21,3 +21,5 @@ Progress (2026-10-11):
 - `scripts/smoke.sh` checks both shops' catalogs, that neither shows the other's products, and the unknown-shop 404 (default `SHOP_DOMAIN=shop.localhost:8080`); it can run only once the cell is deployed.
 - `CONTEXT.md`, ADRs 0010–0012, the amendments to ADRs 0004, 0006, and 0007, and the README are written.
 - Left: `make smoke` against the deployed lab cluster, and the memory measurement with the router running; both need both pull requests merged and synced. The architecture doc (`docs/architecture/`) was taken out of this ticket (2026-10-11): the author updates it.
+
+Resolved 2026-10-11. PRs #18 and #19 merged; the release pinned the Phase 1 images (`ea54a10`) and Argo CD synced `shop-dev` to Synced and Healthy. `make smoke` passes against the cluster for both shops, and memory with the router running is recorded in `docs/evidence/2026-10-11-phase-1-cluster.md` (shop namespace 234 MiB, 5.9 GB still available in the Colima VM). Two operator-side gaps found during the rollout and recorded there and in the README: the cluster's Secret lacked the new `MERCHANT_CREDENTIALS` key until `make secrets` ran against the cluster (the new storefront could not start for about ten minutes), and the k3d load balancer had to be restarted after k3s restarted under it.

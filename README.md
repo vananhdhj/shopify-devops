@@ -208,12 +208,14 @@ The bad-release drill is written up step by step in
 
 ## Measured results
 
-All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB, on 2026-10-10.
+All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phase 1 on 2026-10-11.
 
 | What | Result |
 |---|---|
-| Service-HTTP test suite | 101 tests pass locally and in CI, including 100 concurrent retries → one Order, 20 concurrent Checkouts for the last unit → one Confirmed, a worker killed between deduction and confirmation → one deduction, two worker replicas, and a Redis outage with reconciliation |
+| Service-HTTP and isolation suite (Phase 1) | 139 tests in 26 files pass from a wiped stack and in CI on amd64 and arm64, including the cross-tenant suite (API, tenant context, storefront, database, schema) and a worker that survives 40 connection cuts while Orders settle |
+| Service-HTTP test suite (Phase 0) | 101 tests pass locally and in CI, including 100 concurrent retries → one Order, 20 concurrent Checkouts for the last unit → one Confirmed, a worker killed between deduction and confirmation → one deduction, two worker replicas, and a Redis outage with reconciliation |
 | Memory, whole lab (k3s, shop, Argo CD, kube-prometheus-stack) | k3d node 4.0 GiB; 5.7 GB still available in the Colima VM. Grafana (415 MiB) and Prometheus (375 MiB) are the largest pods ([memory evidence](docs/evidence/2026-10-10-k3d-memory.md)) |
+| Two shops on the cluster (Phase 1) | `make smoke` passes for both shops; the shop namespace grew from 216 to 234 MiB with the router (33 MiB); 5.9 GB still available in the Colima VM; the 209 Phase 0 Orders were backfilled to Harbor Goods ([Phase 1 evidence](docs/evidence/2026-10-11-phase-1-cluster.md)) |
 | GitOps loop | Merge → multi-arch build → digest commit by the deploy key (no release loop) → Argo CD sync in about 35 s; a worker scaled to 0 by hand was restored by self-heal within about 2 s |
 | Stale-Pending alert drill | Worker stopped: alert firing about 70 s after the Order was placed, at both receivers; resolved about 30 s after the worker returned, and the Order was Confirmed |
 | Bad-release drill | Fault live → FIRING notification in 1 min 34 s; FIRING → Checkout working again via `git revert` in 2 min 14 s; RESOLVED 2 min 12 s later; Checkout down 3 min 48 s in total ([drill evidence](docs/evidence/2026-10-10-bad-release-drill.md)) |
@@ -233,6 +235,11 @@ Failed experiments, kept on record:
 - **The ruleset bypass** for the deploy key could not be added by the automation (held by a
   safety check) and needed the repository owner, and two attempts in the GitHub UI did not save
   before it was applied through the API.
+- **A release that needed a new Secret key (Phase 1).** The storefront started reading
+  `MERCHANT_CREDENTIALS`, but the cluster's Secret lacked it, because `make secrets` had run only
+  while the cluster was unreachable. The new pod could not start and the shop was likely down for
+  about ten minutes until `make secrets` was run. A release that adds a Secret key needs
+  `make secrets` against the cluster before Argo CD syncs it.
 
 ## Teardown
 
