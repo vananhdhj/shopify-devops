@@ -11,6 +11,8 @@ export const config = {
   tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
   /** The control plane's internal listener, where the routing table is read. */
   platformApiUrl: required("PLATFORM_API_URL"),
+  /** The control plane's public listener: the signup pages at the bare base domain. */
+  platformPublicUrl: required("PLATFORM_PUBLIC_URL"),
   routerToken: required("PLATFORM_ROUTER_TOKEN"),
   routesRefreshMs: Number(process.env.ROUTES_REFRESH_MS ?? 2_000),
 };

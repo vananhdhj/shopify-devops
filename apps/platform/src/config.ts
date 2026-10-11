@@ -1,8 +1,12 @@
 import { requiredEnv as required } from "@shop/service-kit";
 
 export const config = {
+  /** The signup pages: the only listener the router forwards from the bare platform address. */
+  publicPort: Number(process.env.PUBLIC_PORT ?? 8100),
   /** The listener for the router, the storefront, the cells, and the operator; never on the ingress. */
   internalPort: Number(process.env.INTERNAL_PORT ?? 8101),
+  /** Shops live at `<handle>.<baseDomain>`; the signup pages are at the bare base domain. */
+  baseDomain: required("TENANT_BASE_DOMAIN").toLowerCase(),
   databaseUrl: required("DATABASE_URL"),
   environment: process.env.APP_ENV ?? "dev",
   /** Presented by every cell's router to read the routing table. */

@@ -204,6 +204,8 @@ services:
       # Registry mode: the routing table comes from the control plane.
       PLATFORM_API_URL: http://platform-api:8101
       PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
+      # The bare base domain serves the control plane's signup pages.
+      PLATFORM_PUBLIC_URL: http://platform-api:8100
       APP_ENV: dev
     ports:
       - "127.0.0.1:8000:8000"
@@ -290,11 +292,33 @@ services:
       DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
       PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
       PLATFORM_STOREFRONT_TOKEN: ${PLATFORM_STOREFRONT_TOKEN:?run make secrets}
+      TENANT_BASE_DOMAIN: shop.localhost
       APP_ENV: dev
     ports:
       - "127.0.0.1:8101:8101" # internal listener, for tests; never on an ingress
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8101/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      platform-seed:
+        condition: service_completed_successfully
+
+  # Runs lifecycle workflows (provisioning; deletion in ticket 04). No host port: its listener is
+  # operational only, and the service can be scaled for the two-worker test.
+  platform-worker:
+    build:
+      context: .
+      dockerfile: apps/platform/Dockerfile
+    command: ["node", "dist/worker-server.js"]
+    environment:
+      DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
+      CELL_ROUTER_URL: http://router:8000
+      TENANT_BASE_DOMAIN: shop.localhost
+      APP_ENV: dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8102/health/ready"]
       interval: 2s
       timeout: 3s
       retries: 30

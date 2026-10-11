@@ -34,6 +34,7 @@ const proxy = buildApp({
   routes,
   baseDomain: config.baseDomain,
   storefrontUrl: config.storefrontUrl,
+  platformPublicUrl: config.platformPublicUrl,
   tenantContextSecret: config.tenantContextSecret,
   registry,
 });

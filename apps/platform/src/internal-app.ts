@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import type { Registry } from "prom-client";
 import type { MerchantSignInRequest, MerchantSignInResult, TenantRouteTable } from "@shop/contracts";
 import { createService, requireSecretHeader, uuidPatternSource } from "@shop/service-kit";
 import { isPassword } from "./passwords.ts";
@@ -6,6 +7,8 @@ import { merchantCredential, routingTable } from "./registry.ts";
 
 export interface InternalAppDeps {
   db: Pool;
+  /** Shared with the public listener, so one /metrics covers both. */
+  registry: Registry;
   environment: string;
   routerToken: string;
   storefrontToken: string;
@@ -26,7 +29,7 @@ const signInBody = {
  * are a separate listener (ticket 03).
  */
 export function buildInternalApp(deps: InternalAppDeps) {
-  const app = createService({ name: "platform-api", environment: deps.environment, db: deps.db });
+  const app = createService({ name: "platform-api", environment: deps.environment, db: deps.db, registry: deps.registry });
 
   app.get(
     "/internal/routes",
