@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import type { Registry } from "prom-client";
 import type { MerchantSignInRequest, MerchantSignInResult, TenantRouteTable } from "@shop/contracts";
 import { createService, requireSecretHeader, uuidPatternSource } from "@shop/service-kit";
+import { act, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
 import { isPassword } from "./passwords.ts";
 import { merchantCredential, routingTable } from "./registry.ts";
 
@@ -12,6 +13,7 @@ export interface InternalAppDeps {
   environment: string;
   routerToken: string;
   storefrontToken: string;
+  operatorToken: string;
 }
 
 const signInBody = {
@@ -48,6 +50,33 @@ export function buildInternalApp(deps: InternalAppDeps) {
         credential?.status === "ACTIVE" && (await isPassword(req.body.password, credential.hash));
       req.log.info({ tenantId: req.body.tenantId, ok }, "merchant sign-in checked");
       return ok ? { ok: true, credentialVersion: credential.credentialVersion } : { ok: false };
+    },
+  );
+
+  // The platform operator's actions. Reached by port-forward and `make tenant-*` only.
+  const operatorOnly = { preHandler: requireSecretHeader("x-operator-token", deps.operatorToken) };
+
+  app.get("/operator/tenants", operatorOnly, async () => ({ tenants: await listTenants(deps.db) }));
+
+  app.get<{ Params: { handle: string } }>("/operator/tenants/:handle/events", operatorOnly, async (req) => ({
+    events: await tenantEvents(deps.db, req.params.handle),
+  }));
+
+  app.post<{ Params: { handle: string; action: string } }>(
+    "/operator/tenants/:handle/:action",
+    operatorOnly,
+    async (req, reply) => {
+      const action = req.params.action as OperatorAction;
+      if (!["suspend", "reinstate", "delete"].includes(action)) {
+        return reply.code(404).send({ error: "unknown_action", message: "suspend, reinstate, or delete" });
+      }
+      const result = await act(deps.db, req.params.handle, action);
+      if (result.outcome === "not_found") return reply.code(404).send({ error: "tenant_not_found", message: "no such shop" });
+      if (result.outcome === "not_allowed") {
+        return reply.code(409).send({ error: "not_allowed", message: `cannot ${action} a shop that is ${result.status}` });
+      }
+      req.log.info({ tenantId: result.tenantId, action, status: result.status }, "operator action");
+      return { handle: req.params.handle, status: result.status };
     },
   );
 

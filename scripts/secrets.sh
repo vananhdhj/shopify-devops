@@ -29,6 +29,8 @@ add_if_missing DB_PLATFORM_MIGRATOR_PASSWORD
 add_if_missing DB_PLATFORM_APP_PASSWORD
 add_if_missing PLATFORM_ROUTER_TOKEN
 add_if_missing PLATFORM_STOREFRONT_TOKEN
+add_if_missing PLATFORM_CELL_TOKEN
+add_if_missing PLATFORM_OPERATOR_TOKEN
 add_if_missing GRAFANA_ADMIN_PASSWORD
 
 # The Merchant passwords of the two shops seeded in Phase 1, readable enough to type, as

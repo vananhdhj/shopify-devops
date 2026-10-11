@@ -1,5 +1,6 @@
 import { Counter, Histogram, Registry } from "prom-client";
 import { createPool, createService, requiredEnv, runService } from "@shop/service-kit";
+import { type DeletionOutcome, deleteShop } from "./deletion.ts";
 import { claimDue, type LifecycleEvent, retryLater } from "./lifecycle.ts";
 import { type ProvisionOutcome, provision } from "./provision.ts";
 
@@ -10,6 +11,14 @@ const config = {
   pollIntervalMs: Number(process.env.LIFECYCLE_POLL_MS ?? 250),
   /** The cell's router, reached by Host like a buyer's browser, to check a shop once it is active. */
   router: { routerUrl: requiredEnv("CELL_ROUTER_URL"), baseDomain: requiredEnv("TENANT_BASE_DOMAIN").toLowerCase() },
+  /** Phase 2's one cell's APIs, for purging a deleted shop; a cell directory arrives with more cells. */
+  cell: {
+    catalogUrl: requiredEnv("CELL_CATALOG_URL"),
+    ordersUrl: requiredEnv("CELL_ORDERS_URL"),
+    cellToken: requiredEnv("PLATFORM_CELL_TOKEN"),
+  },
+  /** Between a deletion's first purge and its verifying second one; longer than any settle job. */
+  deleteGraceMs: Number(process.env.DELETE_GRACE_MS ?? 15_000),
 };
 
 const db = createPool(config.databaseUrl);
@@ -37,12 +46,12 @@ const duration = new Histogram({
 // Private operational listener: health and metrics only.
 const ops = createService({ name: "platform-worker", environment: config.environment, db, registry });
 
-function run(event: LifecycleEvent): Promise<ProvisionOutcome> {
+function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome> {
   switch (event.action) {
     case "provision":
       return provision(db, config.router, event);
     case "delete":
-      throw new Error("deletion is not implemented yet"); // ticket 04
+      return deleteShop(db, config.cell, event, config.deleteGraceMs);
   }
 }
 
@@ -53,8 +62,9 @@ async function loop(): Promise<void> {
       for (const event of await claimDue(db)) {
         try {
           const outcome = await run(event);
+          // A deletion's first pass ("verify_later") has neither finished nor failed.
           if (outcome === "retry") failures.inc({ action: event.action });
-          if (outcome === "active" || outcome === "nothing_to_do") {
+          if (outcome === "active" || outcome === "deleted" || outcome === "nothing_to_do") {
             completed.inc({ action: event.action });
             duration.observe({ action: event.action }, (Date.now() - event.createdAt.getTime()) / 1000);
           }

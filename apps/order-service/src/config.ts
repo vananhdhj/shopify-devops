@@ -7,6 +7,7 @@ export const config = {
   orderTokenSecret: required("ORDER_TOKEN_SECRET"),
   adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
   tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
+  platformCellToken: required("PLATFORM_CELL_TOKEN"),
   environment: process.env.APP_ENV ?? "dev",
   // The bad-release drill's fault: when "true", every Checkout fails with 500.
   checkoutFault: process.env.FAULT_CHECKOUT_ERRORS === "true",

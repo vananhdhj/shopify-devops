@@ -13,4 +13,6 @@ export const config = {
   routerToken: required("PLATFORM_ROUTER_TOKEN"),
   /** Presented by every cell's storefront to check a Merchant sign-in. */
   storefrontToken: required("PLATFORM_STOREFRONT_TOKEN"),
+  /** Presented by the platform operator (make tenant-*), never by any unit. */
+  operatorToken: required("PLATFORM_OPERATOR_TOKEN"),
 };

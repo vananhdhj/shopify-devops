@@ -7,4 +7,5 @@ export const config = {
   internalInventoryToken: required("INTERNAL_INVENTORY_TOKEN"),
   adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
   tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
+  platformCellToken: required("PLATFORM_CELL_TOKEN"),
 };

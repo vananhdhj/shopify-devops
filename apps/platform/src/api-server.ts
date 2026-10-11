@@ -11,6 +11,7 @@ const internal = buildInternalApp({
   environment: config.environment,
   routerToken: config.routerToken,
   storefrontToken: config.storefrontToken,
+  operatorToken: config.operatorToken,
   registry,
 });
 const publicApp = buildPublicApp({ db, environment: config.environment, baseDomain: config.baseDomain, registry });

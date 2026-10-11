@@ -3,14 +3,15 @@ COMPOSE := docker compose --env-file .secrets/dev.env
 CLUSTER := shop
 CONTEXT := k3d-$(CLUSTER)
 NAMESPACE := shop-dev
+PLATFORM_NAMESPACE := platform-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete
 
 ## Generate local secrets into .secrets/dev.env (never overwrites existing values), and copy
 ## them into the lab cluster as a Secret when the cluster is running
 secrets:
 	@scripts/secrets.sh
-	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE)
+	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE)
 
 ## Point git at the repo's hooks (Gitleaks pre-commit)
 hooks:
@@ -51,8 +52,8 @@ bootstrap-gitops: cluster-up
 	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
 	  --version $(ARGOCD_CHART_VERSION) --namespace argocd --create-namespace \
 	  --kube-context $(CONTEXT) --values deploy/argocd/values.yaml --wait --timeout 10m
-	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE)
-	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml -f deploy/monitoring/application.yaml
+	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE)
+	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml -f deploy/argocd/platform-dev.yaml -f deploy/monitoring/application.yaml
 	@echo "Argo CD UI: kubectl --context $(CONTEXT) -n argocd port-forward svc/argocd-server 8081:80"
 	@echo "Grafana:    kubectl --context $(CONTEXT) -n monitoring port-forward svc/monitoring-grafana 8082:80  (admin / GRAFANA_ADMIN_PASSWORD)"
 
@@ -66,3 +67,18 @@ smoke:
 drill-stale-pending:
 	@scripts/drill-stale-pending.sh
 
+## The platform operator's shop actions (control plane, internal listener; PLATFORM_URL for the cluster)
+tenant-list:
+	@scripts/tenant.sh list
+
+tenant-events:
+	@scripts/tenant.sh events $(HANDLE)
+
+tenant-suspend:
+	@scripts/tenant.sh suspend $(HANDLE)
+
+tenant-reinstate:
+	@scripts/tenant.sh reinstate $(HANDLE)
+
+tenant-delete:
+	@scripts/tenant.sh delete $(HANDLE)

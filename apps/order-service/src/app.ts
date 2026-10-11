@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
-import { createService, isUuid, requireSecretHeader, tenantOf, withTenant } from "@shop/service-kit";
+import { createService, isUuid, requireSecretHeader, tenantOf, withTenant, withoutTenant } from "@shop/service-kit";
 import { tenantContextHeader } from "@shop/tenancy";
 import { fulfillOrder, listOrders } from "./admin.ts";
 import { orderMetrics } from "./metrics.ts";
@@ -16,6 +16,8 @@ export interface AppDeps {
   orderTokenSecret: string;
   /** Presented by the storefront on behalf of the signed-in Merchant. */
   adminServiceToken: string;
+  /** Presented by the control plane to purge a deleted shop from this cell. */
+  platformCellToken: string;
   /** Verifies the tenant context every business request carries (from the router, via the storefront). */
   tenantContextSecret: string;
   /** Fails every Checkout with 500, standing in for a bad release in the rollback drill. */
@@ -112,6 +114,26 @@ export function buildApp(deps: AppDeps) {
       }
       req.log.info({ orderId: id }, "order fulfilled");
       return { id, status: "FULFILLED" };
+    },
+  );
+
+
+  // Internal: the control plane deletes a shop from this cell. Refused without the cell token,
+  // which only the control plane holds; outside any tenant context, because the shop is no longer
+  // routed. The schema's narrow purge function does the deleting (ADR-0012's pattern) and reports
+  // what it removed and what of the shop is left.
+  app.post<{ Params: { tenantId: string } }>(
+    "/internal/tenants/:tenantId/purge",
+    { ...withoutTenant, preHandler: requireSecretHeader("x-platform-token", deps.platformCellToken) },
+    async (req, reply) => {
+      const { tenantId } = req.params;
+      if (!isUuid(tenantId)) return reply.code(404).send({ error: "tenant_not_found", message: "not a tenant id" });
+      const { rows } = await deps.db.query<{ report: { deleted: Record<string, number>; remaining: Record<string, number> } }>(
+        "SELECT orders.purge_tenant($1) AS report",
+        [tenantId.toLowerCase()],
+      );
+      req.log.info({ tenantId, ...rows[0]!.report }, "tenant purged");
+      return rows[0]!.report;
     },
   );
 
