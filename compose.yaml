@@ -171,6 +171,7 @@ services:
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?run make secrets}
       SESSION_SECRET: ${SESSION_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
       APP_ENV: dev
     ports:
       - "127.0.0.1:3000:3000"
@@ -184,6 +185,31 @@ services:
       catalog-cart-api:
         condition: service_healthy
       order-service:
+        condition: service_healthy
+
+  # The cell's edge: maps <handle>.shop.localhost to a tenant and proxies to the storefront with a
+  # signed tenant context. Health and metrics are on its private port 8001.
+  router:
+    build:
+      context: .
+      dockerfile: apps/router/Dockerfile
+    environment:
+      STOREFRONT_URL: http://storefront:3000
+      TENANT_BASE_DOMAIN: shop.localhost
+      TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANTS_FILE: /config/tenants.json
+      APP_ENV: dev
+    volumes:
+      - ./deploy/base/tenants.json:/config/tenants.json:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8001/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      storefront:
         condition: service_healthy
 
   # One-shot job run by `make seed` / `make dev-up`; a profile keeps `up --wait` from

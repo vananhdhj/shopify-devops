@@ -143,10 +143,19 @@ jobs:
           merge-multiple: true
           path: digests
       - name: Point the dev overlay at the new digests
+        env:
+          OVERLAY: deploy/overlays/dev/kustomization.yaml
         run: |
           for file in digests/*.json; do
-            IMAGE="$(jq -r .image "$file")" DIGEST="$(jq -r .digest "$file")" \
-              yq -i '(.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)' deploy/overlays/dev/kustomization.yaml
+            IMAGE="$(jq -r .image "$file")"
+            DIGEST="$(jq -r .digest "$file")"
+            export IMAGE DIGEST
+            if yq -e '.images[] | select(.name == strenv(IMAGE))' "$OVERLAY" >/dev/null 2>&1; then
+              yq -i '(.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)' "$OVERLAY"
+            else
+              # A new unit's first build: its entry must exist before any manifest can pin it.
+              yq -i '.images += [{"name": strenv(IMAGE), "digest": strenv(DIGEST)}]' "$OVERLAY"
+            fi
           done
           git diff --stat
       - name: Commit and push the digest bump

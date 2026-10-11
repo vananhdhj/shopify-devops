@@ -10,12 +10,15 @@ WORKDIR /repo
 FROM base AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/
+COPY packages/tenancy/package.json packages/tenancy/
 COPY apps/storefront/package.json apps/storefront/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @shop/storefront...
+COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
+COPY packages/tenancy packages/tenancy
 COPY apps/storefront apps/storefront
-RUN pnpm --filter @shop/storefront build
+RUN pnpm --filter "@shop/storefront..." build
 
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production

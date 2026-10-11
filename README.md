@@ -106,7 +106,7 @@ The bad-release drill is written up step by step in
 ## Delivery path
 
 1. **Pull request.** CI runs lint (Biome), typecheck and image builds for the affected services,
-   the service-HTTP tests against a throwaway Compose stack, Gitleaks, and rendering plus schema
+   the service-HTTP tests against a throwaway Compose stack on both amd64 and arm64 runners, Gitleaks, and rendering plus schema
    validation (kubeconform) of the dev and staging overlays, the monitoring config, and the Argo CD
    Applications, including a check that every image is pinned by digest. One aggregate check,
    `ci-ok`, is the only required check, so skipped jobs never leave the pull request waiting. Pull

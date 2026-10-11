@@ -5,3 +5,5 @@ export { secretsEqual } from "./secrets.ts";
 export { requireSecretHeader } from "./guards.ts";
 export { withTransaction } from "./transactions.ts";
 export { quietRoute } from "./routes.ts";
+export { loggingOptions } from "./logging.ts";
+export { observeRequests } from "./metrics.ts";

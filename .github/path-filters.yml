@@ -27,6 +27,9 @@ worker:
   - "db/orders/**"
 storefront:
   - "apps/storefront/**"
+router:
+  - "apps/router/**"
+  - "deploy/base/tenants.json"
 db-migrations:
   - "apps/db-migrations/**"
   - "db/**"
