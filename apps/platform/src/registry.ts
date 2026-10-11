@@ -28,3 +28,16 @@ export async function routingTable(db: Queryable): Promise<TenantRoute[]> {
     credentialVersion: row.credential_version,
   }));
 }
+
+/** What a sign-in check needs: the shop's status, credential, and credential version. */
+export async function merchantCredential(
+  db: Queryable,
+  tenantId: string,
+): Promise<{ status: TenantStatus; hash: string; credentialVersion: number } | undefined> {
+  const { rows } = await db.query<{ status: TenantStatus; merchant_password_hash: string; credential_version: number }>(
+    "SELECT status, merchant_password_hash, credential_version FROM platform.tenants WHERE id = $1",
+    [tenantId],
+  );
+  const row = rows[0];
+  return row && { status: row.status, hash: row.merchant_password_hash, credentialVersion: row.credential_version };
+}

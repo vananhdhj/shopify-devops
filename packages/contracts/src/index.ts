@@ -148,6 +148,15 @@ export interface TenantRoute {
   credentialVersion: number;
 }
 
+/** Asked by a cell's storefront when a Merchant signs in; the credential never leaves the control plane. */
+export interface MerchantSignInRequest {
+  tenantId: string;
+  password: string;
+}
+
+/** The answer: whether the password is this active shop's, and the credential version a session binds to. */
+export type MerchantSignInResult = { ok: true; credentialVersion: number } | { ok: false };
+
 /** The control plane's routing table: every shop that has not been deleted. */
 export interface TenantRouteTable {
   tenants: TenantRoute[];

@@ -1,7 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
 import { Counter, Gauge, type Registry } from "prom-client";
 import type { TenantRoute, TenantRouteTable } from "@shop/contracts";
-import type { Tenant } from "@shop/tenancy";
 
 /** Where the router learns which shops exist and in what state. */
 export interface RouteSource {
@@ -9,14 +8,6 @@ export interface RouteSource {
   lookup(handle: string): TenantRoute | undefined;
   /** False until a first routing table is in hand. */
   ready(): boolean;
-}
-
-/** The static tenant table of Phase 1: every shop in it is active. */
-export function staticRoutes(tenants: Tenant[]): RouteSource {
-  const byHandle = new Map<string, TenantRoute>(
-    tenants.map((tenant) => [tenant.handle, { ...tenant, status: "ACTIVE", credentialVersion: 1 }]),
-  );
-  return { lookup: (handle) => byHandle.get(handle), ready: () => true };
 }
 
 export interface RegistryRoutesOptions {

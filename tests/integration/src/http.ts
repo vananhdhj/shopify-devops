@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { signTenantContext, tenantContextHeader, type Tenant } from "@shop/tenancy";
+import { signTenantContext, tenantContextHeader, type TenantContext } from "@shop/tenancy";
 import { secret } from "./secrets.ts";
 import { tenants } from "./tenants.ts";
 
@@ -10,7 +10,7 @@ export const storefrontUrl = process.env.STOREFRONT_URL ?? "http://127.0.0.1:300
 export const platformInternalUrl = process.env.PLATFORM_INTERNAL_URL ?? "http://127.0.0.1:8101";
 
 /** A signed tenant context for `tenant`, as the router would attach it. */
-export function tenantContextFor(tenant: Tenant): string {
+export function tenantContextFor(tenant: TenantContext): string {
   return signTenantContext(tenant, secret("TENANT_CONTEXT_SECRET"));
 }
 
@@ -18,13 +18,13 @@ export function tenantContextFor(tenant: Tenant): string {
  * Calls one of the APIs directly, as `tenant` (Harbor Goods unless told otherwise): the request
  * carries a freshly signed tenant context, as it would coming from the storefront.
  */
-export function api(url: string, init: RequestInit = {}, tenant: Tenant = tenants.harbor): Promise<Response> {
+export function api(url: string, init: RequestInit = {}, tenant: TenantContext = tenants.harbor): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set(tenantContextHeader, tenantContextFor(tenant));
   return fetch(url, { ...init, headers });
 }
 
-export async function getJson<T>(url: string, tenant: Tenant = tenants.harbor): Promise<{ status: number; body: T }> {
+export async function getJson<T>(url: string, tenant: TenantContext = tenants.harbor): Promise<{ status: number; body: T }> {
   const res = await api(url, {}, tenant);
   return { status: res.status, body: (await res.json()) as T };
 }

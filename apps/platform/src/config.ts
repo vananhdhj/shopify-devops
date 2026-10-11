@@ -7,4 +7,6 @@ export const config = {
   environment: process.env.APP_ENV ?? "dev",
   /** Presented by every cell's router to read the routing table. */
   routerToken: required("PLATFORM_ROUTER_TOKEN"),
+  /** Presented by every cell's storefront to check a Merchant sign-in. */
+  storefrontToken: required("PLATFORM_STOREFRONT_TOKEN"),
 };

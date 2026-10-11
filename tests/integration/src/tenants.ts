@@ -1,17 +1,10 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { parseTenantTable, type Tenant } from "@shop/tenancy";
+import type { TenantContext } from "@shop/tenancy";
 
-const tableFile = fileURLToPath(new URL("../../../deploy/base/tenants.json", import.meta.url));
-
-function byHandle(handle: string): Tenant {
-  const tenant = parseTenantTable(readFileSync(tableFile, "utf8")).find((entry) => entry.handle === handle);
-  if (!tenant) throw new Error(`tenant ${handle} missing from deploy/base/tenants.json`);
-  return tenant;
-}
-
-/** The two seeded shops, as the static tenant table defines them. */
+/**
+ * The two shops seeded in Phase 1, as the control plane's registry seed enters them
+ * (db/platform/seed.sql). Credential version 1 unless a test bumps it.
+ */
 export const tenants = {
-  harbor: byHandle("harbor"),
-  meadow: byHandle("meadow"),
-} as const;
+  harbor: { id: "10000000-0000-4000-8000-000000000001", handle: "harbor", name: "Harbor Goods", credentialVersion: 1 },
+  meadow: { id: "10000000-0000-4000-8000-000000000002", handle: "meadow", name: "Meadow Supply", credentialVersion: 1 },
+} as const satisfies Record<string, TenantContext>;
