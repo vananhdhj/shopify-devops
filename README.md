@@ -239,10 +239,12 @@ The bad-release drill is written up step by step in
 
 ## Measured results
 
-All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phase 1 on 2026-10-11.
+All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11.
 
 | What | Result |
 |---|---|
+| Control plane on the cluster (Phase 2) | A shop signed up through `make smoke` was ACTIVE 0.24 s after signup and checked through the router at 1.84 s; deleted with every one of its rows verified gone 15.4 s after the request; through a 60 s control-plane outage, 120 of 120 buyer pages served and signups recovered 21 s after restore; the control plane uses 108 MiB, with 6.1 GB still free in the VM ([Phase 2 evidence](docs/evidence/2026-10-11-phase-2-cluster.md)) |
+| Service-HTTP, isolation, and lifecycle suite (Phase 2) | 167 tests in 30 files pass in CI on amd64 and arm64, including signup retries (20 concurrent → one shop), crash-resumed provisioning and deletion, two lifecycle workers, and deletion leaving zero rows |
 | Service-HTTP and isolation suite (Phase 1) | 139 tests in 26 files pass from a wiped stack and in CI on amd64 and arm64, including the cross-tenant suite (API, tenant context, storefront, database, schema) and a worker that survives 40 connection cuts while Orders settle |
 | Service-HTTP test suite (Phase 0) | 101 tests pass locally and in CI, including 100 concurrent retries → one Order, 20 concurrent Checkouts for the last unit → one Confirmed, a worker killed between deduction and confirmation → one deduction, two worker replicas, and a Redis outage with reconciliation |
 | Memory, whole lab (k3s, shop, Argo CD, kube-prometheus-stack) | k3d node 4.0 GiB; 5.7 GB still available in the Colima VM. Grafana (415 MiB) and Prometheus (375 MiB) are the largest pods ([memory evidence](docs/evidence/2026-10-10-k3d-memory.md)) |
@@ -266,6 +268,15 @@ Failed experiments, kept on record:
 - **The ruleset bypass** for the deploy key could not be added by the automation (held by a
   safety check) and needed the repository owner, and two attempts in the GitHub UI did not save
   before it was applied through the API.
+- **A rollout that removed the old path first (Phase 2).** The cell's new manifests dropped the
+  static tenant table while the control plane its router now needed was not yet running, and the
+  control plane's first sync hung on a PreSync migration hook that needed resources its own sync
+  had not created. The shops were down for about 30 minutes, until the migration moved behind its
+  database in sync waves and the stuck sync was terminated
+  ([Phase 2 evidence](docs/evidence/2026-10-11-phase-2-cluster.md)).
+- **Local tests against a saturated VM (Phase 2).** With image builds, the Compose stack, and the
+  k3d cluster on the same 6 CPUs, the load average reached 45; the k3s node went NotReady once and
+  several tests timed out and passed on re-run. Run the suite with the cluster stopped.
 - **A release that needed a new Secret key (Phase 1).** The storefront started reading
   `MERCHANT_CREDENTIALS`, but the cluster's Secret lacked it, because `make secrets` had run only
   while the cluster was unreachable. The new pod could not start and the shop was likely down for

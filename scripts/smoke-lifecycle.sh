@@ -51,16 +51,17 @@ smoke_lifecycle() {
   operator_token="$(grep '^PLATFORM_OPERATOR_TOKEN=' .secrets/dev.env | cut -d= -f2-)"
   kubectl --context "$context" -n "$platform_ns" port-forward svc/platform-api 18101:8101 >/dev/null 2>&1 &
   pf=$!
+  stop_port_forward() { kill "$pf" 2>/dev/null; wait "$pf" 2>/dev/null || true; }
   sleep 2
   curl -fsS --max-time 10 -X POST -H "x-operator-token: $operator_token" \
-    "http://127.0.0.1:18101/operator/tenants/$handle/delete" >/dev/null || { kill "$pf"; fail "deleting $handle"; }
+    "http://127.0.0.1:18101/operator/tenants/$handle/delete" >/dev/null || { stop_port_forward; fail "deleting $handle"; }
   for _ in $(seq 1 90); do
     status="$(curl -fsS --max-time 5 -H "x-operator-token: $operator_token" http://127.0.0.1:18101/operator/tenants |
       jq -r --arg h "$handle" '.tenants[] | select(.handle == $h) | .status')"
     [ "$status" = DELETED ] && break
     sleep 1
   done
-  kill "$pf"
+  stop_port_forward
   [ "$status" = DELETED ] || fail "$handle not DELETED after 90 s (last status: $status)"
 
   local left

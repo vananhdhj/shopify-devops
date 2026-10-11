@@ -1,6 +1,6 @@
 # Spec: Phase 2 — the control plane
 
-**Status:** ready-for-agent
+**Status:** resolved (2026-10-11: tickets 01–05 resolved; PRs #21, #22, #23 merged and deployed to the lab cluster)
 
 Background: the blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`, revised 2026-10-11) puts Phase 2 after tenancy inside one cell: "Control plane: registry, signup, lifecycle workflows, router reading the registry, suspension and deletion", with the exit gate "Sign up a shop and buy from it with no manual step; delete it and show zero rows; crash drill passes." Phase 1 (`.scratch/phase-1-tenancy/`) is resolved. Vocabulary is in `CONTEXT.md`; ADRs 0001–0012 are binding.
 
