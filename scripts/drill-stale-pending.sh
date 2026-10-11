@@ -8,7 +8,7 @@ set -euo pipefail
 
 context="${CONTEXT:-k3d-shop}"
 namespace="${NAMESPACE:-shop-dev}"
-base="${SHOP_URL:-http://shop.localhost:8080}"
+base="${SHOP_URL:-http://harbor.shop.localhost:8080}"
 k() { kubectl --context "$context" "$@"; }
 stamp() { date -u +%H:%M:%S; }
 # shellcheck source=scripts/checkout.sh

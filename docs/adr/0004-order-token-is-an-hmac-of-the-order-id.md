@@ -17,3 +17,7 @@ A retried Checkout must hand back the same Order token, because a buyer whose fi
 - Anyone holding the secret can mint a token for any Order; it is a server-side secret like the database passwords and never leaves the order service.
 - Tokens travel in an `x-order-token` header to the API. The storefront's buyer-facing link carries the token as `?token=`, so storefront request logging must never record query strings.
 - Verified 2026-10-10: the storefront's request log (`apps/storefront/proxy.ts`) records the path only, and `tests/integration/src/storefront-logs.test.ts` fails if an Order token appears in the storefront's logs.
+
+## Amended 2026-10-11: the token binds the tenant
+
+With many shops on the platform (ADR-0010), the token is `base64url(HMAC-SHA256(ORDER_TOKEN_SECRET, tenant id + ":" + order id))`, so a token from one shop is worthless at every other, on top of row-level security hiding the Order there. Order links issued before the change stopped working; the dev lab accepted that.

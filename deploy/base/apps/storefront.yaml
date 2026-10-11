@@ -1,4 +1,4 @@
-# Storefront: the only unit exposed through ingress.
+# Storefront: serves every shop of the cell, behind the router; only the router reaches it.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -36,10 +36,12 @@ spec:
               value: http://order-service:4002
             - name: ADMIN_SERVICE_TOKEN
               valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
-            - name: ADMIN_PASSWORD_HASH
-              valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_PASSWORD_HASH } }
+            - name: MERCHANT_CREDENTIALS
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: MERCHANT_CREDENTIALS } }
             - name: SESSION_SECRET
               valueFrom: { secretKeyRef: { name: shop-secrets, key: SESSION_SECRET } }
+            - name: TENANT_CONTEXT_SECRET
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: TENANT_CONTEXT_SECRET } }
           envFrom:
             - configMapRef:
                 name: shop-env # generated per environment by the overlay
@@ -88,21 +90,3 @@ spec:
     - name: http
       port: 3000
       targetPort: http
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: storefront
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: shop.example # set by each overlay
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: storefront
-                port:
-                  name: http

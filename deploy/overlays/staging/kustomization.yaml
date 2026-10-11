@@ -11,6 +11,7 @@ configMapGenerator:
     literals:
       - APP_ENV=staging
       - COOKIE_SECURE=true
+      - TENANT_BASE_DOMAIN=shop-staging.localhost
 replicas:
   - name: catalog-cart-api
     count: 2
@@ -20,12 +21,14 @@ replicas:
     count: 2
   - name: storefront
     count: 2
+  - name: router
+    count: 2
 patches:
-  - target: { kind: Ingress, name: storefront }
+  - target: { kind: Ingress, name: router }
     patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: shop-staging.localhost
+        value: "*.shop-staging.localhost"
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
     digest: sha256:784a9e0326f33c1f04f998e489e5e91e7eb825e9750ce8106ca5f159e26dfbbb
@@ -36,4 +39,6 @@ images:
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
     digest: sha256:49914a6e25dad78bcbc6c34aa2f56dadda52dae2f33cadede357abc53f895505
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # promoted after the first release
+  - name: ghcr.io/vananhdhj/shopify-devops/router
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # promoted after the first release

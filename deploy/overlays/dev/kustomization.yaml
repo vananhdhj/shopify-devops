@@ -11,12 +11,13 @@ configMapGenerator:
     literals:
       - APP_ENV=dev
       - COOKIE_SECURE=false # plain http on the lab ingress
+      - TENANT_BASE_DOMAIN=shop.localhost
 patches:
-  - target: {kind: Ingress, name: storefront}
+  - target: {kind: Ingress, name: router}
     patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: shop.localhost
+        value: "*.shop.localhost"
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
     digest: sha256:e7e964aa4eb3efce97edda006f9306582763d77281f2cf95d5b23a5cb605b1e2

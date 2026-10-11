@@ -1,8 +1,30 @@
 # Shopify DevOps Lab
 
-A deliberately small single-merchant shop that exists to be built, deployed, observed, broken, and recovered. The commerce domain is narrow on purpose: guest buyers, one merchant, simulated payment.
+A small multi-tenant commerce platform that exists to be built, deployed, observed, broken, and recovered: many shops, each run by its own merchant, on shared infrastructure. The commerce domain is narrow on purpose: guest buyers, one merchant per shop, simulated payment.
 
 ## Language
+
+### Platform
+
+**Tenant**:
+One shop on the platform: its products, Carts, Orders, and Merchant. Every piece of shop data belongs to exactly one tenant, and no tenant can see or change another's.
+_Avoid_: Store, account, customer, organisation
+
+**Handle**:
+A tenant's short, unique, address-safe name; the shop is reached at `<handle>.` followed by the platform's domain.
+_Avoid_: Slug, subdomain, shop ID
+
+**Tenant context**:
+The signed statement, attached at the platform's edge, of which tenant a request is for; the only way any part of the system learns the tenant.
+_Avoid_: Tenant header, tenant ID parameter
+
+**Cell**:
+One complete, independently deployed copy of the shop system, serving a group of tenants.
+_Avoid_: Pod, cluster, shard, environment
+
+**Platform operator**:
+The person who runs the platform itself (cells, releases, incidents); never a Merchant of any tenant.
+_Avoid_: Admin, operator (alone), SRE
 
 ### People
 
@@ -11,7 +33,7 @@ An anonymous shopper with no account, who reaches their Cart and Order only thro
 _Avoid_: Customer, user, account
 
 **Merchant**:
-The single person who runs the shop: manages products and fulfills Orders.
+The person who runs one tenant's shop: manages its products and fulfills its Orders, and has no access to any other tenant.
 _Avoid_: Admin user, seller, owner
 
 ### Catalog
@@ -51,7 +73,7 @@ The record of one Checkout of one Cart, carrying an immutable snapshot of its it
 _Avoid_: Purchase, transaction
 
 **Order token**:
-An unguessable token handed to the Guest buyer at Checkout; the only way to read that Order's status.
+An unguessable token handed to the Guest buyer at Checkout; the only way to read that Order's status, and only at the tenant where it was placed.
 _Avoid_: Order ID, order-read token, receipt link
 
 **Pending order**:
