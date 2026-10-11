@@ -1,0 +1,6 @@
+{
+  "tenants": [
+    { "id": "10000000-0000-4000-8000-000000000001", "handle": "harbor", "name": "Harbor Goods" },
+    { "id": "10000000-0000-4000-8000-000000000002", "handle": "meadow", "name": "Meadow Supply" }
+  ]
+}

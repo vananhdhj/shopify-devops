@@ -9,12 +9,17 @@ export interface ServiceOptions {
   /** Service name stamped on every log line, e.g. "order-service". */
   name: string;
   environment: string;
-  /** Readiness fails while this database is unreachable. */
-  db: pg.Pool;
+  /** Readiness fails while this database is unreachable. Units without a database omit it. */
+  db?: pg.Pool;
   /** Further dependencies readiness must reach (each throws when unreachable). */
   readinessChecks?: Array<() => Promise<unknown>>;
   /** Where the service registers its own metrics; HTTP metrics are added to it. */
   registry?: Registry;
+  /**
+   * False for a private operational listener whose own requests are only probes and scrapes,
+   * when the unit records its real traffic in the same registry elsewhere (the router).
+   */
+  recordRequests?: boolean;
 }
 
 /**
@@ -25,10 +30,17 @@ export interface ServiceOptions {
 // Services that have begun shutting down; their readiness answers 503 from that moment.
 const draining = new WeakSet<FastifyInstance>();
 
-export function createService({ name, environment, db, readinessChecks = [], registry }: ServiceOptions): FastifyInstance {
+export function createService({
+  name,
+  environment,
+  db,
+  readinessChecks = [],
+  registry,
+  recordRequests = true,
+}: ServiceOptions): FastifyInstance {
   // No type coercion: a quantity sent as "2" is a client error, not a number.
   const app = Fastify({ ...loggingOptions(name, environment), ajv: { customOptions: { coerceTypes: false } } });
-  registerMetrics(app, registry);
+  registerMetrics(app, registry, recordRequests);
 
   app.setErrorHandler((err: FastifyError, req, reply) => {
     const status = err.statusCode ?? 500;
@@ -46,7 +58,7 @@ export function createService({ name, environment, db, readinessChecks = [], reg
   app.get("/health/ready", quietRoute, async (_req, reply) => {
     if (draining.has(app)) return reply.code(503).send({ status: "draining" });
     try {
-      await db.query("SELECT 1");
+      await db?.query("SELECT 1");
       await Promise.all(readinessChecks.map((check) => check()));
       return { status: "ready" };
     } catch {
@@ -75,13 +87,13 @@ const drainTimeoutMs = 8_000;
  */
 export async function runService(
   app: FastifyInstance,
-  db: pg.Pool,
+  db: pg.Pool | undefined,
   port: number,
   /** Runs first on shutdown, e.g. to stop taking queue jobs and let active ones finish. */
   beforeClose: () => Promise<void> = async () => {},
 ): Promise<void> {
   // Idle clients emit errors when PostgreSQL goes away; without a listener the process would crash.
-  db.on("error", (err) => app.log.warn({ err }, "idle database client error"));
+  db?.on("error", (err) => app.log.warn({ err }, "idle database client error"));
 
   await app.listen({ host: "0.0.0.0", port });
 
@@ -100,7 +112,7 @@ export async function runService(
 
     await beforeClose();
     await app.close();
-    await db.end();
+    await db?.end();
     process.exit(0);
   }
 

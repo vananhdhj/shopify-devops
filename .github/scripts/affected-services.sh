@@ -7,7 +7,7 @@ set -euo pipefail
 
 changed="$1"
 force_all="${2:-false}"
-all='["catalog-cart-api","order-service","worker","storefront","db-migrations"]'
+all='["catalog-cart-api","order-service","worker","storefront","router","db-migrations"]'
 
 if [[ "$force_all" == "true" ]] || jq -e 'index("shared")' <<<"$changed" >/dev/null; then
   services="$all"

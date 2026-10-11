@@ -3,12 +3,10 @@ import { Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { quietRoute } from "./routes.ts";
 
 /**
- * Exposes Prometheus metrics at /metrics. Requests are labelled by route template
- * (`/products/:id`), never the raw URL, so ids cannot explode label cardinality.
+ * Records every request's duration in `registry`, labelled by route template (`/products/:id`),
+ * never the raw URL, so ids cannot explode label cardinality.
  */
-export function registerMetrics(app: FastifyInstance, registry: Registry = new Registry()): void {
-  collectDefaultMetrics({ register: registry });
-
+export function observeRequests(app: FastifyInstance, registry: Registry): void {
   const duration = new Histogram({
     name: "http_request_duration_seconds",
     help: "HTTP request duration by method, route template, and status code",
@@ -27,6 +25,12 @@ export function registerMetrics(app: FastifyInstance, registry: Registry = new R
       reply.elapsedTime / 1000,
     );
   });
+}
+
+/** Exposes Prometheus metrics at /metrics, with process metrics and (unless told not to) this app's request durations. */
+export function registerMetrics(app: FastifyInstance, registry: Registry = new Registry(), recordRequests = true): void {
+  collectDefaultMetrics({ register: registry });
+  if (recordRequests) observeRequests(app, registry);
 
   app.get("/metrics", quietRoute, async (_req, reply) => {
     reply.type(registry.contentType);

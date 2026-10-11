@@ -10,7 +10,7 @@
 - [ ] Dispatcher, reconciliation, and the oldest-Pending gauge use `SECURITY DEFINER` functions; the order identity loses direct outbox `SELECT` and `UPDATE`
 - [ ] Seed data for both tenants (Meadow Supply's own catalog, including one product with Stock 1)
 - [ ] Both APIs refuse business requests without a valid tenant context (`401 tenant_context_required`) and run every business query through `withTenant`
-- [ ] The order service forwards the context to the catalog; the outbox payload and queue job carry `tenantId`; the worker sets the tenant for its transactions and mints a context for Inventory-effect calls
+- [ ] The order service forwards the context to the catalog; the outbox payload and queue job carry `tenantId`; the worker sets the tenant for its transactions and names it in the body of Inventory-effect calls, which only its internal token may make
 - [ ] The Order token is an HMAC over tenant id and order id
 - [ ] The storefront refuses requests without a valid context (`404`) and forwards it on every backend call
 - [ ] `tenantId` appears on every log line of tenant work

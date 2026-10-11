@@ -1,0 +1,18 @@
+{
+  "name": "@shop/router",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc --noEmit -p .",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@fastify/reply-from": "^12.7.1",
+    "@shop/service-kit": "workspace:*",
+    "@shop/tenancy": "workspace:*",
+    "fastify": "^5.12.5",
+    "prom-client": "^15.1.3"
+  }
+}

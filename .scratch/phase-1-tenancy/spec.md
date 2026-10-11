@@ -65,11 +65,12 @@ Two seeded shops, **Harbor Goods** and **Meadow Supply**, run in the one cell, e
 ### Tenant context
 
 - One header, `x-tenant-context`: `base64url(JSON {tenantId, handle, name, issuedAt})` + `.` + `base64url(HMAC-SHA256(TENANT_CONTEXT_SECRET, payload))`. Valid for 60 seconds after `issuedAt`, with 5 seconds of clock skew allowed.
-- `TENANT_CONTEXT_SECRET` is one secret per cell, held by the router, storefront, both APIs, and the worker. A leaked secret exposes one cell, not the platform.
+- `TENANT_CONTEXT_SECRET` is one secret per cell, held by the router, storefront, and both APIs. A leaked secret exposes one cell, not the platform.
 - New package `@shop/tenancy`: sign, verify, header name. No dependencies beyond `node:crypto`, so the storefront can use it too.
 - The storefront verifies the context on every request (`proxy.ts`) and answers `404` without it, so reaching the storefront directly, around the router, serves nothing. It forwards the same header on every backend call.
 - Both APIs verify the context on every business route through a shared Fastify hook in `@shop/service-kit`; health and metrics routes are exempt. A missing, malformed, expired, or wrongly signed context answers `401 tenant_context_required`.
-- The order service forwards the incoming context when it reads a Cart from the catalog. The worker mints a context for each Inventory-effect call from the tenant on the job.
+- The order service forwards the incoming context when it reads a Cart from the catalog.
+- The internal Inventory-effect endpoint is the one exception: the worker has no shop request to carry a context from, and it knows only a tenant id, not a handle or name. Its body names the tenant (`tenantId`), and the internal token, which only the worker holds, is what makes that claim trusted. The endpoint sets that tenant for its transaction like any other.
 
 ### Data model and RLS
 
