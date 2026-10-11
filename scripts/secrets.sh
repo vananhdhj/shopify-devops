@@ -26,18 +26,37 @@ add_if_missing SESSION_SECRET
 add_if_missing TENANT_CONTEXT_SECRET
 add_if_missing GRAFANA_ADMIN_PASSWORD
 
-# The Merchant's password, readable enough to type; only its scrypt hash reaches the storefront.
-# To change it: edit ADMIN_PASSWORD, delete the ADMIN_PASSWORD_HASH line, and re-run.
-grep -q "^ADMIN_PASSWORD=" "$file" || echo "ADMIN_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=')" >>"$file"
-if ! grep -q "^ADMIN_PASSWORD_HASH=" "$file"; then
-  password="$(grep "^ADMIN_PASSWORD=" "$file" | cut -d= -f2-)"
-  # shellcheck disable=SC2016 # a JavaScript template literal, not shell
-  hash="$(ADMIN_PASSWORD="$password" node -e '
-    const { randomBytes, scryptSync } = require("node:crypto");
-    const salt = randomBytes(16);
-    const key = scryptSync(process.env.ADMIN_PASSWORD, salt, 32);
-    console.log(`scrypt:${salt.toString("hex")}:${key.toString("hex")}`);
-  ')"
-  echo "ADMIN_PASSWORD_HASH=$hash" >>"$file"
-fi
+# One Merchant password per shop in the tenant table, readable enough to type, as
+# MERCHANT_PASSWORD_<HANDLE>. Only their scrypt hashes reach the storefront, together in
+# MERCHANT_CREDENTIALS (`<tenant id>=<hash>,...`). A shop missing from it is hashed and added; a
+# shop no longer in the table is dropped; existing hashes are kept, so sessions survive a re-run.
+# To change a password: edit its MERCHANT_PASSWORD_<HANDLE> line, delete MERCHANT_CREDENTIALS, re-run.
+# shellcheck disable=SC2016 # JavaScript template literals, not shell
+SECRETS_FILE="$file" node -e '
+  const { readFileSync, writeFileSync } = require("node:fs");
+  const { randomBytes, scryptSync } = require("node:crypto");
+  const file = process.env.SECRETS_FILE;
+  const { tenants } = JSON.parse(readFileSync("deploy/base/tenants.json", "utf8"));
+  let lines = readFileSync(file, "utf8").split("\n").filter((line) => line !== "");
+  const value = (key) => lines.find((line) => line.startsWith(`${key}=`))?.slice(key.length + 1);
+
+  const credentials = new Map(
+    (value("MERCHANT_CREDENTIALS") ?? "").split(",").filter(Boolean).map((entry) => entry.split("=")),
+  );
+  for (const id of credentials.keys()) if (!tenants.some((tenant) => tenant.id === id)) credentials.delete(id);
+
+  for (const tenant of tenants) {
+    const key = `MERCHANT_PASSWORD_${tenant.handle.toUpperCase().replaceAll("-", "_")}`;
+    if (value(key) === undefined) lines.push(`${key}=${randomBytes(18).toString("base64url").replace(/[-_]/g, "")}`);
+    if (!credentials.has(tenant.id)) {
+      const salt = randomBytes(16);
+      const hash = scryptSync(value(key), salt, 32);
+      credentials.set(tenant.id, `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`);
+    }
+  }
+
+  lines = lines.filter((line) => !line.startsWith("MERCHANT_CREDENTIALS="));
+  lines.push(`MERCHANT_CREDENTIALS=${[...credentials].map(([id, hash]) => `${id}=${hash}`).join(",")}`);
+  writeFileSync(file, `${lines.join("\n")}\n`);
+'
 add_if_missing REDIS_PASSWORD

@@ -171,7 +171,7 @@ services:
       CATALOG_API_URL: http://catalog-cart-api:4001
       ORDER_SERVICE_URL: http://order-service:4002
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?run make secrets}
+      MERCHANT_CREDENTIALS: ${MERCHANT_CREDENTIALS:?run make secrets}
       SESSION_SECRET: ${SESSION_SECRET:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
       APP_ENV: dev

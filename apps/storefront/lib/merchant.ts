@@ -3,15 +3,17 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
 import { isValidSession, merchantCookie } from "./merchant-session";
+import { currentTenant, tenantFrom } from "./tenant";
 
-/** For admin pages: sends anyone without a valid Merchant session to sign-in. */
+/** For admin pages: sends anyone without a valid session for this shop's Merchant to sign-in. */
 export async function requireMerchant(): Promise<void> {
-  if (!isValidSession((await cookies()).get(merchantCookie.name)?.value)) redirect("/admin/login");
+  const tenant = await currentTenant();
+  if (!isValidSession(tenant.id, (await cookies()).get(merchantCookie.name)?.value)) redirect("/admin/login");
 }
 
 /** For admin form handlers, which must check the session themselves before acting. */
 export function isMerchant(request: NextRequest): boolean {
-  return isValidSession(request.cookies.get(merchantCookie.name)?.value);
+  return isValidSession(tenantFrom(request.headers).id, request.cookies.get(merchantCookie.name)?.value);
 }
 
 /**

@@ -6,7 +6,7 @@ import { checkoutOf, readOrder, settled } from "./shopping.ts";
 
 async function signedInMerchant(): Promise<Browser> {
   const browser = new Browser();
-  const res = await browser.submit("/admin/session", { password: secret("ADMIN_PASSWORD") });
+  const res = await browser.submit("/admin/session", { password: secret("MERCHANT_PASSWORD_HARBOR") });
   if (res.status !== 303 || res.headers.get("location") !== "/admin") throw new Error("sign-in failed");
   return browser;
 }
@@ -35,7 +35,7 @@ describe("storefront admin", () => {
 
   it("refuses sign-in and admin form posts sent from another site", async () => {
     const evil = "http://evil.example";
-    const signIn = await new Browser().submit("/admin/session", { password: secret("ADMIN_PASSWORD") }, evil);
+    const signIn = await new Browser().submit("/admin/session", { password: secret("MERCHANT_PASSWORD_HARBOR") }, evil);
     expect(signIn.status).toBe(403);
     expect(signIn.headers.get("set-cookie")).toBeNull();
 
@@ -56,7 +56,7 @@ describe("storefront admin", () => {
 
   it("signs the Merchant in with an httpOnly, strict, admin-scoped session", async () => {
     const browser = new Browser();
-    const res = await browser.submit("/admin/session", { password: secret("ADMIN_PASSWORD") });
+    const res = await browser.submit("/admin/session", { password: secret("MERCHANT_PASSWORD_HARBOR") });
     const cookie = res.headers.get("set-cookie") ?? "";
     expect(cookie).toMatch(/^merchant_session=/);
     expect(cookie).toMatch(/HttpOnly/i);
