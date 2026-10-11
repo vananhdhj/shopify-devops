@@ -20,6 +20,10 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      # Prune only after every other resource of the sync is healthy: a resource the old pods still
+      # use (the router's tenant ConfigMap, in the Phase 2 outage) outlives the rollout that drops it.
+      - PruneLast=true
     retry:
       limit: 10
       backoff:

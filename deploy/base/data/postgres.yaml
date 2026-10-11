@@ -1,14 +1,19 @@
 # One PostgreSQL instance; each service gets its own identity and schema (see db/roles.sh).
+# Sync wave -2: up before the migration (wave -1) and the cell's units (wave 0).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   selector:
     app.kubernetes.io/name: postgres
@@ -20,6 +25,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   serviceName: postgres
   replicas: 1

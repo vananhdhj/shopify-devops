@@ -1,10 +1,15 @@
-# The database step of each release. As an Argo CD PreSync hook it runs, and must succeed,
-# before any new application pod is synced; migrations are backward-compatible, so the old
-# pods keep working against the new schema meanwhile.
+# The database step of each release: roles and both schemas' migrations, as a Sync hook in wave -1.
+# Argo CD finishes wave -2 (PostgreSQL, Redis, this ServiceAccount) before it, and it before wave 0
+# (the cell's units), so it must succeed before any new application pod is synced; migrations are
+# backward-compatible, so the old pods keep working against the new schema meanwhile. Not a PreSync
+# hook: on a fresh namespace a PreSync hook runs before anything else exists, so neither its
+# ServiceAccount nor the database would be there (the control plane's first sync hung exactly so).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: db-migrate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 automountServiceAccountToken: false
 ---
 apiVersion: batch/v1
@@ -12,7 +17,8 @@ kind: Job
 metadata:
   name: db-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 6

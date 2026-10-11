@@ -24,6 +24,7 @@ const registryRouteSource = registryRoutes({
   platformApiUrl: config.platformApiUrl,
   routerToken: config.routerToken,
   refreshMs: config.routesRefreshMs,
+  cacheFile: config.routesCacheFile,
   registry,
   log: ops.log,
 });

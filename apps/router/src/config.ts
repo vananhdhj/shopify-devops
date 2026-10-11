@@ -15,4 +15,6 @@ export const config = {
   platformPublicUrl: required("PLATFORM_PUBLIC_URL"),
   routerToken: required("PLATFORM_ROUTER_TOKEN"),
   routesRefreshMs: Number(process.env.ROUTES_REFRESH_MS ?? 2_000),
+  /** In the pod's /tmp (an emptyDir in the cluster), so it survives a container restart. */
+  routesCacheFile: process.env.ROUTES_CACHE_FILE ?? "/tmp/routing-table.json",
 };
