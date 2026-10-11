@@ -10,6 +10,8 @@ export interface AppDeps {
   routes: RouteSource;
   baseDomain: string;
   storefrontUrl: string;
+  /** The control plane's public listener (signup pages), served at the bare base domain. */
+  platformPublicUrl: string;
   tenantContextSecret: string;
   /** Where request durations are recorded; served by the private operational listener. */
   registry: Registry;
@@ -35,11 +37,17 @@ export function handleFor(host: string | undefined, baseDomain: string): string 
   return label === "" || label.includes(".") ? undefined : label;
 }
 
+/** True for the bare base domain (`shop.localhost:8080`): the platform's own address. */
+export function isPlatformHost(host: string | undefined, baseDomain: string): boolean {
+  return host?.toLowerCase().replace(/:\d+$/, "") === baseDomain;
+}
+
 /**
  * The cell's edge: resolves the request's host to a tenant and proxies the request to the
  * storefront with a freshly signed tenant context. A context sent by the client is dropped, so
  * the only tenant anything downstream believes is the one the router chose. Only an active shop
- * is proxied; one being set up or suspended gets a fixed page, and a deleted one is unknown.
+ * is proxied; one being set up or suspended gets a fixed page, and a deleted one is unknown. The
+ * bare base domain goes to the control plane's signup pages, without any tenant context.
  */
 export function buildApp(deps: AppDeps) {
   const app = Fastify(loggingOptions("router", deps.environment));
@@ -49,8 +57,8 @@ export function buildApp(deps: AppDeps) {
   app.removeAllContentTypeParsers();
   app.addContentTypeParser("*", (_req, payload, done) => done(null, payload));
 
+  // No fixed base: requests go either to the storefront or to the control plane's signup pages.
   app.register(replyFrom, {
-    base: deps.storefrontUrl,
     undici: { headersTimeout: 15_000, bodyTimeout: 30_000 },
     // Its own log lines record the full upstream URL, query string included, and Order links
     // carry their Order token there (ADR-0004). Fastify's own request lines are enough.
@@ -59,6 +67,14 @@ export function buildApp(deps: AppDeps) {
 
   const text = "text/plain; charset=utf-8";
   app.all("/*", async (req, reply) => {
+    if (isPlatformHost(req.headers.host, deps.baseDomain)) {
+      return reply.from(`${deps.platformPublicUrl}${req.url}`, {
+        rewriteRequestHeaders: (_original, headers) => {
+          const { [tenantContextHeader]: _fromClient, ...rest } = headers;
+          return { ...rest, host: req.headers.host, "x-request-id": req.id };
+        },
+      });
+    }
     if (!deps.routes.ready()) return reply.code(503).header("retry-after", "5").type(text).send(starting);
     const handle = handleFor(req.headers.host, deps.baseDomain);
     const tenant = handle === undefined ? undefined : deps.routes.lookup(handle);
@@ -76,7 +92,7 @@ export function buildApp(deps: AppDeps) {
 
     // The "request completed" line then names the shop the request was routed to.
     reply.log = req.log = req.log.child({ tenant: tenant.handle });
-    return reply.from(req.url, {
+    return reply.from(`${deps.storefrontUrl}${req.url}`, {
       rewriteRequestHeaders: (_original, headers) => {
         const { [tenantContextHeader]: _fromClient, ...rest } = headers;
         return {

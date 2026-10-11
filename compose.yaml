@@ -98,6 +98,7 @@ services:
       INTERNAL_INVENTORY_TOKEN: ${INTERNAL_INVENTORY_TOKEN:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
+      PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
       - "127.0.0.1:4001:4001"
@@ -120,6 +121,7 @@ services:
       ORDER_TOKEN_SECRET: ${ORDER_TOKEN_SECRET:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
+      PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
       - "127.0.0.1:4002:4002"
@@ -171,8 +173,10 @@ services:
       CATALOG_API_URL: http://catalog-cart-api:4001
       ORDER_SERVICE_URL: http://order-service:4002
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
-      MERCHANT_CREDENTIALS: ${MERCHANT_CREDENTIALS:?run make secrets}
       SESSION_SECRET: ${SESSION_SECRET:?run make secrets}
+      # Merchant sign-in is checked by the control plane; the credentials never reach the cell.
+      PLATFORM_API_URL: http://platform-api:8101
+      PLATFORM_STOREFRONT_TOKEN: ${PLATFORM_STOREFRONT_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
       APP_ENV: dev
     ports:
@@ -202,6 +206,8 @@ services:
       # Registry mode: the routing table comes from the control plane.
       PLATFORM_API_URL: http://platform-api:8101
       PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
+      # The bare base domain serves the control plane's signup pages.
+      PLATFORM_PUBLIC_URL: http://platform-api:8100
       APP_ENV: dev
     ports:
       - "127.0.0.1:8000:8000"
@@ -287,11 +293,40 @@ services:
     environment:
       DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
       PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
+      PLATFORM_STOREFRONT_TOKEN: ${PLATFORM_STOREFRONT_TOKEN:?run make secrets}
+      PLATFORM_OPERATOR_TOKEN: ${PLATFORM_OPERATOR_TOKEN:?run make secrets}
+      TENANT_BASE_DOMAIN: shop.localhost
       APP_ENV: dev
     ports:
       - "127.0.0.1:8101:8101" # internal listener, for tests; never on an ingress
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8101/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      platform-seed:
+        condition: service_completed_successfully
+
+  # Runs lifecycle workflows (provisioning, deletion). No host port: its listener is
+  # operational only, and the service can be scaled for the two-worker test.
+  platform-worker:
+    build:
+      context: .
+      dockerfile: apps/platform/Dockerfile
+    command: ["node", "dist/worker-server.js"]
+    environment:
+      DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
+      CELL_ROUTER_URL: http://router:8000
+      TENANT_BASE_DOMAIN: shop.localhost
+      # The cell's APIs, where a deleted shop is purged; a short grace between purge passes in dev.
+      CELL_CATALOG_URL: http://catalog-cart-api:4001
+      CELL_ORDERS_URL: http://order-service:4002
+      PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
+      DELETE_GRACE_MS: "3000"
+      APP_ENV: dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8102/health/ready"]
       interval: 2s
       timeout: 3s
       retries: 30

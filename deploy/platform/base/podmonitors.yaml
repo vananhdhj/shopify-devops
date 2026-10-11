@@ -1,0 +1,17 @@
+# Prometheus scrapes the control plane on its private ports: the API's internal listener (requests
+# from both listeners, signups) and the worker's ops listener (lifecycle completions and durations).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: platform
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [platform-api, platform-worker] }
+  podMetricsEndpoints:
+    - port: internal
+      path: /metrics
+    - port: ops
+      path: /metrics

@@ -9,6 +9,7 @@
     "start": "node dist/api-server.js"
   },
   "dependencies": {
+    "@fastify/formbody": "^9.0.1",
     "@shop/service-kit": "workspace:*",
     "fastify": "^5.12.5",
     "pg": "^8.23.1",

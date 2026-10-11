@@ -8,12 +8,12 @@ import { currentTenant, tenantFrom } from "./tenant";
 /** For admin pages: sends anyone without a valid session for this shop's Merchant to sign-in. */
 export async function requireMerchant(): Promise<void> {
   const tenant = await currentTenant();
-  if (!isValidSession(tenant.id, (await cookies()).get(merchantCookie.name)?.value)) redirect("/admin/login");
+  if (!isValidSession(tenant, (await cookies()).get(merchantCookie.name)?.value)) redirect("/admin/login");
 }
 
 /** For admin form handlers, which must check the session themselves before acting. */
 export function isMerchant(request: NextRequest): boolean {
-  return isValidSession(tenantFrom(request.headers).id, request.cookies.get(merchantCookie.name)?.value);
+  return isValidSession(tenantFrom(request.headers), request.cookies.get(merchantCookie.name)?.value);
 }
 
 /**

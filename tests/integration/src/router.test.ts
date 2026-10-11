@@ -36,7 +36,6 @@ describe("router", () => {
 
   it.each([
     ["an unknown handle", shopHost("nowhere")],
-    ["the bare base domain", "shop.localhost:8000"],
     ["a deeper subdomain", `www.${shopHost("harbor")}`],
     ["another domain", "harbor.example.com"],
   ])("answers %s with the same fixed 404, without reaching the storefront", async (_label, host) => {
@@ -49,6 +48,12 @@ describe("router", () => {
       res: { statusCode: 404 },
     });
     expect(logLinesWith("storefront", requestId)).toEqual([]);
+  });
+
+  it("sends the bare base domain to the control plane's signup pages, without a tenant context", async () => {
+    const res = await viaRouter("shop.localhost:8000", "/", { headers: { "x-tenant-context": "forged" } });
+    expect(res.status).toBe(200);
+    expect(res.body).toContain("Open a shop");
   });
 
   it("passes a form post through to the storefront unchanged", async () => {

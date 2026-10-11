@@ -4,7 +4,8 @@
 #
 # Modes for the bad-release drill (ShopServerErrorRatioHigh, read at the in-cluster alert catcher):
 #   check    (default) both shops serve their own catalogs, an unknown shop gets the router's 404,
-#            and a Checkout at Harbor Goods is Confirmed
+#            a Checkout at Harbor Goods is Confirmed, and a throwaway shop is signed up, sold from,
+#            deleted, and verified gone from the cell (scripts/smoke-lifecycle.sh)
 #   fault    with the fault release live: one Checkout attempt a second until the alert fires
 #   recover  after merging the revert: one Checkout attempt a second until Checkout works again, and
 #            on until the alert resolves, then `check`. The traffic never pauses: the alert needs a
@@ -24,6 +25,8 @@ stamp() { date -u +%H:%M:%S; }
 source "$(dirname "$0")/checkout.sh"
 # shellcheck source=scripts/alert-catcher.sh
 source "$(dirname "$0")/alert-catcher.sh"
+# shellcheck source=scripts/smoke-lifecycle.sh
+source "$(dirname "$0")/smoke-lifecycle.sh"
 
 # One drill Checkout, counted in `accepted` or `failed`; succeeds only when the Checkout was accepted.
 accepted=0 failed=0
@@ -97,5 +100,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 [ "$status" = "Confirmed" ] || fail "Order not Confirmed after 30 s (last status: ${status:-unknown})"
+
+[ "$mode" = check ] && smoke_lifecycle
 
 echo "smoke: OK - both shops serve their own catalogs at $domain and a Checkout at $base was Confirmed"

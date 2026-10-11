@@ -36,12 +36,13 @@ spec:
               value: http://order-service:4002
             - name: ADMIN_SERVICE_TOKEN
               valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
-            - name: MERCHANT_CREDENTIALS
-              valueFrom: { secretKeyRef: { name: shop-secrets, key: MERCHANT_CREDENTIALS } }
             - name: SESSION_SECRET
               valueFrom: { secretKeyRef: { name: shop-secrets, key: SESSION_SECRET } }
             - name: TENANT_CONTEXT_SECRET
               valueFrom: { secretKeyRef: { name: shop-secrets, key: TENANT_CONTEXT_SECRET } }
+            # Merchant sign-in is checked by the control plane (PLATFORM_API_URL from shop-env).
+            - name: PLATFORM_STOREFRONT_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: PLATFORM_STOREFRONT_TOKEN } }
           envFrom:
             - configMapRef:
                 name: shop-env # generated per environment by the overlay

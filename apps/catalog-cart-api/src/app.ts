@@ -65,6 +65,8 @@ export interface AppDeps {
   internalInventoryToken: string;
   /** Presented by the storefront on behalf of the signed-in Merchant. */
   adminServiceToken: string;
+  /** Presented by the control plane to purge a deleted shop from this cell. */
+  platformCellToken: string;
   /** Verifies the tenant context every business request carries (from the router, via the storefront). */
   tenantContextSecret: string;
 }
@@ -141,6 +143,26 @@ export function buildApp(deps: AppDeps) {
       const product = await asTenant(req, (db) => addProduct(db, req.body));
       req.log.info({ productId: product.id }, "product added");
       return reply.code(201).send(product);
+    },
+  );
+
+
+  // Internal: the control plane deletes a shop from this cell. Refused without the cell token,
+  // which only the control plane holds; outside any tenant context, because the shop is no longer
+  // routed. The schema's narrow purge function does the deleting (ADR-0012's pattern) and reports
+  // what it removed and what of the shop is left.
+  app.post<{ Params: { tenantId: string } }>(
+    "/internal/tenants/:tenantId/purge",
+    { ...withoutTenant, preHandler: requireSecretHeader("x-platform-token", deps.platformCellToken) },
+    async (req, reply) => {
+      const { tenantId } = req.params;
+      if (!isUuid(tenantId)) return reply.code(404).send({ error: "tenant_not_found", message: "not a tenant id" });
+      const { rows } = await deps.db.query<{ report: { deleted: Record<string, number>; remaining: Record<string, number> } }>(
+        "SELECT catalog.purge_tenant($1) AS report",
+        [tenantId.toLowerCase()],
+      );
+      req.log.info({ tenantId, ...rows[0]!.report }, "tenant purged");
+      return rows[0]!.report;
     },
   );
 

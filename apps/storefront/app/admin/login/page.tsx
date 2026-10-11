@@ -7,7 +7,13 @@ export default async function MerchantSignIn({ searchParams }: { searchParams: P
   return (
     <>
       <h1>Merchant sign-in</h1>
-      <Notice code={error} messages={{ invalid: "That password isn't right." }} />
+      <Notice
+        code={error}
+        messages={{
+          invalid: "That password isn't right.",
+          unavailable: "Signing in isn't possible right now. Try again in a minute.",
+        }}
+      />
       <form action="/admin/session" method="post" className="stacked-form">
         <label>
           Password

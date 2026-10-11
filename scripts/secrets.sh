@@ -28,34 +28,39 @@ add_if_missing DB_PLATFORM_SUPERUSER_PASSWORD
 add_if_missing DB_PLATFORM_MIGRATOR_PASSWORD
 add_if_missing DB_PLATFORM_APP_PASSWORD
 add_if_missing PLATFORM_ROUTER_TOKEN
+add_if_missing PLATFORM_STOREFRONT_TOKEN
+add_if_missing PLATFORM_CELL_TOKEN
+add_if_missing PLATFORM_OPERATOR_TOKEN
 add_if_missing GRAFANA_ADMIN_PASSWORD
 
-# One Merchant password per shop in the tenant table, readable enough to type, as
-# MERCHANT_PASSWORD_<HANDLE>. Only their scrypt hashes reach the storefront, together in
-# MERCHANT_CREDENTIALS (`<tenant id>=<hash>,...`). A shop missing from it is hashed and added; a
-# shop no longer in the table is dropped; existing hashes are kept, so sessions survive a re-run.
-# To change a password: edit its MERCHANT_PASSWORD_<HANDLE> line, delete MERCHANT_CREDENTIALS, re-run.
+# The Merchant passwords of the two shops seeded in Phase 1, readable enough to type, as
+# MERCHANT_PASSWORD_<HANDLE>. Shops that sign up choose their own password at the control plane;
+# these two are entered into its registry by the platform seed, which reads only their scrypt
+# hashes, from MERCHANT_CREDENTIALS (`<tenant id>=<hash>,...`). Existing hashes are kept, so
+# re-running changes nothing. To change one: edit its password line, delete MERCHANT_CREDENTIALS,
+# re-run, and bump the shop's credential version in the registry.
 # shellcheck disable=SC2016 # JavaScript template literals, not shell
 SECRETS_FILE="$file" node -e '
   const { readFileSync, writeFileSync } = require("node:fs");
   const { randomBytes, scryptSync } = require("node:crypto");
   const file = process.env.SECRETS_FILE;
-  const { tenants } = JSON.parse(readFileSync("deploy/base/tenants.json", "utf8"));
+  const seeded = [
+    { id: "10000000-0000-4000-8000-000000000001", handle: "harbor" },
+    { id: "10000000-0000-4000-8000-000000000002", handle: "meadow" },
+  ];
   let lines = readFileSync(file, "utf8").split("\n").filter((line) => line !== "");
   const value = (key) => lines.find((line) => line.startsWith(`${key}=`))?.slice(key.length + 1);
 
   const credentials = new Map(
     (value("MERCHANT_CREDENTIALS") ?? "").split(",").filter(Boolean).map((entry) => entry.split("=")),
   );
-  for (const id of credentials.keys()) if (!tenants.some((tenant) => tenant.id === id)) credentials.delete(id);
-
-  for (const tenant of tenants) {
-    const key = `MERCHANT_PASSWORD_${tenant.handle.toUpperCase().replaceAll("-", "_")}`;
+  for (const shop of seeded) {
+    const key = `MERCHANT_PASSWORD_${shop.handle.toUpperCase()}`;
     if (value(key) === undefined) lines.push(`${key}=${randomBytes(18).toString("base64url").replace(/[-_]/g, "")}`);
-    if (!credentials.has(tenant.id)) {
+    if (!credentials.has(shop.id)) {
       const salt = randomBytes(16);
       const hash = scryptSync(value(key), salt, 32);
-      credentials.set(tenant.id, `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`);
+      credentials.set(shop.id, `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`);
     }
   }
 

@@ -8,6 +8,15 @@ export interface Tenant {
 }
 
 /**
+ * The tenant a request is for, as the router states it: the shop plus its credential version,
+ * which changes whenever the shop's Merchant credential changes, so a Merchant session can be bound
+ * to it without the cell ever holding the credential. Not a secret.
+ */
+export interface TenantContext extends Tenant {
+  credentialVersion: number;
+}
+
+/**
  * The header that carries the current tenant from the router through every unit of the cell.
  * Its value is signed, so a unit trusts it only when the signature verifies; a tenant named by
  * the client in any other way is never believed.
@@ -22,6 +31,8 @@ interface Payload {
   id: string;
   handle: string;
   name: string;
+  /** Credential version. */
+  cv: number;
   /** Issued-at, Unix seconds. */
   iat: number;
 }
@@ -31,8 +42,14 @@ function signature(payload: string, secret: string): string {
 }
 
 /** `base64url(JSON payload) + "." + base64url(HMAC-SHA256(secret, payload))`. */
-export function signTenantContext(tenant: Tenant, secret: string, now = Date.now()): string {
-  const body: Payload = { id: tenant.id, handle: tenant.handle, name: tenant.name, iat: Math.floor(now / 1000) };
+export function signTenantContext(tenant: TenantContext, secret: string, now = Date.now()): string {
+  const body: Payload = {
+    id: tenant.id,
+    handle: tenant.handle,
+    name: tenant.name,
+    cv: tenant.credentialVersion,
+    iat: Math.floor(now / 1000),
+  };
   const payload = Buffer.from(JSON.stringify(body)).toString("base64url");
   return `${payload}.${signature(payload, secret)}`;
 }
@@ -42,7 +59,7 @@ export function verifyTenantContext(
   value: string | string[] | null | undefined,
   secret: string,
   now = Date.now(),
-): Tenant | undefined {
+): TenantContext | undefined {
   if (typeof value !== "string") return undefined;
   const [payload, given, extra] = value.split(".");
   if (!payload || !given || extra !== undefined) return undefined;
@@ -57,41 +74,17 @@ export function verifyTenantContext(
   } catch {
     return undefined;
   }
-  const { id, handle, name, iat } = body;
-  if (typeof id !== "string" || typeof handle !== "string" || typeof name !== "string" || typeof iat !== "number") {
+  const { id, handle, name, cv, iat } = body;
+  if (
+    typeof id !== "string" ||
+    typeof handle !== "string" ||
+    typeof name !== "string" ||
+    typeof cv !== "number" ||
+    typeof iat !== "number"
+  ) {
     return undefined;
   }
   const age = Math.floor(now / 1000) - iat;
   if (age > maxAgeSeconds || age < -maxSkewSeconds) return undefined;
-  return { id, handle, name };
-}
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-/** A single DNS label: lower-case letters, digits, and inner hyphens. */
-const handlePattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-
-/**
- * Parses the static tenant table (`deploy/base/tenants.json`), failing loudly on anything a
- * router could misroute: a malformed id or handle, a missing name, or a duplicate id or handle.
- */
-export function parseTenantTable(json: string): Tenant[] {
-  const table = JSON.parse(json) as { tenants?: unknown };
-  if (!Array.isArray(table.tenants)) throw new Error("tenant table: `tenants` must be an array");
-
-  const tenants = table.tenants.map((entry: Partial<Tenant>, index) => {
-    const { id, handle, name } = entry ?? {};
-    if (typeof id !== "string" || !uuidPattern.test(id)) throw new Error(`tenant table: entry ${index} has no valid id`);
-    if (typeof handle !== "string" || !handlePattern.test(handle)) {
-      throw new Error(`tenant table: entry ${index} has no valid handle`);
-    }
-    if (typeof name !== "string" || name.length === 0) throw new Error(`tenant table: entry ${index} has no name`);
-    return { id, handle, name };
-  });
-
-  for (const key of ["id", "handle"] as const) {
-    const values = tenants.map((tenant) => tenant[key]);
-    const duplicate = values.find((value, index) => values.indexOf(value) !== index);
-    if (duplicate) throw new Error(`tenant table: duplicate ${key} ${duplicate}`);
-  }
-  return tenants;
+  return { id, handle, name, credentialVersion: cv };
 }

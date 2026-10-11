@@ -142,19 +142,26 @@ jobs:
           pattern: digest-*
           merge-multiple: true
           path: digests
-      - name: Point the dev overlay at the new digests
+      - name: Point the dev overlays at the new digests
         env:
-          OVERLAY: deploy/overlays/dev/kustomization.yaml
+          # The cell's overlay first: a new unit's first digest is added there.
+          OVERLAYS: deploy/overlays/dev/kustomization.yaml deploy/platform/overlays/dev/kustomization.yaml
         run: |
+          read -ra overlays <<<"$OVERLAYS"
           for file in digests/*.json; do
             IMAGE="$(jq -r .image "$file")"
             DIGEST="$(jq -r .digest "$file")"
             export IMAGE DIGEST
-            if yq -e '.images[] | select(.name == strenv(IMAGE))' "$OVERLAY" >/dev/null 2>&1; then
-              yq -i '(.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)' "$OVERLAY"
-            else
+            listed=false
+            for overlay in "${overlays[@]}"; do
+              if yq -e '.images[] | select(.name == strenv(IMAGE))' "$overlay" >/dev/null 2>&1; then
+                yq -i '(.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)' "$overlay"
+                listed=true
+              fi
+            done
+            if [ "$listed" = false ]; then
               # A new unit's first build: its entry must exist before any manifest can pin it.
-              yq -i '.images += [{"name": strenv(IMAGE), "digest": strenv(DIGEST)}]' "$OVERLAY"
+              yq -i '.images += [{"name": strenv(IMAGE), "digest": strenv(DIGEST)}]' "${overlays[0]}"
             fi
           done
           git diff --stat

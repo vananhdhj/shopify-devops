@@ -9,5 +9,6 @@ const app = buildApp({
   internalInventoryToken: config.internalInventoryToken,
   adminServiceToken: config.adminServiceToken,
   tenantContextSecret: config.tenantContextSecret,
+  platformCellToken: config.platformCellToken,
 });
 await runService(app, db, config.port);

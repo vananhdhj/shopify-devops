@@ -10,18 +10,32 @@ The proof of concept (Phase 0) answered two questions: can the order logic be ma
 correct under retries, races, and crashes, and does a real delivery loop (CI, GitOps, monitoring,
 rollback) fit and work on one Apple M2 laptop with 16 GB of RAM? Both answers are yes; the numbers
 are under [Measured results](#measured-results). Phase 1 runs two shops in one **cell** (one
-complete copy of the system), with the database itself keeping them apart.
+complete copy of the system), with the database itself keeping them apart. Phase 2 adds the
+**control plane**: merchants sign up and get a working shop in seconds, and the platform operator
+suspends and deletes shops, with every step audited and every deletion verified.
 
 ## The shops
 
 Two seeded shops, **Harbor Goods** and **Meadow Supply**, each at its own address
 (`harbor.shop.localhost`, `meadow.shop.localhost`), with its own catalog, Carts, Orders, and
-Merchant password. The static tenant table is [`deploy/base/tenants.json`](deploy/base/tenants.json).
+Merchant password; anyone can open another at the platform's address, `shop.localhost`.
 
-- A **router**, the only unit on the ingress, maps the address to a **tenant** and attaches a signed
-  **tenant context**; nothing downstream believes a shop named any other way
+- The **control plane** (`apps/platform`) keeps the **registry** of every shop in its own database,
+  apart from every cell ([ADR-0013](docs/adr/0013-the-control-plane-has-its-own-database.md)).
+  **Signup** creates a shop and **provisioning** places it in the cell, activates it, and checks
+  it as a buyer would; no deployment, no operator
+  ([ADR-0015](docs/adr/0015-tenants-are-data-cells-are-infrastructure.md)). Merchant passwords
+  live only there; sessions are bound to a credential version the router carries
+  ([ADR-0014](docs/adr/0014-sessions-bind-a-credential-version-from-the-tenant-context.md)).
+- The platform operator suspends, reinstates, and deletes shops (`make tenant-*`). Deletion purges
+  the shop from the cell and is complete only when no row of it is left
+  ([ADR-0016](docs/adr/0016-deleting-a-shop-purges-and-verifies.md)).
+
+- A **router**, the only unit on the ingress, maps the address to a **tenant** from the control
+  plane's routing table (cached, so shops keep serving when the control plane is down) and
+  attaches a signed **tenant context**; nothing downstream believes a shop named any other way
   ([ADR-0011](docs/adr/0011-tenant-identity-from-a-signed-router-context.md)). An address that
-  names no shop gets one fixed 404.
+  names no shop gets one fixed 404; a shop being set up or suspended gets a fixed 503.
 - Every shop-owned row carries a `tenant_id`, and PostgreSQL row-level security limits each service
   to the tenant of its current transaction; a transaction with no tenant sees nothing
   ([ADR-0010](docs/adr/0010-pooled-tenancy-with-row-level-security.md)). The worker's
@@ -93,27 +107,35 @@ GHCR images inherit the repository's public visibility; no manual step was neede
 ```sh
 make dev-up     # generates secrets, builds, starts, migrates, seeds; returns once healthy
 open http://harbor.shop.localhost:8000 http://meadow.shop.localhost:8000
+open http://shop.localhost:8000    # open a shop of your own
+make tenant-list                   # the registry, as the platform operator sees it
 make test       # typecheck + the service-HTTP and isolation tests against real PostgreSQL and Redis (~4 min)
 make dev-down
 ```
 
-Each Merchant signs in at their shop's `/admin/login` with their own password from
-`.secrets/dev.env` (`MERCHANT_PASSWORD_HARBOR`, `MERCHANT_PASSWORD_MEADOW`). Every `*.localhost`
+The seeded shops' Merchants sign in at their shop's `/admin/login` with their passwords from
+`.secrets/dev.env` (`MERCHANT_PASSWORD_HARBOR`, `MERCHANT_PASSWORD_MEADOW`); a shop opened at
+signup uses the password chosen there. Operator actions: `make tenant-events|tenant-suspend|
+tenant-reinstate|tenant-delete HANDLE=<handle>`. Every `*.localhost`
 name resolves to this machine, so no hosts-file entries are needed.
 
 ### On the lab cluster with GitOps
 
 ```sh
 make secrets            # .secrets/dev.env (if not already there)
-make bootstrap-gitops   # k3d cluster, Argo CD, cluster Secrets, the shop-dev and monitoring apps
+make bootstrap-gitops   # k3d cluster, Argo CD, cluster Secrets, the shop-dev, platform-dev, and monitoring apps
 kubectl --context k3d-shop -n argocd get applications   # wait for Synced / Healthy
-make smoke              # both shops serve their own catalogs, an unknown shop gets 404, a Checkout is Confirmed
+make smoke              # both shops, an unknown shop's 404, a Checkout, and a throwaway shop's whole lifecycle
 open http://harbor.shop.localhost:8080 http://meadow.shop.localhost:8080
 ```
 
-Argo CD then deploys whatever `main` holds. Admin tools are reached only by port-forward:
+Argo CD then deploys whatever `main` holds. **Before merging a change that reads a new secret
+key, run `make secrets` against the cluster**, or the new pods cannot start there (it warns when
+the cluster is unreachable). Admin tools and the operator's endpoints are reached only by
+port-forward:
 
 ```sh
+kubectl --context k3d-shop -n platform-dev port-forward svc/platform-api 8101:8101   # then make tenant-* as locally
 kubectl --context k3d-shop -n argocd port-forward svc/argocd-server 8081:80
 kubectl --context k3d-shop -n monitoring port-forward svc/monitoring-grafana 8082:80   # admin / GRAFANA_ADMIN_PASSWORD
 ```
@@ -161,10 +183,16 @@ The bad-release drill is written up step by step in
   and both APIs refuse requests without a valid one, and the database refuses any row outside the
   transaction's tenant. Keys and foreign keys are tenant-scoped, so even the table owner cannot
   put another shop's product in a Cart (tested).
-- **Merchants.** Each shop has its own password; only scrypt hashes reach the storefront, which
-  issues a signed, httpOnly session cookie valid at that shop only. The APIs' admin endpoints
-  require a separate admin service token, which never names a shop; the human password never
-  reaches them. Admin pages and form posts refuse visitors without a session and cross-site posts.
+- **Merchants.** Each shop has its own password, hashed with scrypt and kept only in the control
+  plane's registry; a storefront asks the control plane to check a sign-in and never sees the
+  hash. The session cookie (signed, httpOnly) is bound to the shop and its credential version, so
+  it is valid at that shop only and a credential change signs its sessions out. The APIs' admin
+  endpoints require a separate admin service token, which never names a shop. Admin pages and form
+  posts refuse visitors without a session and cross-site posts.
+- **Control plane.** Its internal listener is never on an ingress, and each caller has its own
+  token: routers (`PLATFORM_ROUTER_TOKEN`), storefronts (`PLATFORM_STOREFRONT_TOKEN`), and the
+  operator (`PLATFORM_OPERATOR_TOKEN`); the cell's purge endpoints accept only the control plane's
+  `PLATFORM_CELL_TOKEN`. Each namespace's Secret holds only the keys its pods use.
 - **Orders.** The Order token is an HMAC of the tenant id and order id and is never stored
   ([ADR-0004](docs/adr/0004-order-token-is-an-hmac-of-the-order-id.md)). A wrong token, another
   shop's Order, and an unknown Order answer the same 404.
@@ -183,8 +211,11 @@ The bad-release drill is written up step by step in
 
 - One single-node k3d cluster on a laptop: no high availability, and the "dev" environment is the
   only one running. The staging overlay is rendered and validated in CI but never applied.
-- One cell. Shops are added by editing the static tenant table and the seed data; signup, a
-  control plane, and more cells come in later phases of the blueprint.
+- One cell, so placement is trivial and a cell outage stops every shop; more cells, placement by
+  plan, and tenant moves come in later phases of the blueprint. A deleted shop's data is not
+  exported first, and its handle is never reused.
+- No signup verification, password reset, or attempt limiting; a Merchant session cannot be
+  revoked alone (bumping the shop's credential version signs all its sessions out).
 - Metrics have no tenant dimension yet: dashboards and alerts are per cell, and the oldest-Pending
   gauge spans every shop. Per-shop rate limits and queue fairness are not in place either, so one
   busy shop can slow the others.
@@ -253,10 +284,12 @@ Generated secrets stay in `.secrets/dev.env`; delete the folder to start from sc
 
 ## Repository map
 
-- `apps/`: router, storefront, catalog-cart-api, order-service, worker, db-migrations
+- `apps/`: platform (control plane: registry, signup, lifecycle worker), router, storefront,
+  catalog-cart-api, order-service, worker, db-migrations
 - `packages/`: shared API contracts, service plumbing, and tenancy (the signed tenant context)
 - `tests/integration/`: the service-HTTP test suite
-- `deploy/`: Kustomize base and overlays, Argo CD Applications, monitoring, k3d config
+- `deploy/`: Kustomize base and overlays for the cell (`deploy/base`, `deploy/overlays`) and the
+  control plane (`deploy/platform`), Argo CD Applications, monitoring, k3d config
 - `scripts/`: secrets, smoke and drills
 - `docs/adr/`: decisions; `docs/evidence/`: measurements and drill records
 - `.scratch/`: specs and tickets, one folder per phase

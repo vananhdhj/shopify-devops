@@ -10,6 +10,7 @@ const app = buildApp({
   orderTokenSecret: config.orderTokenSecret,
   adminServiceToken: config.adminServiceToken,
   tenantContextSecret: config.tenantContextSecret,
+  platformCellToken: config.platformCellToken,
   checkoutFault: config.checkoutFault,
 });
 await runService(app, db, config.port);

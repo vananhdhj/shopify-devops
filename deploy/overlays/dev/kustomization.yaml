@@ -12,12 +12,18 @@ configMapGenerator:
       - APP_ENV=dev
       - COOKIE_SECURE=false # plain http on the lab ingress
       - TENANT_BASE_DOMAIN=shop.localhost
+      # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
+      - PLATFORM_API_URL=http://platform-api.platform-dev:8101
+      - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
 patches:
   - target: {kind: Ingress, name: router}
     patch: |-
       - op: replace
         path: /spec/rules/0/host
         value: "*.shop.localhost"
+      - op: replace
+        path: /spec/rules/1/host
+        value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
     digest: sha256:752e4f597236037773a7ac73ba93d78d9c18fab836a5272d38ec0330590dba48
