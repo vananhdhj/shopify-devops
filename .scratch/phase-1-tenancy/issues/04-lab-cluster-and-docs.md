@@ -1,6 +1,6 @@
 # 04: Two shops on the lab cluster, and the record of Phase 1
 
-**What to build:** The k3d dev environment serves both shops through the router, and the repository explains the multi-tenant model: glossary, ADRs, README, and the architecture doc.
+**What to build:** The k3d dev environment serves both shops through the router, and the repository explains the multi-tenant model: glossary, ADRs, and README.
 
 **Blocked by:** 03
 
@@ -10,7 +10,7 @@
 - [ ] `make smoke` checks both shops at `harbor.shop.localhost:8080` and `meadow.shop.localhost:8080`, and the unknown-shop `404`
 - [x] `CONTEXT.md` gains Tenant, Handle, Tenant context, Cell, and Platform operator, and the Merchant definition becomes per tenant
 - [x] ADRs: pooled tenancy with RLS as the isolation boundary; tenant identity from a signed router context; cross-tenant work only through narrow functions; amendments to ADR-0004 (tenant-bound Order token), ADR-0006 (role per schema, tenant per row), and ADR-0007 (token per cell, tenant from context)
-- [ ] README and the architecture doc describe the router, tenancy, and the isolation suite (README done; architecture doc not yet)
+- [x] README describes the router, tenancy, and the isolation suite (the architecture doc is maintained by the author, outside this ticket)
 - [ ] Measured memory of the dev environment with the router, recorded in `docs/evidence/`
 
 ## Comments
@@ -20,4 +20,4 @@ Progress (2026-10-11):
 - The dev router image is not pinned yet: its first digest appears on `main` when the release job builds PR #18 (ticket 01). This branch must be rebased onto that `main` before its PR can pass the "every image pinned by digest" check.
 - `scripts/smoke.sh` checks both shops' catalogs, that neither shows the other's products, and the unknown-shop 404 (default `SHOP_DOMAIN=shop.localhost:8080`); it can run only once the cell is deployed.
 - `CONTEXT.md`, ADRs 0010–0012, the amendments to ADRs 0004, 0006, and 0007, and the README are written.
-- Left: the architecture doc (`docs/architecture/`), `make smoke` against the deployed lab cluster, and the memory measurement with the router running. The last two need both pull requests merged and synced.
+- Left: `make smoke` against the deployed lab cluster, and the memory measurement with the router running; both need both pull requests merged and synced. The architecture doc (`docs/architecture/`) was taken out of this ticket (2026-10-11): the author updates it.
