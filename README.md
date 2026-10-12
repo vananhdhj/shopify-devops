@@ -163,17 +163,29 @@ The bad-release drill is written up step by step in
    requests get no deployment credentials.
 2. **Merge to `main`.** The release workflow builds each affected image once, natively on amd64
    and arm64 runners, pushes it to GHCR by digest, and merges a multi-arch index.
-3. **Digest commit.** The `deploy-dev` job commits the new digests into every dev cell's directory
-   (`deploy/cells/dev/<cell>`), the control plane's, and the edge's overlay with the deploy key, the one identity allowed to bypass the ruleset. Commits that touch only
-   `deploy/` do not start another release.
-4. **GitOps.** Argo CD polls `main`, syncs the dev overlay with automated prune and self-heal,
-   runs the database migration as a PreSync job, rolls the Deployments, and reseeds the dev data
-   as a PostSync job.
-5. **Observe.** kube-prometheus-stack, itself deployed by Argo CD, scrapes the services and
+3. **Digest commit, wave 0.** The `deploy-dev` job commits the new digests into the cells of wave 0
+   (the canary, from each `deploy/cells/dev/<cell>/cell.json`), the control plane's, and the
+   edge's overlay with the deploy key, the one identity allowed to bypass the ruleset. Commits that
+   touch only `deploy/` do not start another release.
+4. **GitOps.** Argo CD polls `main` and syncs each cell, the control plane, and the edge with
+   automated prune and self-heal: the database migration as a Sync job, then the Deployments, then
+   the cell's registration and the dev seed as PostSync jobs.
+5. **Waves.** The promoter, in the control plane, soaks wave 0 on the new release for 5 minutes:
+   every cell of the wave must stay Synced and Healthy, keep its 5xx ratio at or under 5% and its
+   oldest Pending Order at or under 60 s, fire no alert, and complete a synthetic Checkout in its
+   synthetic shop every tick. When the gate passes it dispatches the `promote` workflow, which
+   commits the same digests to wave 1 (pool-1); wave 1 is soaked the same way before wave 2
+   (dedicated-1). A failed gate halts the release where it is, records how many tenants ran it,
+   and fires `PromotionHalted`; revert the release's merge commit and the next release replaces
+   it in wave 0. `make fleet` shows each cell's wave and digests and the latest promotions. If the
+   promoter is down, promote by hand: `gh workflow run promote.yml -f wave=1` (it refuses any
+   digest the previous wave does not run). Manifests are shared by every wave and reach them all
+   at the merge, so a manifest must still work with the previous release's images.
+6. **Observe.** kube-prometheus-stack, itself deployed by Argo CD, scrapes the services and
    Traefik. Two alert rules live in Git (5xx ratio above 5% over two minutes with a minimum
    request rate; oldest Pending order older than 60 s) and Alertmanager sends each firing and
    resolved notification to Discord and to an in-cluster alert catcher.
-6. **Roll back.** Revert the commit with `git revert` and merge it like any other change. Never
+7. **Roll back.** Revert the commit with `git revert` and merge it like any other change. Never
    `kubectl rollout undo`: the cluster always matches `main`.
 
 ## Security model

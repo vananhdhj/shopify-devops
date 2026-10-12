@@ -123,10 +123,12 @@ jobs:
           name: digest-${{ matrix.service }}
           path: digests/${{ matrix.service }}.json
 
-  # GitOps hand-off (ADR-0003): write the new digests into the dev overlay and push to main with
-  # the deploy key, the only identity allowed to bypass branch protection. The commit touches
-  # only deploy/**, which this workflow ignores, so it cannot trigger another build; Argo CD
-  # notices it and deploys. Staging digests are promoted deliberately, never here.
+  # GitOps hand-off (ADR-0003): write the new digests into wave 0 (the canary cell), the control
+  # plane, and the edge, and push to main with the deploy key, the only identity allowed to bypass
+  # branch protection. The later waves get the release from the promoter, through the promote
+  # workflow, once wave 0 has passed its gate (Phase 4). The commit touches only deploy/**, which
+  # this workflow ignores, so it cannot trigger another build; Argo CD notices it and deploys.
+  # Staging digests are promoted deliberately, never here.
   deploy-dev:
     needs: [changes, merge]
     runs-on: ubuntu-latest
@@ -142,14 +144,15 @@ jobs:
           pattern: digest-*
           merge-multiple: true
           path: digests
-      - name: Point the dev overlays at the new digests
+      - name: Point wave 0, the control plane, and the edge at the new digests
         run: |
-          # Every dev cell's directory (pool-1 first: a new unit's first digest is added there), then
-          # the control plane and the edge. Every cell gets the same digests until Phase 4's waves.
-          overlays=(deploy/cells/dev/pool-1/kustomization.yaml)
-          for cell in deploy/cells/dev/*/kustomization.yaml; do
-            [ "$cell" = "${overlays[0]}" ] || overlays+=("$cell")
+          # Wave 0's cells (from each cell.json), then the control plane and the edge.
+          overlays=() cells=()
+          for cell_json in deploy/cells/dev/*/cell.json; do
+            cells+=("$(dirname "$cell_json")/kustomization.yaml")
+            if [ "$(jq -r .wave "$cell_json")" = 0 ]; then overlays+=("$(dirname "$cell_json")/kustomization.yaml"); fi
           done
+          [ "${#overlays[@]}" -gt 0 ] || { echo "::error::no dev cell is in wave 0"; exit 1; }
           overlays+=(deploy/platform/overlays/dev/kustomization.yaml deploy/edge/overlays/dev/kustomization.yaml)
           for file in digests/*.json; do
             IMAGE="$(jq -r .image "$file")"
@@ -163,8 +166,11 @@ jobs:
               fi
             done
             if [ "$listed" = false ]; then
-              # A new unit's first build: its entry must exist before any manifest can pin it.
-              yq -i '.images += [{"name": strenv(IMAGE), "digest": strenv(DIGEST)}]' "${overlays[0]}"
+              # A new unit's first build: every cell's manifests reference it at once (they share
+              # the base), so every cell needs its entry now, whatever its wave.
+              for cell in "${cells[@]}"; do
+                yq -i '.images += [{"name": strenv(IMAGE), "digest": strenv(DIGEST)}]' "$cell"
+              done
             fi
           done
           git diff --stat
