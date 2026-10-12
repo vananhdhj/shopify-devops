@@ -66,11 +66,14 @@ spec:
             exec:
               command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "platform"]
             periodSeconds: 5
+            timeoutSeconds: 3
           livenessProbe:
             exec:
               command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
             initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 256Mi }

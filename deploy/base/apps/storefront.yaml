@@ -59,13 +59,17 @@ spec:
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 2
-            failureThreshold: 30
+            failureThreshold: 60
+            timeoutSeconds: 3
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 5
+            timeoutSeconds: 3
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 384Mi }
