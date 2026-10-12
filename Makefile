@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -97,3 +97,9 @@ tenant-reinstate:
 
 tenant-delete:
 	@scripts/tenant.sh delete $(HANDLE)
+
+## What runs where: each cell's role, shops, and API readiness, with each Argo CD Application's
+## sync, health, and image digests (the lab cluster); FLEET=compose for the local stack's cells only
+FLEET ?= cluster
+fleet:
+	@scripts/fleet.sh $(FLEET) $(CONTEXT) $(PLATFORM_NAMESPACE)

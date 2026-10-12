@@ -73,6 +73,13 @@ async function deleteShop(tenantId: string, handle: string): Promise<void> {
 
 const statusOf = async (handle: string) => (await shopFetch("/", {}, handle)).status;
 
+/** The fleet view's readiness of each cell's APIs. */
+async function apisOf(): Promise<Record<string, { catalog: string; orders: string } | null>> {
+  const res = await fetch(`${platformInternalUrl}/operator/cells`, { headers: { "x-operator-token": secret("PLATFORM_OPERATOR_TOKEN") } });
+  const { cells } = (await res.json()) as { cells: { id: string; apis: { catalog: string; orders: string } | null }[] };
+  return Object.fromEntries(cells.map((cell) => [cell.id, cell.apis]));
+}
+
 describe.skipIf(!twoCells)("two cells", () => {
   const password = `pw-${randomUUID()}`;
   let plus: { id: string; handle: string };
@@ -112,10 +119,17 @@ describe.skipIf(!twoCells)("two cells", () => {
     expect(await signup("plus")).toMatchObject({ status: 409, body: { error: "no_capacity" } });
   }, 60_000);
 
-  it("keeps pool-1's shops serving while dedicated-1's database is down, and recovers dedicated-1", async () => {
+  it("keeps pool-1's shops serving while dedicated-1's database is down, shows it in the fleet view, and recovers dedicated-1", async () => {
     compose("stop", "dedicated-1-postgres");
     try {
       await expect.poll(() => statusOf(plus.handle), { timeout: 30_000, interval: 500 }).toBeGreaterThanOrEqual(500);
+      // The fleet view marks dedicated-1's APIs not ready, and only those.
+      await expect
+        .poll(async () => {
+          const apis = await apisOf();
+          return { pool: apis["pool-1"], dedicated: apis["dedicated-1"] };
+        }, { timeout: 15_000, interval: 500 })
+        .toEqual({ pool: { catalog: "ready", orders: "ready" }, dedicated: { catalog: "not_ready", orders: "not_ready" } });
       for (let i = 0; i < 10; i++) {
         for (const shop of [tenants.harbor, tenants.meadow]) expect.soft(await statusOf(shop.handle), shop.handle).toBe(200);
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -124,6 +138,7 @@ describe.skipIf(!twoCells)("two cells", () => {
       restartService("dedicated-1-postgres");
     }
     await expect.poll(() => statusOf(plus.handle), { timeout: 60_000, interval: 1_000 }).toBe(200);
+    expect((await apisOf())["dedicated-1"]).toEqual({ catalog: "ready", orders: "ready" });
   }, 120_000);
 
   it("answers 503 for dedicated-1's shop when its storefront is down, and only for it", async () => {
