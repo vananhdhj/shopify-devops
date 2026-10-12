@@ -6,7 +6,7 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
 /** Runs `docker compose` against the local stack, the same way the Makefile does. */
 export function compose(...args: string[]): string {
-  return execFileSync("docker", ["compose", "--env-file", ".secrets/dev.env", ...args], {
+  return execFileSync("docker", ["compose", "--env-file", ".secrets/dev.env", "--env-file", ".secrets/cells/pool-1.env", ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

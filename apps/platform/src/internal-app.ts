@@ -1,7 +1,9 @@
 import type { Pool } from "pg";
 import type { Registry } from "prom-client";
-import type { MerchantSignInRequest, MerchantSignInResult, TenantRouteTable } from "@shop/contracts";
-import { createService, requireSecretHeader, uuidPatternSource } from "@shop/service-kit";
+import type { CellRegistration, MerchantSignInRequest, MerchantSignInResult, TenantRouteTable } from "@shop/contracts";
+import { createService, requireSecretHeader, secretsEqual, uuidPatternSource } from "@shop/service-kit";
+import { type CellCredentials, cellIdPattern } from "@shop/tenancy";
+import { cellRoutes, register } from "./cells.ts";
 import { act, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
 import { isPassword } from "./passwords.ts";
 import { merchantCredential, routingTable } from "./registry.ts";
@@ -12,7 +14,8 @@ export interface InternalAppDeps {
   registry: Registry;
   environment: string;
   routerToken: string;
-  storefrontToken: string;
+  /** Each cell's own tokens: a cell is trusted for itself and its own shops only. */
+  credentials: CellCredentials;
   operatorToken: string;
 }
 
@@ -22,6 +25,20 @@ const signInBody = {
   properties: {
     tenantId: { type: "string", pattern: uuidPatternSource },
     password: { type: "string", maxLength: 200 },
+  },
+} as const;
+
+const url = { type: "string", pattern: "^https?://[^\\s]+$", maxLength: 200 } as const;
+const registrationBody = {
+  type: "object",
+  required: ["role", "capacity", "storefrontUrl", "catalogUrl", "ordersUrl"],
+  additionalProperties: false,
+  properties: {
+    role: { type: "string", enum: ["canary", "pooled", "dedicated"] },
+    capacity: { type: "integer", minimum: 1, maximum: 10_000 },
+    storefrontUrl: url,
+    catalogUrl: url,
+    ordersUrl: url,
   },
 } as const;
 
@@ -36,18 +53,46 @@ export function buildInternalApp(deps: InternalAppDeps) {
   app.get(
     "/internal/routes",
     { preHandler: requireSecretHeader("x-platform-token", deps.routerToken) },
-    async (): Promise<TenantRouteTable> => ({ tenants: await routingTable(deps.db) }),
+    async (): Promise<TenantRouteTable> => ({ tenants: await routingTable(deps.db), cells: await cellRoutes(deps.db) }),
   );
 
-  // A cell's storefront asks whether a password is this shop's. Only an active shop can be signed
-  // in to; an unknown tenant, a wrong password, and a suspended shop all answer the same "no".
+  // A cell enters the directory, or refreshes its entry, once its units are healthy (a PostSync
+  // hook in the cluster). Only the cell's own token registers it, so no cell can claim another's
+  // id or point another cell's shops at itself.
+  app.post<{ Params: { id: string }; Body: CellRegistration }>(
+    "/internal/cells/:id/registration",
+    { schema: { body: registrationBody } },
+    async (req, reply) => {
+      const { id } = req.params;
+      const expected = cellIdPattern.test(id) ? deps.credentials.get(id, "platform-cell-token") : undefined;
+      if (!expected || !secretsEqual(req.headers["x-platform-token"], expected)) {
+        return reply.code(401).send({ error: "unauthorized", message: "x-platform-token of this cell required" });
+      }
+      const result = await register(deps.db, id, req.body);
+      if (result.outcome === "refused") {
+        req.log.warn({ cell: id, reason: result.reason }, "cell registration refused");
+        return reply.code(409).send({ error: "registration_refused", message: result.reason });
+      }
+      req.log.info({ cell: id, role: req.body.role, capacity: req.body.capacity, created: result.created }, "cell registered");
+      return { cell: id, registered: true };
+    },
+  );
+
+  // A cell's storefront asks whether a password is this shop's. Only the storefront of the cell
+  // holding the shop may ask (its own token), so a cell cannot probe another cell's Merchants.
+  // Only an active shop can be signed in to; a wrong password and a suspended shop answer the
+  // same "no".
   app.post<{ Body: MerchantSignInRequest }>(
     "/internal/merchant-sign-ins",
-    { preHandler: requireSecretHeader("x-platform-token", deps.storefrontToken), schema: { body: signInBody } },
-    async (req): Promise<MerchantSignInResult> => {
+    { schema: { body: signInBody } },
+    async (req, reply): Promise<MerchantSignInResult | undefined> => {
       const credential = await merchantCredential(deps.db, req.body.tenantId.toLowerCase());
-      const ok =
-        credential?.status === "ACTIVE" && (await isPassword(req.body.password, credential.hash));
+      const expected = credential?.cell ? deps.credentials.get(credential.cell, "storefront-token") : undefined;
+      if (!credential || !expected || !secretsEqual(req.headers["x-platform-token"], expected)) {
+        req.log.warn({ tenantId: req.body.tenantId }, "sign-in check refused: not the storefront of the shop's cell");
+        return reply.code(401).send({ error: "unauthorized", message: "x-platform-token of the shop's cell required" });
+      }
+      const ok = credential.status === "ACTIVE" && (await isPassword(req.body.password, credential.hash));
       req.log.info({ tenantId: req.body.tenantId, ok }, "merchant sign-in checked");
       return ok ? { ok: true, credentialVersion: credential.credentialVersion } : { ok: false };
     },

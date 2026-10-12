@@ -9,6 +9,7 @@ resources:
   - data/postgres.yaml
   - data/redis.yaml
   - jobs/db-migrate.yaml
+  - jobs/register-cell.yaml
   - apps/catalog-cart-api.yaml
   - apps/order-service.yaml
   - apps/worker.yaml

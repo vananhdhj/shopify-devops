@@ -1,5 +1,6 @@
-# Platform worker: lifecycle workflows (provisioning, deletion). It reaches the cell's router (to
-# check a new shop like a buyer would) and the cell's two APIs (to purge a deleted shop).
+# Platform worker: lifecycle workflows (provisioning, deletion). It reaches the router (to check a
+# new shop like a buyer would) and the APIs of the shop's cell, from the cell directory, with that
+# cell's own token (to purge a deleted shop).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -36,11 +37,11 @@ spec:
               valueFrom: { secretKeyRef: { name: platform-secrets, key: DB_PLATFORM_APP_PASSWORD } }
             - name: DATABASE_URL
               value: "postgres://platform_app:$(DB_PASSWORD)@platform-db:5432/platform?sslmode=disable"
-            - name: PLATFORM_CELL_TOKEN
-              valueFrom: { secretKeyRef: { name: platform-secrets, key: PLATFORM_CELL_TOKEN } }
+            - name: CELL_CREDENTIALS_DIR
+              value: /run/cell-credentials
           envFrom:
             - configMapRef:
-                name: platform-env # the cell's addresses and the base domain, per environment
+                name: platform-env # the router's address and the base domain, per environment
           ports:
             - name: ops
               containerPort: 8102
@@ -65,6 +66,13 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: cell-credentials
+              mountPath: /run/cell-credentials
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        # One file per cell and key, from `make secrets`; a cell added later appears in place.
+        - name: cell-credentials
+          secret:
+            secretName: cell-credentials

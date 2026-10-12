@@ -24,7 +24,7 @@ async function shopWithPassword(): Promise<{ id: string; handle: string; passwor
     "INSERT INTO platform.tenants (handle, name, merchant_password_hash) VALUES ($1, $1, $2) RETURNING id",
     [handle, hash],
   );
-  await platformQuery("UPDATE platform.tenants SET status = 'ACTIVE', cell = 'cell-1' WHERE id = $1", [row!.id]);
+  await platformQuery("UPDATE platform.tenants SET status = 'ACTIVE', cell = 'pool-1' WHERE id = $1", [row!.id]);
   return { id: row!.id, handle, password };
 }
 
@@ -45,8 +45,9 @@ describe("Merchant credentials in the control plane", () => {
     expect(await right.json()).toEqual({ ok: true, credentialVersion: 1 });
     const wrong = await signInCheck({ tenantId: tenants.harbor.id, password: secret("MERCHANT_PASSWORD_MEADOW") });
     expect(await wrong.json()).toEqual({ ok: false });
+    // A shop no cell holds: no storefront's token is that of its cell.
     const unknown = await signInCheck({ tenantId: randomUUID(), password: "anything-at-all" });
-    expect(await unknown.json()).toEqual({ ok: false });
+    expect(unknown.status).toBe(401);
   });
 
   it("signs a shop's sessions out when its credential version changes", async () => {

@@ -11,8 +11,6 @@ configMapGenerator:
       - APP_ENV=staging
       - TENANT_BASE_DOMAIN=shop-staging.localhost
       - CELL_ROUTER_URL=http://router.shop-staging:8000
-      - CELL_CATALOG_URL=http://catalog-cart-api.shop-staging:4001
-      - CELL_ORDERS_URL=http://order-service.shop-staging:4002
 replicas:
   - name: platform-api
     count: 2

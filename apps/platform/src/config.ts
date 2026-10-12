@@ -9,10 +9,14 @@ export const config = {
   baseDomain: required("TENANT_BASE_DOMAIN").toLowerCase(),
   databaseUrl: required("DATABASE_URL"),
   environment: process.env.APP_ENV ?? "dev",
-  /** Presented by every cell's router to read the routing table. */
+  /** Presented by the routers to read the routing table. */
   routerToken: required("PLATFORM_ROUTER_TOKEN"),
-  /** Presented by every cell's storefront to check a Merchant sign-in. */
-  storefrontToken: required("PLATFORM_STOREFRONT_TOKEN"),
+  /**
+   * Each cell's own secrets, one file per cell and key (`<cell>.platform-cell-token`,
+   * `<cell>.storefront-token`): a cell registers with its cell token, and its storefront checks
+   * sign-ins with its storefront token, for its own shops only.
+   */
+  cellCredentialsDir: required("CELL_CREDENTIALS_DIR"),
   /** Presented by the platform operator (make tenant-*), never by any unit. */
   operatorToken: required("PLATFORM_OPERATOR_TOKEN"),
 };

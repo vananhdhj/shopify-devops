@@ -1,5 +1,6 @@
 SHELL := /bin/bash
-COMPOSE := docker compose --env-file .secrets/dev.env
+# The platform's secrets, then the default cell's (pool-1): Compose runs the control plane and one cell.
+COMPOSE := docker compose --env-file .secrets/dev.env --env-file .secrets/cells/pool-1.env
 CLUSTER := shop
 CONTEXT := k3d-$(CLUSTER)
 NAMESPACE := shop-dev
@@ -7,8 +8,8 @@ PLATFORM_NAMESPACE := platform-dev
 
 .PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete
 
-## Generate local secrets into .secrets/dev.env (never overwrites existing values), and copy
-## them into the lab cluster as a Secret when the cluster is running
+## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
+## existing values), and copy them into the lab cluster as Secrets when the cluster is running
 secrets:
 	@scripts/secrets.sh
 	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE)

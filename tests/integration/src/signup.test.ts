@@ -79,7 +79,7 @@ describe("signup and provisioning", () => {
     const steps = (await eventsOf(tenantId)).filter((event) => event.step !== "check_failed");
     expect(steps.map((event) => `${event.step}:${event.actor}`)).toEqual([
       "created:signup",
-      "placed:platform-worker",
+      "placed:signup",
       "activated:platform-worker",
       "checked:platform-worker",
     ]);

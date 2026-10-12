@@ -6,6 +6,7 @@ export interface TenantSummary {
   handle: string;
   name: string;
   status: string;
+  plan: string;
   cell: string | null;
   createdAt: string;
   updatedAt: string;
@@ -17,15 +18,17 @@ export async function listTenants(db: Queryable): Promise<TenantSummary[]> {
     handle: string;
     name: string;
     status: string;
+    plan: string;
     cell: string | null;
     created_at: Date;
     updated_at: Date;
-  }>("SELECT id, handle, name, status, cell, created_at, updated_at FROM platform.tenants ORDER BY created_at");
+  }>("SELECT id, handle, name, status, plan, cell, created_at, updated_at FROM platform.tenants ORDER BY created_at");
   return rows.map((row) => ({
     id: row.id,
     handle: row.handle,
     name: row.name,
     status: row.status,
+    plan: row.plan,
     cell: row.cell,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),

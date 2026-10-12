@@ -1,4 +1,4 @@
-# The dev control plane on the laptop's k3d cluster, managing the one dev cell (shop-dev). CI
+# The dev control plane on the laptop's k3d cluster, managing the dev cells. CI
 # rewrites the `digest:` lines below after each release build, as for the cell (ADR-0003).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -10,10 +10,8 @@ configMapGenerator:
     literals:
       - APP_ENV=dev
       - TENANT_BASE_DOMAIN=shop.localhost
-      # The one cell this control plane manages (Phase 2): its router and its two APIs.
+      # Where a new shop is checked like a buyer would; each cell's APIs come from the cell directory.
       - CELL_ROUTER_URL=http://router.shop-dev:8000
-      - CELL_CATALOG_URL=http://catalog-cart-api.shop-dev:4001
-      - CELL_ORDERS_URL=http://order-service.shop-dev:4002
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
     digest: sha256:c3503c0aecafd134e969141be3d220c8071d42cda0f9a95ce59f7349435dea11

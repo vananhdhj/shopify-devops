@@ -1,5 +1,6 @@
 import { Counter, Histogram, Registry } from "prom-client";
 import { createPool, createService, requiredEnv, runService } from "@shop/service-kit";
+import { CellCredentials } from "@shop/tenancy";
 import { type DeletionOutcome, deleteShop } from "./deletion.ts";
 import { claimDue, type LifecycleEvent, retryLater } from "./lifecycle.ts";
 import { type ProvisionOutcome, provision } from "./provision.ts";
@@ -11,17 +12,14 @@ const config = {
   pollIntervalMs: Number(process.env.LIFECYCLE_POLL_MS ?? 250),
   /** The cell's router, reached by Host like a buyer's browser, to check a shop once it is active. */
   router: { routerUrl: requiredEnv("CELL_ROUTER_URL"), baseDomain: requiredEnv("TENANT_BASE_DOMAIN").toLowerCase() },
-  /** Phase 2's one cell's APIs, for purging a deleted shop; a cell directory arrives with more cells. */
-  cell: {
-    catalogUrl: requiredEnv("CELL_CATALOG_URL"),
-    ordersUrl: requiredEnv("CELL_ORDERS_URL"),
-    cellToken: requiredEnv("PLATFORM_CELL_TOKEN"),
-  },
+  /** Each cell's token for its purge endpoints, one file per cell; the URLs come from the cell directory. */
+  cellCredentialsDir: requiredEnv("CELL_CREDENTIALS_DIR"),
   /** Between a deletion's first purge and its verifying second one; longer than any settle job. */
   deleteGraceMs: Number(process.env.DELETE_GRACE_MS ?? 15_000),
 };
 
 const db = createPool(config.databaseUrl);
+const credentials = new CellCredentials(config.cellCredentialsDir);
 const registry = new Registry();
 const completed = new Counter({
   name: "platform_lifecycle_completed_total",
@@ -51,7 +49,7 @@ function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome>
     case "provision":
       return provision(db, config.router, event);
     case "delete":
-      return deleteShop(db, config.cell, event, config.deleteGraceMs);
+      return deleteShop(db, credentials, event, config.deleteGraceMs);
   }
 }
 

@@ -143,7 +143,7 @@ jobs:
         run: make test
       - name: Stack logs on failure
         if: failure()
-        run: docker compose --env-file .secrets/dev.env logs --no-color --tail 200
+        run: docker compose --env-file .secrets/dev.env --env-file .secrets/cells/pool-1.env logs --no-color --tail 200
 
   # The one check branch protection requires. It always runs, fails if any job failed or was
   # cancelled, and accepts jobs skipped because nothing they cover changed.

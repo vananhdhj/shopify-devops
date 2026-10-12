@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Copies .secrets/dev.env into the cluster, when the lab cluster is reachable: the cell's
-# `shop-secrets` and the control plane's `platform-secrets`, each with only the keys its namespace
-# needs. Secrets never live in Git; Argo CD applications only reference them by name.
+# Copies .secrets/ into the cluster, when the lab cluster is reachable: each cell's `shop-secrets`
+# from its own file, the control plane's `platform-secrets`, and `cell-credentials` (one key per
+# cell and secret, mounted as files), each namespace getting only what it needs. Secrets never live
+# in Git; Argo CD applications only reference them by name.
 # The Merchants' plaintext passwords stay local: the cluster needs only their hashes.
 # Pods read secrets at startup, so after rotating a value, restart the affected Deployments.
 set -euo pipefail
@@ -28,18 +29,32 @@ apply_secret() {
   echo "secret $2 applied to $1 on $context"
 }
 
-# The cell: everything except the plaintext Merchant passwords, the control plane's database
-# passwords, and the operator's token, none of which any cell unit uses.
-grep -Ev '^(ADMIN_PASSWORD|MERCHANT_PASSWORD_[A-Z0-9_]+|DB_PLATFORM_[A-Z_]+|PLATFORM_OPERATOR_TOKEN)=' .secrets/dev.env |
+# The cell pool-1: its own file, plus the token its router reads the routing table with.
+{ cat .secrets/cells/pool-1.env; grep '^PLATFORM_ROUTER_TOKEN=' .secrets/dev.env; } |
   apply_secret "$namespace" shop-secrets
 # The control plane: its own database passwords, its tokens, and the seeded shops' password hashes.
-grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS)=' .secrets/dev.env |
-  apply_secret "$platform_namespace" platform-secrets
+# Pool-1's cell and storefront tokens stay here too while a release older than the cell directory
+# may still run (it reads them from env); remove them with the per-cell router (Phase 3 ticket 03).
+{
+  grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS)=' .secrets/dev.env
+  grep -E '^PLATFORM_(CELL|STOREFRONT)_TOKEN=' .secrets/cells/pool-1.env
+} | apply_secret "$platform_namespace" platform-secrets
+# Every cell's tokens the control plane holds, as files `<cell>.<key>` (see scripts/secrets.sh);
+# the integration tests' throwaway cells (test-*) stay local.
+files=()
+for f in .secrets/mounts/platform/*; do
+  case "$(basename "$f")" in test-*) ;; *) files+=("--from-file=$f") ;; esac
+done
+kubectl --context "$context" -n "$platform_namespace" create secret generic cell-credentials \
+  "${files[@]}" --dry-run=client -o yaml |
+  kubectl --context "$context" -n "$platform_namespace" label --local -f - app.kubernetes.io/part-of=shop -o yaml |
+  kubectl --context "$context" apply -f - >/dev/null
+echo "secret cell-credentials applied to $platform_namespace on $context"
 
 # The monitoring namespace: Grafana's admin login, and the Discord webhook Alertmanager reads
 # from a mounted file. Without a webhook in .secrets/dev.env, a placeholder keeps Alertmanager
 # running (Discord deliveries fail, the in-cluster alert catcher still receives every alert).
-value() { grep "^$1=" .secrets/dev.env | cut -d= -f2-; }
+value() { grep -h "^$1=" .secrets/dev.env | cut -d= -f2-; }
 kubectl --context "$context" create namespace monitoring --dry-run=client -o yaml |
   kubectl --context "$context" apply -f - >/dev/null
 kubectl --context "$context" -n monitoring create secret generic grafana-admin \
