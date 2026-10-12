@@ -4,6 +4,7 @@ import type { CellRegistration, MerchantSignInRequest, MerchantSignInResult, Ten
 import { createService, requireSecretHeader, secretsEqual, uuidPatternSource } from "@shop/service-kit";
 import { type CellCredentials, cellIdPattern } from "@shop/tenancy";
 import { cellRoutes, register } from "./cells.ts";
+import { fleetView } from "./fleet.ts";
 import { act, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
 import { isPassword } from "./passwords.ts";
 import { merchantCredential, routingTable } from "./registry.ts";
@@ -98,10 +99,12 @@ export function buildInternalApp(deps: InternalAppDeps) {
     },
   );
 
-  // The platform operator's actions. Reached by port-forward and `make tenant-*` only.
+  // The platform operator's actions. Reached by port-forward, `make tenant-*`, and `make fleet` only.
   const operatorOnly = { preHandler: requireSecretHeader("x-operator-token", deps.operatorToken) };
 
   app.get("/operator/tenants", operatorOnly, async () => ({ tenants: await listTenants(deps.db) }));
+
+  app.get("/operator/cells", operatorOnly, async () => ({ cells: await fleetView(deps.db) }));
 
   app.get<{ Params: { handle: string } }>("/operator/tenants/:handle/events", operatorOnly, async (req) => ({
     events: await tenantEvents(deps.db, req.params.handle),

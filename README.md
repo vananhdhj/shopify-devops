@@ -110,6 +110,7 @@ make dev-up     # generates secrets, builds, starts, migrates, seeds; returns on
 open http://harbor.shop.localhost:8000 http://meadow.shop.localhost:8000
 open http://shop.localhost:8000    # open a shop of your own
 make tenant-list                   # the registry, as the platform operator sees it
+make fleet FLEET=compose           # each cell: role, shops by status, API readiness
 make test       # typecheck + the service-HTTP and isolation tests against real PostgreSQL and Redis (~4 min)
 make dev-down
 ```
@@ -124,8 +125,8 @@ name resolves to this machine, so no hosts-file entries are needed.
 
 ```sh
 make secrets            # .secrets/ (the platform's file, one per cell; only what is missing)
-make bootstrap-gitops   # k3d cluster, Argo CD, cluster Secrets, the shop-dev, platform-dev, and monitoring apps
-kubectl --context k3d-shop -n argocd get applications   # wait for Synced / Healthy
+make bootstrap-gitops   # k3d cluster, Argo CD, cluster Secrets, the cells (one app each), the edge, the control plane, monitoring
+make fleet              # wait for every cell Synced / Healthy and its APIs ready; images per app
 make smoke              # both shops, an unknown shop's 404, a Checkout, and a throwaway shop's whole lifecycle
 open http://harbor.shop.localhost:8080 http://meadow.shop.localhost:8080
 ```

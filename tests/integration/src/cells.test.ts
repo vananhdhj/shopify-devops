@@ -229,3 +229,57 @@ describe("a shop's cell, for the control plane's calls into cells", () => {
     expect(await (await check(cellSecret("pool-1", "PLATFORM_STOREFRONT_TOKEN"))).json()).toEqual({ ok: true, credentialVersion: 1 });
   });
 });
+
+describe("the fleet view", () => {
+  interface CellView {
+    id: string;
+    role: string;
+    capacity: number;
+    registeredAt: string | null;
+    shops: Record<string, number>;
+    placed: number;
+    apis: { catalog: string; orders: string } | null;
+  }
+  const fleet = async () => {
+    const res = await fetch(`${platformInternalUrl}/operator/cells`, { headers: { "x-operator-token": secret("PLATFORM_OPERATOR_TOKEN") } });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { cells: CellView[] }).cells;
+  };
+  const viewOf = async (cell: string) => (await fleet()).find((view) => view.id === cell);
+  const noShops = { PROVISIONING: 0, ACTIVE: 0, SUSPENDED: 0, DELETING: 0, DELETED: 0 };
+
+  it("is for the platform operator only", async () => {
+    expect((await fetch(`${platformInternalUrl}/operator/cells`)).status).toBe(401);
+    expect((await fetch(`${platformInternalUrl}/operator/cells`, { headers: { "x-operator-token": "not-the-token" } })).status).toBe(401);
+  });
+
+  it("counts each cell's shops and asks each cell's APIs whether they are ready, without failing on one that is down", async () => {
+    // A dedicated cell whose orders API cannot be reached, the only one free (an earlier test's
+    // cell is free again once its shop is deleted).
+    await retireTestCells();
+    const cell = await aliasCell("dedicated", { ordersUrl: "http://nowhere.invalid:4002" });
+    expect(await viewOf(cell)).toEqual({
+      id: cell,
+      role: "dedicated",
+      capacity: 1,
+      registeredAt: expect.any(String),
+      shops: noShops,
+      placed: 0,
+      apis: { catalog: "ready", orders: "unreachable" },
+    });
+
+    const { body } = await signup("plus");
+    expect(await tenantRow(body.tenantId!)).toMatchObject({ cell });
+    await expect.poll(async () => (await tenantRow(body.tenantId!))?.status, { timeout: 15_000, interval: 250 }).toBe("ACTIVE");
+    expect(await viewOf(cell)).toMatchObject({ shops: { ...noShops, ACTIVE: 1 }, placed: 1 });
+
+    // pool-1 counts every shop placed in it that is not deleted, and its APIs are ready.
+    const [pool] = await platformQuery<{ n: number }>("SELECT count(*)::int AS n FROM platform.tenants WHERE cell = 'pool-1' AND status <> 'DELETED'");
+    expect(await viewOf("pool-1")).toMatchObject({ role: "pooled", placed: pool!.n, apis: { catalog: "ready", orders: "ready" } });
+    expect((await viewOf("pool-1"))!.shops.ACTIVE).toBeGreaterThanOrEqual(2);
+
+    // A cell taken out of the directory is listed, unregistered, and not asked.
+    await retireTestCells();
+    expect(await viewOf(cell)).toMatchObject({ registeredAt: null, apis: null, placed: 1 });
+  });
+});
