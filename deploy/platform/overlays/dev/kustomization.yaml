@@ -17,6 +17,6 @@ configMapGenerator:
       - CELL_ROUTER_URL=http://edge.edge-dev:8000
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
-    digest: sha256:18b9b04ae9fca55d1f621ab89cbe6244a0a876091e5db695ebff2c7479350066
+    digest: sha256:e3610cbebb4d91e2ebc787ae62da8898e03869ade897dcb51f2a4628f70de234
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:142f853afb3ea781c073251255315ab8cc6c529a11d315d6ae7c108697ac7da0
+    digest: sha256:fbfddd1a7eb2df5df89f405a73c199b76fa333284a38172143788990ef4d2bd0

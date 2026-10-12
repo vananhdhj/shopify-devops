@@ -15,7 +15,7 @@ configMapGenerator:
       - PLATFORM_API_URL=http://platform-api.platform-dev:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
 patches:
-  - target: { kind: Ingress, name: edge }
+  - target: {kind: Ingress, name: edge}
     patch: |-
       - op: replace
         path: /spec/rules/0/host
@@ -25,4 +25,4 @@ patches:
         value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/router
-    digest: sha256:d6fedd555531ea9c90bafbb183f2f73b148200b96f4ca5fa83d81a177bdd48f6
+    digest: sha256:bd09730cf2606c0e8ba17d3d8447464c867cda76fe07ba8d5af869c300b0a147
