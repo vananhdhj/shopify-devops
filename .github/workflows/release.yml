@@ -143,11 +143,14 @@ jobs:
           merge-multiple: true
           path: digests
       - name: Point the dev overlays at the new digests
-        env:
-          # The cell's overlay first: a new unit's first digest is added there.
-          OVERLAYS: deploy/overlays/dev/kustomization.yaml deploy/platform/overlays/dev/kustomization.yaml deploy/edge/overlays/dev/kustomization.yaml
         run: |
-          read -ra overlays <<<"$OVERLAYS"
+          # Every dev cell's directory (pool-1 first: a new unit's first digest is added there), then
+          # the control plane and the edge. Every cell gets the same digests until Phase 4's waves.
+          overlays=(deploy/cells/dev/pool-1/kustomization.yaml)
+          for cell in deploy/cells/dev/*/kustomization.yaml; do
+            [ "$cell" = "${overlays[0]}" ] || overlays+=("$cell")
+          done
+          overlays+=(deploy/platform/overlays/dev/kustomization.yaml deploy/edge/overlays/dev/kustomization.yaml)
           for file in digests/*.json; do
             IMAGE="$(jq -r .image "$file")"
             DIGEST="$(jq -r .digest "$file")"
@@ -167,7 +170,7 @@ jobs:
           git diff --stat
       - name: Commit and push the digest bump
         run: |
-          if git diff --quiet; then echo "dev overlay already at these digests"; exit 0; fi
+          if git diff --quiet; then echo "dev overlays already at these digests"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           services="$(jq -r .service digests/*.json | sort | paste -sd, -)"

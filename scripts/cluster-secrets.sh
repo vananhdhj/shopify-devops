@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copies .secrets/ into the cluster, when the lab cluster is reachable: each cell's `shop-secrets`
-# from its own file, the control plane's `platform-secrets`, and `cell-credentials` (one key per
+# from its own file into its own namespace, the control plane's `platform-secrets`, and `cell-credentials` (one key per
 # cell and secret, mounted as files), each namespace getting only what it needs. Secrets never live
 # in Git; Argo CD applications only reference them by name.
 # The Merchants' plaintext passwords stay local: the cluster needs only their hashes.
@@ -8,9 +8,8 @@
 set -euo pipefail
 
 context="$1"
-namespace="$2"
-platform_namespace="$3"
-edge_namespace="$4"
+platform_namespace="$2"
+edge_namespace="$3"
 
 if ! kubectl --context "$context" get --raw /readyz >/dev/null 2>&1; then
   # Not an error (Compose needs only the file), but the cluster now lags the file: a release that
@@ -30,16 +29,16 @@ apply_secret() {
   echo "secret $2 applied to $1 on $context"
 }
 
-# The cell pool-1: its own file, plus the token its router reads the routing table with.
-{ cat .secrets/cells/pool-1.env; grep '^PLATFORM_ROUTER_TOKEN=' .secrets/dev.env; } |
-  apply_secret "$namespace" shop-secrets
+# Each cell: its own file, into the namespace its cell.json names, so a cell's pods can read no
+# other cell's secrets.
+for cell_json in deploy/cells/dev/*/cell.json; do
+  cell="$(basename "$(dirname "$cell_json")")"
+  cell_namespace="$(sed -n 's/.*"namespace": *"\([^"]*\)".*/\1/p' "$cell_json")"
+  apply_secret "$cell_namespace" shop-secrets <".secrets/cells/$cell.env"
+done
 # The control plane: its own database passwords, its tokens, and the seeded shops' password hashes.
-# Pool-1's cell and storefront tokens stay here too while a release older than the cell directory
-# may still run (it reads them from env); remove them with the per-cell router (Phase 3 ticket 03).
-{
-  grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS)=' .secrets/dev.env
-  grep -E '^PLATFORM_(CELL|STOREFRONT)_TOKEN=' .secrets/cells/pool-1.env
-} | apply_secret "$platform_namespace" platform-secrets
+grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS)=' .secrets/dev.env |
+  apply_secret "$platform_namespace" platform-secrets
 # The per-cell secrets the platform-level units hold, as files `<cell>.<key>` (see
 # scripts/secrets.sh): the control plane's cell and storefront tokens, the edge's tenant-context
 # secrets. The integration tests' throwaway cells (test-*) stay local.

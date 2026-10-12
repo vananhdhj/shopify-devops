@@ -30,7 +30,7 @@ export type SignupResult = { outcome: "accepted"; tenantId: string } | { outcome
 /** A single DNS label of 3–30 characters: lower-case letters, digits, and inner hyphens. */
 const handlePattern = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 /** Addresses the platform keeps for itself, now or later. */
-const reservedHandles = new Set(["www", "admin", "api", "platform", "shop", "app", "status", "mail"]);
+const reservedHandles = new Set(["www", "admin", "api", "platform", "shop", "app", "status", "mail", "canary"]);
 export const minimumPasswordLength = 12;
 
 /** The request's fields as received, normalised the way they are stored. */

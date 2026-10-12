@@ -1,0 +1,6 @@
+# Dev only: the seed job, as a component a dev cell includes when it holds seeded shops. SEED_FILE
+# picks the cell's catalog (see apps/db-migrations/seed.sh); a cell sets it with a patch.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - seed-job.yaml

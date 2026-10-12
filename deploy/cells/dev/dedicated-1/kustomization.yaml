@@ -1,0 +1,34 @@
+# Cell dedicated-1 of the dev environment: one plus shop alone, placed at signup when the cell is
+# free. No seed data: its Merchant builds the catalog. CI rewrites the `digest:` lines below
+# after each release build (ADR-0003).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cell-dedicated-1-dev
+resources:
+  - ../../../base
+configMapGenerator:
+  - name: shop-env
+    literals:
+      - APP_ENV=dev
+      - COOKIE_SECURE=false # plain http on the lab ingress
+      - TENANT_BASE_DOMAIN=shop.localhost
+      # This cell in its control plane's cell directory (registered by the register-cell hook).
+      - CELL_ID=dedicated-1
+      - CELL_ROLE=dedicated
+      - CELL_CAPACITY=1
+      # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
+      - PLATFORM_API_URL=http://platform-api.platform-dev:8101
+      - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
+images:
+  - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
+    digest: sha256:2b51124d4583c71703ba116ebd9eebcf5fa3d1e4bd6795606be6b56d51c8fc7f
+  - name: ghcr.io/vananhdhj/shopify-devops/order-service
+    digest: sha256:bb17e1889b797c9a9ff704f07fbedce34b41e5c195894dfedfb6dbd89312edb0
+  - name: ghcr.io/vananhdhj/shopify-devops/worker
+    digest: sha256:716d183a8a7fd8d08a1e407e071a498ecfc35869ca49b97f374d6113ed6c7764
+  - name: ghcr.io/vananhdhj/shopify-devops/storefront
+    digest: sha256:2e633913d34544a811532d2f879983081d046537ced3d24cbca27ea448cca506
+  - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
+    digest: sha256:7b61fb8ada694f9ad89981834975c30faccfcabbcf539b2aead066c90ad59cea
+  - name: ghcr.io/vananhdhj/shopify-devops/platform
+    digest: sha256:0bf5d5b0757a1de7a8ebbd7d19e415f0232bdde60415ca5f8691877aebe98c55
