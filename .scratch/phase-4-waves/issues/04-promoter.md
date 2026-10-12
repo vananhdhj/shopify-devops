@@ -41,3 +41,11 @@ Part 1 (this PR): the code, the migration, Compose, the tests.
 Part 2 (next PR, after this PR's digest commit and `make secrets`): `platform-promoter` Deployment, a read-only ClusterRole on Argo CD Applications (the overlay's namespace would move a Role out of `argocd`), the PodMonitor entry, and the `PromotionHalted` rule.
 
 `make test` with the k3d cluster stopped: 32 files passed. Three tests failed in the first run. Two were promoter test mistakes: the dispatch was compared as JSON text, but jsonb reorders keys; and the gate of a fresh soak has no tick count yet. The third was `settle.test.ts`, a payment delay measured at 2.98 s against 3, in a file this ticket does not touch. After the fixes, the promoter, gate, settle, and cells files pass together (27 tests).
+
+Part 2 (this PR, after part 1's digest commit and `make secrets`):
+- `deploy/platform/base/platform-promoter.yaml`: the Deployment (one replica, `Recreate`, so two promoters never overlap), its ServiceAccount with a token, a read-only ClusterRole (get/list `applications.argoproj.io`) bound to it, and the `PromotionHalted` rule (`max by (wave) (promotion_halted) == 1`, severity page, so it reaches both receivers).
+- The platform PodMonitor scrapes the promoter's ops port too.
+- The ClusterRole and its binding are cluster-wide names (`shop-platform-promoter`); the staging overlay renders the same names, and it is never applied to the lab cluster.
+- `platform-secrets` already holds `GITHUB_PROMOTE_TOKEN`: `make secrets` ran on 2026-10-13 before this PR.
+
+Server dry-run on the cluster: the ServiceAccount, ClusterRole, ClusterRoleBinding, Deployment, and PrometheusRule are accepted.

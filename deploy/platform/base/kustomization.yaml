@@ -1,5 +1,5 @@
-# The control plane: the tenant registry in its own PostgreSQL, the platform API, and the lifecycle
-# worker. Its own namespace and Argo CD Application, so it syncs and fails apart from every cell.
+# The control plane: the tenant registry in its own PostgreSQL, the platform API, the lifecycle
+# worker, and the promoter (Phase 4). Its own namespace and Argo CD Application, so it syncs and fails apart from every cell.
 # Overlays set the namespace, the cell it manages, and the image digests. Secrets are created out of
 # band by `make secrets` (never in Git).
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -12,4 +12,5 @@ resources:
   - db-migrate.yaml
   - platform-api.yaml
   - platform-worker.yaml
+  - platform-promoter.yaml
   - podmonitors.yaml
