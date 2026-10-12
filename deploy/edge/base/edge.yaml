@@ -16,6 +16,9 @@ metadata:
   name: edge
 spec:
   replicas: 1
+  # A new pod is ready before the old one stops: never fewer ready pods than replicas.
+  strategy:
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
   selector:
     matchLabels:
       app.kubernetes.io/name: edge
@@ -52,6 +55,11 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          # Kept serving for 5 s after the pod starts terminating, while the Service's endpoints and
+          # Traefik drop it; only then SIGTERM starts the drain. Without it a rollout fails requests.
+          lifecycle:
+            preStop:
+              sleep: { seconds: 5 }
           startupProbe:
             httpGet: { path: /health/live, port: ops }
             periodSeconds: 2
