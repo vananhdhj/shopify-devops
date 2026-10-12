@@ -4,10 +4,20 @@
 
 **Blocked by:** none
 
-**Status:** ready-for-agent
+**Status:** in review
 
 - [ ] `deploy/cells/dev/<cell>/cell.json` gains `wave` (canary 0, pool-1 1, dedicated-1 2); the ApplicationSet labels each Application `shop.example/wave`
 - [ ] `.github/workflows/promote.yml` (`workflow_dispatch`: `wave`, `digests` as JSON `{image: digest}`, `gate` summary): checks that every cell of wave `wave - 1` pins exactly `digests` on `main`, writes them into every cell of `wave`, commits `deploy(dev): promote … to wave <n> (<cells>)` with the deploy key; one promotion at a time; refuses wave 0 and unknown images
-- [ ] `GET /operator/cells` and `make fleet` show each cell's wave
+- [ ] `make fleet` shows each cell's wave (from the Application's label; see the notes)
 - [ ] CI validates `cell.json` (cell, namespace, wave) for every cell directory
 - [ ] Dispatched by hand once on `main` (a no-op, then a real copy after a release), output in the ticket
+
+## Comments
+
+Implementation notes (2026-10-13):
+- `cell.json` carries `wave` (canary 0, pool-1 1, dedicated-1 2), and the ApplicationSet labels each cell's Application `shop.example/wave`. That label is how the promoter will group cells, and `make fleet` shows it in a WAVE column. The control plane has no use for a cell's wave, so `GET /operator/cells` does not carry it, a change from this ticket's first draft. The control plane and the edge have no wave label: they go out with wave 0.
+- `.github/scripts/promote-wave.sh <wave> [digests]` edits the checkout only. It refuses wave 0, an empty wave, malformed digests, cells of the previous wave that disagree, and any digest the previous wave does not run. It writes the digests into every cell of the wave, adding an image a cell lacks. With no digests it takes the previous wave's own pins, the operator's manual fallback.
+- `.github/workflows/promote.yml` (`workflow_dispatch`: `wave`, `digests`, `gate`) runs the script on a checkout of `main` with the deploy key, then commits `deploy(dev): promote to wave <n> (<cells>)`, with the short digests and the gate summary in the body, and pushes, rebasing up to three times. Inputs reach the shell only through environment variables. Promotions run one at a time. A dispatch that changes nothing ends green with "already runs these digests". The commit touches only `deploy/**`, so no release starts.
+- CI checks every dev cell's `cell.json`: `cell` matches its directory, a namespace, an integer wave, and waves 0, 1, 2… with no gap.
+
+Tested `promote-wave.sh` in an Alpine container (bash 5, yq 4, jq) on a copy of the dev cells. Refused: wave 0, a wave with no cells, malformed JSON, and a digest the canary does not run. Done: wave 1 took the canary's newer digest, a repeat changed nothing, and wave 2 by hand took wave 1's pins. After the merge the ApplicationSet must be applied by hand (`kubectl apply -f deploy/argocd/cells-dev.yaml`) for the wave labels; the workflow is then dispatched once by hand.

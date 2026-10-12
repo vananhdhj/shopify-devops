@@ -1,5 +1,6 @@
 # The dev cells, one Argo CD Application per directory under deploy/cells/dev (from its cell.json:
-# the cell's id and namespace), so adding a cell is a pull request that adds a directory. Each
+# the cell's id, namespace, and release wave), so adding a cell is a pull request that adds a
+# directory. The wave label is how the promoter groups the cells (Phase 4). Each
 # Application syncs and fails on its own: automated sync, prune last, self-heal, retries, as for
 # the control plane and the edge. Rollback is a Git revert.
 #
@@ -34,6 +35,7 @@ spec:
       name: "cell-{{.cell}}-dev"
       labels:
         shop.example/cell: "{{.cell}}"
+        shop.example/wave: "{{.wave}}"
     spec:
       project: default
       source:

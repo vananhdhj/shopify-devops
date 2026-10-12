@@ -121,6 +121,17 @@ jobs:
           ./kubeconform -strict -summary -kubernetes-version 1.35.0 -schema-location default -schema-location "$CRD_SCHEMAS" \
             rendered/*.yaml deploy/argocd/cells-dev.yaml deploy/argocd/platform-dev.yaml deploy/argocd/edge-dev.yaml \
             deploy/monitoring/application.yaml
+      - name: Every dev cell names itself, its namespace, and its wave; the waves run 0, 1, 2… without a gap
+        run: |
+          for file in deploy/cells/dev/*/cell.json; do
+            dir="$(basename "$(dirname "$file")")"
+            jq -e --arg dir "$dir" '.cell == $dir and (.namespace | type == "string" and length > 0)
+              and (.wave | type == "number" and . >= 0 and floor == .)' "$file" >/dev/null ||
+              { echo "::error file=${file}::needs cell (its directory name), namespace, and an integer wave"; exit 1; }
+          done
+          # A release reaches wave 0 and is promoted one wave at a time, so a gap would strand every later wave.
+          jq -se '[.[].wave] | unique | . == [range(0; length)]' deploy/cells/dev/*/cell.json >/dev/null ||
+            { echo "::error::the dev cells' waves must be 0, 1, 2… with no gap"; exit 1; }
       - name: Every workload image is pinned by digest
         run: |
           unpinned="$(grep -hE '^\s+image:' rendered/*.yaml | grep -v '@sha256:' || true)"
