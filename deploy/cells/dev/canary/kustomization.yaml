@@ -22,14 +22,14 @@ configMapGenerator:
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
-    digest: sha256:a13999c4380bbc9cfe87d78ce60a20e2b234218e89fe4ab6a3fb6fbc95f6c7ad
+    digest: sha256:0984b6d414ecea92dd5869d2564393b530c7afea28f36f4ad965ea1ff5cedb62
   - name: ghcr.io/vananhdhj/shopify-devops/order-service
-    digest: sha256:606622dd52ec4f4365d4820d09e0560bbca0c2515005bb1794ea18582a1fe3e8
+    digest: sha256:1c72a9d52af4f8ab4fc78d41ed060b10dd564254902a8768d2cb27866b634e82
   - name: ghcr.io/vananhdhj/shopify-devops/worker
-    digest: sha256:62cd879c543729e985544004f4119fe48768b0c3ac9a347de3944b8e862922b1
+    digest: sha256:f1b020f2e580390a233081e63c3c3025e421a98618b7788e027e2ce5b86e177b
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
-    digest: sha256:6e298cd24bc0fb4b77b1c95d9cb66d4152e7848d5cb3ddcb13a4d00360fb7bea
+    digest: sha256:b0aee6da4528af8c1d6d982111f55206df7cec2067441c858bed7d7c523679c6
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:6fbd46b6f1fb9a4b975d9402f092dcb06815b62dba5b9588cb9773407583eafc
+    digest: sha256:cd039f5cafd5a9d6c21672cf5e9edda52188308eaf2cb207140c642e504968fd
   - name: ghcr.io/vananhdhj/shopify-devops/platform
-    digest: sha256:426617e1ff38202e8247df15befe31ae4d08506bfe023b199a14b6fb26f734c1
+    digest: sha256:b4b386189fceb536ee464eacb7161084aee1aeb292b3ffa832409587a7a7ec73
