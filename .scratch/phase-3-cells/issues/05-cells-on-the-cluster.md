@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 04
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] ApplicationSet controller enabled in `deploy/argocd/values.yaml`; `deploy/argocd/cells-dev.yaml` (Git directory generator, `PruneLast`, automated sync, retries)
 - [ ] `deploy/cells/dev/<cell>/kustomization.yaml`: namespace, role and capacity for registration, per-cell seed; `deploy/overlays/dev` moves to `deploy/cells/dev/pool-1`
@@ -32,3 +32,10 @@ Rollout runbook (the existing `shop-dev` Application points at `deploy/overlays/
 5. Apply `deploy/argocd/cells-dev.yaml`. `cell-pool-1-dev` adopts pool-1's resources (only the tracking label changes, no pod restarts); `cell-canary-dev` and `cell-dedicated-1-dev` create their cells; each registers with the control plane; the canary shop is placed in the canary cell.
 
 `make test` passes locally (32 files and the containment file skipped with one cell; 182 tests) in 226 s with the k3d cluster stopped. The two new seed files were run against the Compose databases inside transactions that were rolled back: the canary shop enters as internal, PROVISIONING, unplaced, with one provision request; its catalog's three products pass the seed check. Every rendered manifest (four cells, the control plane and the edge in both environments, the three Argo CD definitions) passes kubeconform locally: 141 resources valid.
+
+Resolved 2026-10-12 with PR #32 (`f616567`, digests `a9048ad`), following the runbook: `make secrets` and the Argo CD upgrade before the merge; at the merge commit `platform-dev` synced (the new `platform-env`) and `shop-dev` kept 847a045, its path gone; after the digest commit `shop-dev` was deleted without its resources (14:02:45 UTC) and `cells-dev.yaml` applied (14:02:46).
+- Adoption: `cell-pool-1-dev` took over pool-1 in place. `postgres-0` and `redis-0` kept their pods (124 minutes old, no restart) and the cell's data. Its Deployments rolled once, to the digest commit's images, which arrived with the adoption since `shop-dev` had not synced them.
+- All three cells Synced and Healthy at 14:16, about 13.5 minutes after the apply; each registered itself (`pool-1` pooled 100, `canary` canary 5, `dedicated-1` dedicated 1). The canary shop was placed in the canary cell and is ACTIVE; its storefront shows its three seed products and a Checkout there was Confirmed.
+- A `plus` signup (`plus-a2d37b`) landed in `dedicated-1` and went ACTIVE; its Merchant signed in through dedicated-1's storefront and added a product, and a Checkout of it was Confirmed. A second `plus` signup was refused: 409 `no_capacity`. `make smoke` passed (pool-1: both shops, a Checkout, a throwaway shop signed up, sold, deleted, 0 rows left).
+- The two new cells starting at once (two Postgres initdbs, ten app pods, seven new images) with pool-1, the control plane, and the edge rolling to new digests saturated the node: a probe through the ingress (harbor, every 250 ms, 14:02:33–14:12:33) saw 90 of 422 requests fail, mostly timeouts, longest outage 48.5 s. Third-party pods on default probes restarted (coredns 3, the Prometheus operator 2, Argo CD's repo server and server, metrics-server, kube-state-metrics 1 each); ours, on ADR-0017's probes, did not. Adding cells to a live node one at a time, or after the image rollout, is the lesson for the cell-outage drill and Phase 4.
+- Node with three cells (14:19 UTC): MemAvailable 5.47 GB of 10.16 GB, down from 6.18 GB before the two new cells (12:09). Per namespace: pool-1 201 Mi, canary 193 Mi, dedicated-1 190 Mi, platform-dev 91 Mi, edge-dev 40 Mi, argocd 459 Mi, monitoring 889 Mi, kube-system 81 Mi. CPU stayed high after the start (load 25–30 on 6 vCPUs, CPU pressure about 70%) with the host Mac itself out of memory (64 MB free, 8 GB compressed): the lab's limit now is the host, not the cluster's memory.
