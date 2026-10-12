@@ -5,7 +5,7 @@ import type { CellRegistration } from "@shop/contracts";
 import { platformQuery } from "./db.ts";
 import { platformInternalUrl } from "./http.ts";
 import { baseDomain, routerPort, viaRouter } from "./router.ts";
-import { cellSecret, platformCredentialsDir, secret } from "./secrets.ts";
+import { cellSecret, edgeCredentialsDir, platformCredentialsDir, secret } from "./secrets.ts";
 import { tenants } from "./tenants.ts";
 
 const platformHost = `${baseDomain}:${routerPort}`;
@@ -27,17 +27,26 @@ const register = (cell: string, body: unknown, token: string | null) =>
   });
 
 const written: string[] = [];
-/** Gives the control plane a cell's secrets, as `make secrets` would; removed after the file's tests. */
-function giveCredentials(cell: string, values: { cellToken: string; storefrontToken: string }): void {
-  for (const [key, value] of [
-    ["platform-cell-token", values.cellToken],
-    ["storefront-token", values.storefrontToken],
+/**
+ * Gives the control plane and the edge a cell's secrets, as `make secrets` would; removed after the
+ * file's tests.
+ */
+function giveCredentials(cell: string, values: { cellToken: string; storefrontToken: string; tenantContextSecret: string }): void {
+  for (const [file, value] of [
+    [`${platformCredentialsDir}/${cell}.platform-cell-token`, values.cellToken],
+    [`${platformCredentialsDir}/${cell}.storefront-token`, values.storefrontToken],
+    [`${edgeCredentialsDir}/${cell}.tenant-context-secret`, values.tenantContextSecret],
   ] as const) {
-    const file = `${platformCredentialsDir}/${cell}.${key}`;
     writeFileSync(file, value, { mode: 0o644 });
     written.push(file);
   }
 }
+
+const randomSecrets = () => ({
+  cellToken: randomBytes(24).toString("hex"),
+  storefrontToken: randomBytes(24).toString("hex"),
+  tenantContextSecret: randomBytes(24).toString("hex"),
+});
 
 /**
  * A throwaway cell (`test-…`) that is pool-1 under another name: pool-1's URLs and tokens, so a
@@ -47,7 +56,11 @@ function giveCredentials(cell: string, values: { cellToken: string; storefrontTo
 async function aliasCell(role: CellRegistration["role"], urls: Partial<CellRegistration> = {}): Promise<string> {
   const cell = `test-${randomUUID().slice(0, 8)}`;
   const cellToken = cellSecret("pool-1", "PLATFORM_CELL_TOKEN");
-  giveCredentials(cell, { cellToken, storefrontToken: cellSecret("pool-1", "PLATFORM_STOREFRONT_TOKEN") });
+  giveCredentials(cell, {
+    cellToken,
+    storefrontToken: cellSecret("pool-1", "PLATFORM_STOREFRONT_TOKEN"),
+    tenantContextSecret: cellSecret("pool-1", "TENANT_CONTEXT_SECRET"),
+  });
   const res = await register(cell, { ...pool1, role, capacity: role === "dedicated" ? 1 : 100, ...urls }, cellToken);
   expect(res.status, await res.clone().text()).toBe(200);
   return cell;
@@ -99,7 +112,7 @@ describe("cell registration", () => {
 
     // A cell the control plane has a token for cannot be registered with another cell's token.
     const other = `test-${randomUUID().slice(0, 8)}`;
-    giveCredentials(other, { cellToken: randomBytes(24).toString("hex"), storefrontToken: randomBytes(24).toString("hex") });
+    giveCredentials(other, randomSecrets());
     expect((await register(other, pool1, cellSecret("pool-1", "PLATFORM_CELL_TOKEN"))).status).toBe(401);
     // Nor can a cell the control plane holds no secrets for, whatever the token.
     expect((await register(`test-${randomUUID().slice(0, 8)}`, pool1, cellSecret("pool-1", "PLATFORM_CELL_TOKEN"))).status).toBe(401);
@@ -189,8 +202,8 @@ describe("a shop's cell, for the control plane's calls into cells", () => {
 
   it("checks a Merchant sign-in only for the storefront of the shop's cell", async () => {
     const other = `test-${randomUUID().slice(0, 8)}`;
-    const storefrontToken = randomBytes(24).toString("hex");
-    giveCredentials(other, { cellToken: randomBytes(24).toString("hex"), storefrontToken });
+    const secrets = randomSecrets();
+    giveCredentials(other, secrets);
     const check = (token: string) =>
       fetch(`${platformInternalUrl}/internal/merchant-sign-ins`, {
         method: "POST",
@@ -198,7 +211,7 @@ describe("a shop's cell, for the control plane's calls into cells", () => {
         body: JSON.stringify({ tenantId: tenants.harbor.id, password: secret("MERCHANT_PASSWORD_HARBOR") }),
       });
 
-    expect((await check(storefrontToken)).status).toBe(401);
+    expect((await check(secrets.storefrontToken)).status).toBe(401);
     expect(await (await check(cellSecret("pool-1", "PLATFORM_STOREFRONT_TOKEN"))).json()).toEqual({ ok: true, credentialVersion: 1 });
   });
 });

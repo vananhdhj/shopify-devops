@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Migration: `platform.cells` (id, role, capacity, storefront, catalog, orders URLs, `registered_at`); `tenants.plan` and `tenants.internal`; `cell-1` renamed `pool-1`, entered unregistered; `tenants.cell` references `cells`
 - [ ] `POST /internal/cells/:id/registration` (role, capacity, URLs), authenticated by that cell's own token; idempotent; an id/role change of a cell holding shops is refused
@@ -30,3 +30,7 @@ Implementation notes (2026-10-12):
 Rollout (dependencies first): `make secrets` against the cluster before the merge (creates `cell-credentials` in `platform-dev`; the platform pods mount it). After the digest commit, `platform-dev` migrates and rolls out, and `shop-dev`'s PostSync hook registers pool-1, retrying until the new platform-api answers. Until then signups answer `no_capacity`, which is a window of about one sync.
 
 `make test` passes locally (31 files, 178 tests) in 277 s with the k3d cluster stopped. New tests (`cells.test.ts`): registration refuses a missing, wrong, or other cell's token and a role or capacity change that would strand shops; a starter shop lands in pool-1; a plus shop is refused with nothing written when no dedicated cell is free, takes a free one and is served, and only one of six racing plus signups wins the last one; an internal shop waits until a canary cell registers; a deletion waits on an unreachable cell API and finishes once the cell registers a reachable one; a sign-in check with another cell's storefront token is refused.
+
+Resolved 2026-10-12 with PR #27 (`06ce45f`, digests `890d806`). On the cluster: pool-1 registered (`http://storefront.shop-dev:3000`) and `make smoke` passed (the throwaway shop ACTIVE 1 s after signup, sold, deleted, 0 rows left). The rollout went wrong twice before that, with no buyer-facing outage (the old pods kept serving):
+- Argo CD synced the merge commit before the digest commit, so the new platform manifests, which no longer set `PLATFORM_STOREFRONT_TOKEN`, ran the old image, which requires it: the new platform pods crash-looped and the cell's registration hook got 404s from the old API. Both operations kept retrying the merge commit; terminating them (as in the Phase 2 outage) let them sync `890d806`. Rule for the next tickets: manifests must also work with the previous image, for the minutes between the merge and the digest commit.
+- The Compose stack left running after the test run, plus an orphaned `router` container, drove the node's load to about 30 and probes timed out; the first smoke run's Checkout timed out. With both stopped, the load fell and the second run passed. Node memory was 9.5 of 10 GB, which matters for ticket 05's three cells.

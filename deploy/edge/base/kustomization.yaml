@@ -1,0 +1,11 @@
+# The edge: one router for every cell of an environment, in its own namespace and Argo CD
+# Application. Overlays set the namespace, the base domain, the control plane's addresses, and the
+# image digest. Secrets (`edge-secrets`, `cell-credentials`) are created out of band by
+# `make secrets` (never in Git).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: shop-edge
+resources:
+  - edge.yaml

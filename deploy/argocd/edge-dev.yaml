@@ -1,0 +1,31 @@
+# The dev edge, deployed by Argo CD from main into its own namespace, as its own Application: the
+# one router for every cell, syncing and failing apart from the control plane and the cells.
+# Automated sync, prune, and self-heal as for the others; rollback is a Git revert.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: edge-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/vananhdhj/shopify-devops.git
+    targetRevision: main
+    path: deploy/edge/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: edge-dev # created, with its Secret, by `make secrets`
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Prune only after every other resource of the sync is healthy: a resource the old pods still
+      # use (the router's tenant ConfigMap, in the Phase 2 outage) outlives the rollout that drops it.
+      - PruneLast=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

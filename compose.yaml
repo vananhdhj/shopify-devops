@@ -194,22 +194,25 @@ services:
       order-service:
         condition: service_healthy
 
-  # The cell's edge: maps <handle>.shop.localhost to a tenant and proxies to the storefront with a
-  # signed tenant context. Health and metrics are on its private port 8001.
-  router:
+  # The edge, for every cell: maps <handle>.shop.localhost to a tenant and that tenant's cell, and
+  # proxies to the cell's storefront with a tenant context signed by the cell's own secret. Health
+  # and metrics are on its private port 8001.
+  edge:
     build:
       context: .
       dockerfile: apps/router/Dockerfile
     environment:
-      STOREFRONT_URL: http://storefront:3000
       TENANT_BASE_DOMAIN: shop.localhost
-      TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
-      # Registry mode: the routing table comes from the control plane.
+      # Each cell's tenant-context secret, one file per cell; the cells' storefronts come from the
+      # routing table.
+      CELL_CREDENTIALS_DIR: /run/cell-credentials
       PLATFORM_API_URL: http://platform-api:8101
       PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
       # The bare base domain serves the control plane's signup pages.
       PLATFORM_PUBLIC_URL: http://platform-api:8100
       APP_ENV: dev
+    volumes:
+      - ./.secrets/mounts/edge:/run/cell-credentials:ro
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -342,7 +345,7 @@ services:
     command: ["node", "dist/worker-server.js"]
     environment:
       DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
-      CELL_ROUTER_URL: http://router:8000
+      CELL_ROUTER_URL: http://edge:8000
       TENANT_BASE_DOMAIN: shop.localhost
       # A deleted shop is purged through its cell's APIs (from the cell directory) with that cell's
       # token; a short grace between purge passes in dev.

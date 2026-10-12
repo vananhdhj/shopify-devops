@@ -10,6 +10,7 @@ set -euo pipefail
 context="$1"
 namespace="$2"
 platform_namespace="$3"
+edge_namespace="$4"
 
 if ! kubectl --context "$context" get --raw /readyz >/dev/null 2>&1; then
   # Not an error (Compose needs only the file), but the cluster now lags the file: a release that
@@ -39,17 +40,23 @@ apply_secret() {
   grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS)=' .secrets/dev.env
   grep -E '^PLATFORM_(CELL|STOREFRONT)_TOKEN=' .secrets/cells/pool-1.env
 } | apply_secret "$platform_namespace" platform-secrets
-# Every cell's tokens the control plane holds, as files `<cell>.<key>` (see scripts/secrets.sh);
-# the integration tests' throwaway cells (test-*) stay local.
-files=()
-for f in .secrets/mounts/platform/*; do
-  case "$(basename "$f")" in test-*) ;; *) files+=("--from-file=$f") ;; esac
-done
-kubectl --context "$context" -n "$platform_namespace" create secret generic cell-credentials \
-  "${files[@]}" --dry-run=client -o yaml |
-  kubectl --context "$context" -n "$platform_namespace" label --local -f - app.kubernetes.io/part-of=shop -o yaml |
-  kubectl --context "$context" apply -f - >/dev/null
-echo "secret cell-credentials applied to $platform_namespace on $context"
+# The per-cell secrets the platform-level units hold, as files `<cell>.<key>` (see
+# scripts/secrets.sh): the control plane's cell and storefront tokens, the edge's tenant-context
+# secrets. The integration tests' throwaway cells (test-*) stay local.
+apply_cell_credentials() {
+  local files=() f
+  for f in "$2"/*; do
+    case "$(basename "$f")" in test-*) ;; *) files+=("--from-file=$f") ;; esac
+  done
+  kubectl --context "$context" -n "$1" create secret generic cell-credentials "${files[@]}" --dry-run=client -o yaml |
+    kubectl --context "$context" -n "$1" label --local -f - app.kubernetes.io/part-of=shop -o yaml |
+    kubectl --context "$context" apply -f - >/dev/null
+  echo "secret cell-credentials applied to $1 on $context"
+}
+apply_cell_credentials "$platform_namespace" .secrets/mounts/platform
+# The edge: the token it reads the routing table with, and every cell's tenant-context secret.
+grep '^PLATFORM_ROUTER_TOKEN=' .secrets/dev.env | apply_secret "$edge_namespace" edge-secrets
+apply_cell_credentials "$edge_namespace" .secrets/mounts/edge
 
 # The monitoring namespace: Grafana's admin login, and the Discord webhook Alertmanager reads
 # from a mounted file. Without a webhook in .secrets/dev.env, a placeholder keeps Alertmanager

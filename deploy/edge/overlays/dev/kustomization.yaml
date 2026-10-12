@@ -1,0 +1,19 @@
+# The dev edge on the laptop's k3d cluster. Until the ingress moves to it (Phase 3 ticket 03) it
+# runs beside each cell's router and carries no buyer traffic: reach it with a port-forward and a
+# shop's Host header. CI rewrites the `digest:` line below after each release build (ADR-0003).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: edge-dev
+resources:
+  - ../../base
+configMapGenerator:
+  - name: edge-env
+    literals:
+      - APP_ENV=dev
+      - TENANT_BASE_DOMAIN=shop.localhost
+      # The control plane: the routing table (with the cell directory) and the signup pages.
+      - PLATFORM_API_URL=http://platform-api.platform-dev:8101
+      - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
+images:
+  - name: ghcr.io/vananhdhj/shopify-devops/router
+    digest: sha256:39f5b7ad2e2ae12fa9b7d1f809d2b176c9d11da01c4ef48d8b77231c8c31eebe

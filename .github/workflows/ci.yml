@@ -102,7 +102,7 @@ jobs:
           curl -fsSLO "${base}/CHECKSUMS"
           grep " kubeconform-linux-amd64.tar.gz$" CHECKSUMS | sha256sum --check
           tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
-      - name: Render and validate the cell and control-plane overlays, monitoring config, and Argo CD Applications
+      - name: Render and validate the cell, control-plane, and edge overlays, monitoring config, and Argo CD Applications
         env:
           # Custom resources (PodMonitor, PrometheusRule, Application) validate against the
           # community CRD schema catalog instead of being skipped.
@@ -111,14 +111,15 @@ jobs:
           for overlay in dev staging; do
             kubectl kustomize "deploy/overlays/${overlay}" >"${overlay}.yaml"
             kubectl kustomize "deploy/platform/overlays/${overlay}" >"platform-${overlay}.yaml"
+            kubectl kustomize "deploy/edge/overlays/${overlay}" >"edge-${overlay}.yaml"
           done
           kubectl kustomize deploy/monitoring/config >monitoring.yaml
           ./kubeconform -strict -summary -kubernetes-version 1.35.0 -schema-location default -schema-location "$CRD_SCHEMAS" \
-            dev.yaml staging.yaml platform-dev.yaml platform-staging.yaml monitoring.yaml \
-            deploy/argocd/shop-dev.yaml deploy/argocd/platform-dev.yaml deploy/monitoring/application.yaml
+            dev.yaml staging.yaml platform-dev.yaml platform-staging.yaml edge-dev.yaml edge-staging.yaml monitoring.yaml \
+            deploy/argocd/shop-dev.yaml deploy/argocd/platform-dev.yaml deploy/argocd/edge-dev.yaml deploy/monitoring/application.yaml
       - name: Every workload image is pinned by digest
         run: |
-          unpinned="$(grep -hE '^\s+image:' dev.yaml staging.yaml platform-dev.yaml platform-staging.yaml monitoring.yaml | grep -v '@sha256:' || true)"
+          unpinned="$(grep -hE '^\s+image:' dev.yaml staging.yaml platform-dev.yaml platform-staging.yaml edge-dev.yaml edge-staging.yaml monitoring.yaml | grep -v '@sha256:' || true)"
           if [ -n "$unpinned" ]; then echo "::error::images without a digest:"; echo "$unpinned"; exit 1; fi
 
   # Runs on both architectures the release publishes. Compose builds the images natively on each
