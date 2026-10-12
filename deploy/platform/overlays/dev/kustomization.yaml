@@ -14,6 +14,6 @@ configMapGenerator:
       - CELL_ROUTER_URL=http://router.shop-dev:8000
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
-    digest: sha256:c3503c0aecafd134e969141be3d220c8071d42cda0f9a95ce59f7349435dea11
+    digest: sha256:f22855e2ba6acc51c35ed59e194a0724b65f341f0b9ac536ea0f6107b4748ad4
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:25ac79acf49209a3a87b9303ae632ecdeab385ba591f6fd443259e07adb49b44
+    digest: sha256:acc37de95bfcf4a3b7d93286eadaea20a0d73556aa0e86c3868a500bea05e11b
