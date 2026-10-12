@@ -4,7 +4,7 @@ import { CellCredentials } from "@shop/tenancy";
 import { buildApp } from "./app.ts";
 import { config } from "./config.ts";
 import { registryRoutes, type RouteSource } from "./routes.ts";
-import { cellUpstreams, singleCellUpstream } from "./upstreams.ts";
+import { cellUpstreams } from "./upstreams.ts";
 
 const registry = new Registry();
 // Private operational listener: health and metrics only, never on the ingress. The router is ready
@@ -36,19 +36,14 @@ const proxy = buildApp({
   environment: config.environment,
   routes,
   baseDomain: config.baseDomain,
-  upstreamFor: config.singleCell
-    ? singleCellUpstream(config.singleCell.cell, config.singleCell.storefrontUrl, config.singleCell.tenantContextSecret)
-    : cellUpstreams(routes, new CellCredentials(config.cellCredentialsDir!)),
+  upstreamFor: cellUpstreams(routes, new CellCredentials(config.cellCredentialsDir)),
   platformPublicUrl: config.platformPublicUrl,
   registry,
 });
 
 await proxy.listen({ host: "0.0.0.0", port: config.port });
 await registryRouteSource.start();
-proxy.log.info(
-  { ready: routes.ready(), mode: config.singleCell ? `single cell ${config.singleCell.cell}` : "edge, every cell" },
-  "routing shops from the control plane",
-);
+proxy.log.info({ ready: routes.ready() }, "routing shops from the control plane to their cells");
 
 // On SIGTERM: readiness fails at once, then the proxy stops accepting and lets in-flight requests finish.
 await runService(ops, undefined, config.opsPort, async () => {

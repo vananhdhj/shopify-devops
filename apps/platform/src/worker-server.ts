@@ -10,8 +10,8 @@ const config = {
   databaseUrl: requiredEnv("DATABASE_URL"),
   environment: process.env.APP_ENV ?? "dev",
   pollIntervalMs: Number(process.env.LIFECYCLE_POLL_MS ?? 250),
-  /** The cell's router, reached by Host like a buyer's browser, to check a shop once it is active. */
-  router: { routerUrl: requiredEnv("CELL_ROUTER_URL"), baseDomain: requiredEnv("TENANT_BASE_DOMAIN").toLowerCase() },
+  /** The edge, reached by Host like a buyer's browser, to check a shop once it is active. */
+  router: { routerUrl: requiredEnv("EDGE_URL"), baseDomain: requiredEnv("TENANT_BASE_DOMAIN").toLowerCase() },
   /** Each cell's token for its purge endpoints, one file per cell; the URLs come from the cell directory. */
   cellCredentialsDir: requiredEnv("CELL_CREDENTIALS_DIR"),
   /** Between a deletion's first purge and its verifying second one; longer than any settle job. */

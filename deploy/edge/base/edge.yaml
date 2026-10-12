@@ -111,3 +111,33 @@ spec:
   podMetricsEndpoints:
     - port: ops
       path: /metrics
+---
+# The platform's only way in: every shop's address and the platform's own (signup pages) reach
+# the edge, which picks the shop's cell. No cell has an Ingress of its own.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edge
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: "*.shop.example" # every shop of the environment; set by each overlay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: edge
+                port:
+                  name: http
+    - host: shop.example # the platform's own address (signup pages); set by each overlay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: edge
+                port:
+                  name: http

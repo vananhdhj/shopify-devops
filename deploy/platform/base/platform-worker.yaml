@@ -1,4 +1,4 @@
-# Platform worker: lifecycle workflows (provisioning, deletion). It reaches the router (to check a
+# Platform worker: lifecycle workflows (provisioning, deletion). It reaches the edge (to check a
 # new shop like a buyer would) and the APIs of the shop's cell, from the cell directory, with that
 # cell's own token (to purge a deleted shop).
 apiVersion: v1
@@ -41,7 +41,7 @@ spec:
               value: /run/cell-credentials
           envFrom:
             - configMapRef:
-                name: platform-env # the router's address and the base domain, per environment
+                name: platform-env # the edge's address and the base domain, per environment
           ports:
             - name: ops
               containerPort: 8102

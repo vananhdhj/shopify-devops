@@ -230,6 +230,8 @@ services:
 
   # Enters the cell into the control plane's cell directory once its units are healthy, as the
   # cluster's PostSync hook does: role, capacity, and where its APIs answer, with its own token.
+  # The capacity is far above the cluster's: this registry keeps every test run's shops (its volume
+  # outlives `make dev-down`), and a full pool would refuse the next run's starter signups.
   cell-register:
     image: postgres:18-alpine
     environment:
@@ -239,7 +241,7 @@ services:
       - -c
       - >-
         wget -qO- --header "content-type: application/json" --header "x-platform-token: $$PLATFORM_CELL_TOKEN"
-        --post-data '{"role":"pooled","capacity":100,"storefrontUrl":"http://storefront:3000","catalogUrl":"http://catalog-cart-api:4001","ordersUrl":"http://order-service:4002"}'
+        --post-data '{"role":"pooled","capacity":10000,"storefrontUrl":"http://storefront:3000","catalogUrl":"http://catalog-cart-api:4001","ordersUrl":"http://order-service:4002"}'
         http://platform-api:8101/internal/cells/pool-1/registration
     depends_on:
       storefront:
@@ -345,7 +347,7 @@ services:
     command: ["node", "dist/worker-server.js"]
     environment:
       DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
-      CELL_ROUTER_URL: http://edge:8000
+      EDGE_URL: http://edge:8000
       TENANT_BASE_DOMAIN: shop.localhost
       # A deleted shop is purged through its cell's APIs (from the cell directory) with that cell's
       # token; a short grace between purge passes in dev.

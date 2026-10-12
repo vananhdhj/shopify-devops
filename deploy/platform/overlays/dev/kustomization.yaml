@@ -11,7 +11,10 @@ configMapGenerator:
       - APP_ENV=dev
       - TENANT_BASE_DOMAIN=shop.localhost
       # Where a new shop is checked like a buyer would; each cell's APIs come from the cell directory.
-      - CELL_ROUTER_URL=http://router.shop-dev:8000
+      - EDGE_URL=http://edge.edge-dev:8000
+      # The same, for a platform image older than EDGE_URL (between the merge and the digest
+      # commit); remove once that image is gone.
+      - CELL_ROUTER_URL=http://edge.edge-dev:8000
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
     digest: sha256:18b9b04ae9fca55d1f621ab89cbe6244a0a876091e5db695ebff2c7479350066

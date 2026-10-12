@@ -31,9 +31,10 @@ Merchant password; anyone can open another at the platform's address, `shop.loca
   the shop from the cell and is complete only when no row of it is left
   ([ADR-0016](docs/adr/0016-deleting-a-shop-purges-and-verifies.md)).
 
-- A **router**, the only unit on the ingress, maps the address to a **tenant** from the control
-  plane's routing table (cached, so shops keep serving when the control plane is down) and
-  attaches a signed **tenant context**; nothing downstream believes a shop named any other way
+- The **edge router**, one for every cell and the only unit on the ingress, maps the address to a
+  **tenant** and its **cell** from the control plane's routing table (cached, so shops keep
+  serving when the control plane is down), and proxies to that cell with a **tenant context**
+  signed by the cell's own secret; nothing downstream believes a shop named any other way
   ([ADR-0011](docs/adr/0011-tenant-identity-from-a-signed-router-context.md)). An address that
   names no shop gets one fixed 404; a shop being set up or suspended gets a fixed 503.
 - Every shop-owned row carries a `tenant_id`, and PostgreSQL row-level security limits each service
@@ -61,10 +62,10 @@ settled after it; Pending orders never expire ([ADR-0002](docs/adr/0002-pending-
 The domain vocabulary is defined in [CONTEXT.md](CONTEXT.md).
 
 ```
-browser ──> router ──> storefront (Next.js) ──┬──> catalog-cart API (Fastify) ──> PostgreSQL: catalog schema
- <shop>.shop.localhost  every shop, behind    └──> order service (Fastify) ─────> PostgreSQL: orders schema + outbox
- only unit on ingress   the router                                      (tenant_id + row-level security on every table)
- host → tenant, signs the tenant context                                                     │
+browser ──> edge ────> storefront (Next.js) ──┬──> catalog-cart API (Fastify) ──> PostgreSQL: catalog schema
+ <shop>.shop.localhost  every shop of the     └──> order service (Fastify) ─────> PostgreSQL: orders schema + outbox
+ only unit on ingress   cell, behind the edge                           (tenant_id + row-level security on every table)
+ host → tenant → cell, signs the tenant context for that cell                                │
                        worker ──< Redis (BullMQ queue) <── outbox dispatcher ────────────────┘
                          └── Inventory effects (deduct / release, once per tenant, Order, and action) ──> catalog-cart API
 ```
@@ -193,9 +194,9 @@ The bad-release drill is written up step by step in
   endpoints require a separate admin service token, which never names a shop. Admin pages and form
   posts refuse visitors without a session and cross-site posts.
 - **Control plane.** Its internal listener is never on an ingress, and each caller has its own
-  token: routers (`PLATFORM_ROUTER_TOKEN`), storefronts (`PLATFORM_STOREFRONT_TOKEN`), and the
-  operator (`PLATFORM_OPERATOR_TOKEN`); the cell's purge endpoints accept only the control plane's
-  `PLATFORM_CELL_TOKEN`. Each namespace's Secret holds only the keys its pods use.
+  token: the edge (`PLATFORM_ROUTER_TOKEN`), each cell's storefront (its own
+  `PLATFORM_STOREFRONT_TOKEN`, for its own shops only), and the operator (`PLATFORM_OPERATOR_TOKEN`);
+  a cell's purge and registration use that cell's own `PLATFORM_CELL_TOKEN`. Each namespace's Secret holds only the keys its pods use.
 - **Orders.** The Order token is an HMAC of the tenant id and order id and is never stored
   ([ADR-0004](docs/adr/0004-order-token-is-an-hmac-of-the-order-id.md)). A wrong token, another
   shop's Order, and an unknown Order answer the same 404.
@@ -204,7 +205,7 @@ The bad-release drill is written up step by step in
   the worker's internal token can change Stock.
 - **Logs and metrics** use route templates, never raw URLs, query strings, Order tokens,
   credentials, or request bodies (tested for each service).
-- **Exposure.** Only the router is on the ingress, bound to `127.0.0.1:8080`; its health and
+- **Exposure.** Only the edge is on the ingress, bound to `127.0.0.1:8080`; its health and
   metrics are on a private port. Argo CD, Grafana, PostgreSQL, and Redis are reachable only by
   port-forward.
 - **Supply chain.** Actions are pinned to commit SHAs, downloaded tools are checksum-verified,

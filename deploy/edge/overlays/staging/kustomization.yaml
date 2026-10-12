@@ -15,6 +15,15 @@ configMapGenerator:
 replicas:
   - name: edge
     count: 2
+patches:
+  - target: { kind: Ingress, name: edge }
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: "*.shop-staging.localhost"
+      - op: replace
+        path: /spec/rules/1/host
+        value: shop-staging.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/router
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # promoted after the first release

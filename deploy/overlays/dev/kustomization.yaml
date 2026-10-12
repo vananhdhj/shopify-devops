@@ -19,15 +19,6 @@ configMapGenerator:
       # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
       - PLATFORM_API_URL=http://platform-api.platform-dev:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
-patches:
-  - target: {kind: Ingress, name: router}
-    patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: "*.shop.localhost"
-      - op: replace
-        path: /spec/rules/1/host
-        value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
     digest: sha256:132216678c721b6f49d623c60fa04ed49983178b84626e3d5162900b3cdb72b9
@@ -39,7 +30,5 @@ images:
     digest: sha256:15d1cf4d67db88bc512cbec89c581dccabbcca3462bbfb6a310f14412b756168
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
     digest: sha256:142f853afb3ea781c073251255315ab8cc6c529a11d315d6ae7c108697ac7da0
-  - name: ghcr.io/vananhdhj/shopify-devops/router
-    digest: sha256:d6fedd555531ea9c90bafbb183f2f73b148200b96f4ca5fa83d81a177bdd48f6
   - name: ghcr.io/vananhdhj/shopify-devops/platform
     digest: sha256:18b9b04ae9fca55d1f621ab89cbe6244a0a876091e5db695ebff2c7479350066
