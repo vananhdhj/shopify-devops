@@ -2,7 +2,8 @@
 # What runs where: every cell in the control plane's directory (role, shops by status against its
 # capacity, readiness of its catalog and order APIs, its synthetic shop) and, on the lab cluster, each Argo CD
 # Application of the cells, the edge, and the control plane (release wave, sync, health, revision) with the
-# image digests each one runs, one row per image so a cell left behind stands out.
+# image digests each one runs, one row per image so a cell left behind stands out; and the
+# promoter's latest releases.
 #   fleet.sh cluster <context> <platform-namespace>   (port-forwards the control plane's internal listener)
 #   fleet.sh compose                                  (the local stack, http://127.0.0.1:8101)
 set -euo pipefail
@@ -32,6 +33,18 @@ jq -r '
     .shops.DELETING, .shops.DELETED, (.apis.catalog // "unregistered"), (.apis.orders // "unregistered"),
     (if .synthetic then "\(.synthetic.handle) \(.synthetic.status)" else "-" end)])
   | @tsv' <<<"$cells" | column -t -s $'\t'
+
+# The promoter's latest releases (Phase 4): which wave each soaked in, and what became of it.
+promotions="$(curl -fsS --max-time 10 -H "x-operator-token: $token" "$url/operator/promotions" 2>/dev/null || echo '{"promotions":[]}')"
+if [ "$(jq '.promotions | length' <<<"$promotions")" -gt 0 ]; then
+  echo
+  jq -r '
+    ["PROMOTION", "WAVE", "CELLS", "STATE", "SOAK STARTED", "DECIDED", "FAILURE", "EXPOSED"],
+    (.promotions[:5][] | [.id, .wave, (.cells | join(",")), .state, .soakStartedAt[11:19], ((.decidedAt // "-")[11:19]),
+      (if .failure then "\(.failure.cell) \(.failure.check)" else "-" end),
+      (if .exposedTenants != null then "\(.exposedTenants) tenants in \(.exposedCells | join(","))" else "-" end)])
+    | @tsv' <<<"$promotions" | column -t -s $'\t'
+fi
 
 [ "$where" = cluster ] || exit 0
 

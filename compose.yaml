@@ -365,6 +365,45 @@ services:
       platform-seed:
         condition: service_completed_successfully
 
+  # The promoter (Phase 4), for its tests only: they start it (profile `promoter`) against a stub of
+  # the Kubernetes API (Argo CD's Applications), Prometheus, and GitHub that the test process serves
+  # on the host. Its synthetic Checkouts are real, through the edge. Short ticks and soak for tests.
+  platform-promoter:
+    build:
+      context: .
+      dockerfile: apps/platform/Dockerfile
+    profiles: ["promoter"]
+    command: ["node", "dist/promoter-server.js"]
+    environment:
+      DATABASE_URL: postgres://platform_app:${DB_PLATFORM_APP_PASSWORD}@platform-db:5432/platform?sslmode=disable
+      EDGE_URL: http://edge:8000
+      TENANT_BASE_DOMAIN: shop.localhost
+      KUBERNETES_API_URL: http://host.docker.internal:18199
+      PROMETHEUS_URL: http://host.docker.internal:18199
+      GITHUB_API_URL: http://host.docker.internal:18199
+      GITHUB_REPOSITORY: test/shop
+      GITHUB_PROMOTE_TOKEN: test-token
+      RELEASE_IMAGE_PREFIX: ghcr.io/test/
+      PROMOTER_TICK_MS: "500"
+      SOAK_SECONDS: "4"
+      REDISPATCH_AFTER_SECONDS: "3600"
+      APP_ENV: dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Its metrics, for the tests; loopback only.
+    ports:
+      - "127.0.0.1:8103:8103"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8103/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      platform-seed:
+        condition: service_completed_successfully
+      edge:
+        condition: service_healthy
+
   # One-shot job run by `make seed` / `make dev-up`; a profile keeps `up --wait` from
   # treating its normal exit as a failure.
   seed:

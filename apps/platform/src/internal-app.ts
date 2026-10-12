@@ -5,7 +5,7 @@ import { createService, requireSecretHeader, secretsEqual, uuidPatternSource } f
 import { type CellCredentials, cellIdPattern } from "@shop/tenancy";
 import { cellRoutes, register } from "./cells.ts";
 import { fleetView } from "./fleet.ts";
-import { act, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
+import { act, listPromotions, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
 import { isPassword } from "./passwords.ts";
 import { merchantCredential, routingTable } from "./registry.ts";
 
@@ -105,6 +105,8 @@ export function buildInternalApp(deps: InternalAppDeps) {
   app.get("/operator/tenants", operatorOnly, async () => ({ tenants: await listTenants(deps.db) }));
 
   app.get("/operator/cells", operatorOnly, async () => ({ cells: await fleetView(deps.db) }));
+
+  app.get("/operator/promotions", operatorOnly, async () => ({ promotions: await listPromotions(deps.db) }));
 
   app.get<{ Params: { handle: string } }>("/operator/tenants/:handle/events", operatorOnly, async (req) => ({
     events: await tenantEvents(deps.db, req.params.handle),

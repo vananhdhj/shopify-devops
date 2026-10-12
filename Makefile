@@ -44,9 +44,9 @@ test: install dev-up
 	pnpm typecheck
 	pnpm test:integration
 
-## Stop the stack, both cells; volumes are kept
+## Stop the stack, both cells, and the promoter if a test left it; volumes are kept
 dev-down:
-	$(COMPOSE) --profile cells-2 down
+	$(COMPOSE) --profile cells-2 --profile promoter down
 
 ## Create the single-node k3d lab cluster on Colima (Traefik on 127.0.0.1:8080)
 cluster-up:
