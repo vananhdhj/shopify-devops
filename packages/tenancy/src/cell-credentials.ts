@@ -4,8 +4,11 @@ import { join } from "node:path";
 /** The per-cell secrets a platform-level unit holds, one file each: `<cell>.<key>`. */
 export type CellCredentialKey = "platform-cell-token" | "storefront-token" | "tenant-context-secret";
 
-/** A cell id: a DNS label of 1–30 characters, so it can name a namespace and a file. */
-export const cellIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,28}[a-z0-9])?$/;
+/**
+ * A cell id: a DNS label of 1–20 characters, so it can name a namespace and a file, and its
+ * synthetic shop's handle (`synthetic-<cell>`) still fits a handle's 30.
+ */
+export const cellIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/;
 
 /** How long a value read is trusted before the file is read again, so a rotation lands without a restart. */
 const maxAgeMs = 30_000;

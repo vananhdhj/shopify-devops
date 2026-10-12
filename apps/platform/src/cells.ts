@@ -20,7 +20,7 @@ export function roleFor(plan: Plan, internal: boolean): CellRole {
 export interface Candidate {
   id: string;
   capacity: number;
-  /** Shops placed in the cell and not yet deleted. */
+  /** Shops placed in the cell and not yet deleted, its synthetic shop aside. */
   shops: number;
 }
 
@@ -48,7 +48,7 @@ export async function place(client: Queryable, tenantId: string, role: CellRole)
   );
   if (rows.length === 0) return undefined;
   const counts = await client.query<{ cell: string; n: number }>(
-    "SELECT cell, count(*)::int AS n FROM platform.tenants WHERE cell = ANY($1) AND status <> 'DELETED' GROUP BY cell",
+    "SELECT cell, count(*)::int AS n FROM platform.tenants WHERE cell = ANY($1) AND status <> 'DELETED' AND NOT internal GROUP BY cell",
     [rows.map((row) => row.id)],
   );
   const shops = new Map(counts.rows.map((row) => [row.cell, row.n]));
@@ -59,10 +59,47 @@ export async function place(client: Queryable, tenantId: string, role: CellRole)
 
 export type RegistrationResult = { outcome: "registered"; created: boolean } | { outcome: "refused"; reason: string };
 
+/** The handle of a cell's synthetic shop. */
+export const syntheticHandle = (cell: string) => `synthetic-${cell}`;
+
 /**
- * Enters a cell into the directory, or updates its URLs and capacity: a cell registers on every
- * sync, so registering again is the normal case. A cell holding shops cannot change role, and its
- * capacity cannot drop below the shops it holds; both would strand shops placed by the old rules.
+ * Gives the cell its synthetic shop unless it holds one: an internal shop, placed in the cell
+ * directly and provisioned like any other (the outbox), whose catalog the cell's API fills
+ * (`provision`). It is outside the cell's capacity. The canary cell's seeded shop (`canary`, from
+ * Phase 3) counts as its synthetic shop. Inside the registration's transaction, under the cell's
+ * row lock, so two registrations of one cell cannot both create it.
+ */
+async function ensureSyntheticShop(client: Queryable, cell: string): Promise<void> {
+  const { rows } = await client.query("SELECT 1 FROM platform.tenants WHERE cell = $1 AND internal AND status <> 'DELETED'", [cell]);
+  if (rows.length > 0) return;
+  const handle = syntheticHandle(cell);
+  // No password matches the hash 'unusable', so nobody signs in as its Merchant.
+  const created = await client.query<{ id: string }>(
+    `INSERT INTO platform.tenants (handle, name, merchant_password_hash, internal, cell)
+     VALUES ($1, $2, 'unusable', true, $3)
+     ON CONFLICT (handle) DO NOTHING RETURNING id`,
+    [handle, `Synthetic ${cell}`, cell],
+  );
+  // A deleted synthetic shop keeps its handle forever: the cell then goes without one.
+  const id = created.rows[0]?.id;
+  if (!id) return;
+  await client.query(
+    `INSERT INTO platform.tenant_events (tenant_id, from_status, to_status, step, actor, detail)
+     VALUES ($1, NULL, 'PROVISIONING', 'created', 'registration', $2)`,
+    [id, { handle, internal: true }],
+  );
+  await client.query("INSERT INTO platform.tenant_events (tenant_id, step, actor, detail) VALUES ($1, 'placed', 'registration', $2)", [
+    id,
+    { cell },
+  ]);
+  await client.query("INSERT INTO platform.lifecycle_outbox (tenant_id, action) VALUES ($1, 'provision')", [id]);
+}
+
+/**
+ * Enters a cell into the directory, or updates its URLs and capacity, and makes sure it has its
+ * synthetic shop: a cell registers on every sync, so registering again is the normal case. A cell
+ * holding shops cannot change role, and its capacity cannot drop below the shops it holds; both
+ * would strand shops placed by the old rules.
  */
 export async function register(db: Pool, id: string, cell: CellRegistration): Promise<RegistrationResult> {
   return withTransaction(db, async (client) => {
@@ -70,7 +107,7 @@ export async function register(db: Pool, id: string, cell: CellRegistration): Pr
     const existing = rows[0];
     if (existing) {
       const held = await client.query<{ n: number }>(
-        "SELECT count(*)::int AS n FROM platform.tenants WHERE cell = $1 AND status <> 'DELETED'",
+        "SELECT count(*)::int AS n FROM platform.tenants WHERE cell = $1 AND status <> 'DELETED' AND NOT internal",
         [id],
       );
       const shops = held.rows[0]!.n;
@@ -87,6 +124,7 @@ export async function register(db: Pool, id: string, cell: CellRegistration): Pr
           WHERE id = $1`,
         [id, cell.role, cell.capacity, cell.storefrontUrl, cell.catalogUrl, cell.ordersUrl],
       );
+      await ensureSyntheticShop(client, id);
       return { outcome: "registered", created: false };
     }
     await client.query(
@@ -94,6 +132,7 @@ export async function register(db: Pool, id: string, cell: CellRegistration): Pr
        VALUES ($1, $2, $3, $4, $5, $6, now())`,
       [id, cell.role, cell.capacity, cell.storefrontUrl, cell.catalogUrl, cell.ordersUrl],
     );
+    await ensureSyntheticShop(client, id);
     return { outcome: "registered", created: true };
   });
 }

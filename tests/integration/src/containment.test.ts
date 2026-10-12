@@ -85,14 +85,15 @@ describe.skipIf(!twoCells)("two cells", () => {
   let plus: { id: string; handle: string };
 
   beforeAll(async () => {
-    // A plus shop left by an earlier, interrupted run would hold dedicated-1: free it first.
+    // A plus shop left by an earlier, interrupted run would hold dedicated-1: free it first (its
+    // synthetic shop stays: it is outside the capacity).
     const leftovers = await platformQuery<{ id: string; handle: string }>(
-      "SELECT id, handle FROM platform.tenants WHERE cell = 'dedicated-1' AND status IN ('ACTIVE', 'SUSPENDED')",
+      "SELECT id, handle FROM platform.tenants WHERE cell = 'dedicated-1' AND status IN ('ACTIVE', 'SUSPENDED') AND NOT internal",
     );
     for (const shop of leftovers) await deleteShop(shop.id, shop.handle);
     await waitUntil(
       "dedicated-1 holds no shop",
-      async () => (await platformQuery("SELECT 1 FROM platform.tenants WHERE cell = 'dedicated-1' AND status <> 'DELETED'")).length === 0,
+      async () => (await platformQuery("SELECT 1 FROM platform.tenants WHERE cell = 'dedicated-1' AND status <> 'DELETED' AND NOT internal")).length === 0,
     );
   }, 180_000);
 

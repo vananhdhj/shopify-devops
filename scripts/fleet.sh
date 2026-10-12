@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # What runs where: every cell in the control plane's directory (role, shops by status against its
-# capacity, readiness of its catalog and order APIs) and, on the lab cluster, each Argo CD
+# capacity, readiness of its catalog and order APIs, its synthetic shop) and, on the lab cluster, each Argo CD
 # Application of the cells, the edge, and the control plane (sync, health, revision) with the
 # image digests each one runs, one row per image so a cell left behind stands out.
 #   fleet.sh cluster <context> <platform-namespace>   (port-forwards the control plane's internal listener)
@@ -27,9 +27,10 @@ esac
 cells="$(curl -fsS --max-time 10 -H "x-operator-token: $token" "$url/operator/cells")" ||
   { echo "fleet: the control plane at $url did not answer /operator/cells" >&2; exit 1; }
 jq -r '
-  ["CELL", "ROLE", "PLACED/CAP", "ACTIVE", "PROVISIONING", "SUSPENDED", "DELETING", "DELETED", "CATALOG", "ORDERS"],
+  ["CELL", "ROLE", "PLACED/CAP", "ACTIVE", "PROVISIONING", "SUSPENDED", "DELETING", "DELETED", "CATALOG", "ORDERS", "SYNTHETIC"],
   (.cells[] | [.id, .role, "\(.placed)/\(.capacity)", .shops.ACTIVE, .shops.PROVISIONING, .shops.SUSPENDED,
-    .shops.DELETING, .shops.DELETED, (.apis.catalog // "unregistered"), (.apis.orders // "unregistered")])
+    .shops.DELETING, .shops.DELETED, (.apis.catalog // "unregistered"), (.apis.orders // "unregistered"),
+    (if .synthetic then "\(.synthetic.handle) \(.synthetic.status)" else "-" end)])
   | @tsv' <<<"$cells" | column -t -s $'\t'
 
 [ "$where" = cluster ] || exit 0

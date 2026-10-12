@@ -146,7 +146,6 @@ export function buildApp(deps: AppDeps) {
     },
   );
 
-
   // Internal: the control plane deletes a shop from this cell. Refused without the cell token,
   // which only the control plane holds; outside any tenant context, because the shop is no longer
   // routed. The schema's narrow purge function does the deleting (ADR-0012's pattern) and reports
@@ -166,5 +165,32 @@ export function buildApp(deps: AppDeps) {
     },
   );
 
+  // Internal: the control plane gives a cell's synthetic shop (Phase 4) a product to buy, once.
+  // The promoter checks a release out in every cell by buying it with the decline scenario, which
+  // deducts and then releases Stock, so the Stock never runs down. Same token as a purge.
+  app.post<{ Params: { tenantId: string } }>(
+    "/internal/tenants/:tenantId/synthetic-catalog",
+    { ...withoutTenant, preHandler: requireSecretHeader("x-platform-token", deps.platformCellToken) },
+    async (req, reply) => {
+      const { tenantId } = req.params;
+      if (!isUuid(tenantId)) return reply.code(404).send({ error: "tenant_not_found", message: "not a tenant id" });
+      const product = await withTenant(deps.db, tenantId.toLowerCase(), async (client) => {
+        // Two concurrent calls for one shop would otherwise both find no product and add one each.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`synthetic-catalog:${tenantId.toLowerCase()}`]);
+        const existing = (await listProducts(client)).find((p) => p.name === syntheticProduct.name);
+        return existing ?? (await addProduct(client, syntheticProduct));
+      });
+      req.log.info({ tenantId, productId: product.id }, "synthetic catalog ensured");
+      return product;
+    },
+  );
+
   return app;
 }
+
+const syntheticProduct: NewProduct = {
+  name: "Synthetic Probe",
+  description: "Bought by the platform to check this cell; never shipped.",
+  priceMinor: 100,
+  stock: 1_000_000,
+};

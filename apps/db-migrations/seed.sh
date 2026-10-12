@@ -1,7 +1,7 @@
 #!/bin/sh
 # Dev-only: resets a cell's seed products to their seed price and Stock (and checks they all
-# exist). Each cell seeds only the shops it holds: pool-1 Harbor Goods and Meadow Supply
-# (catalog.sql, the default), the canary cell the platform's synthetic shop (canary.sql).
+# exist). Only pool-1 holds seeded shops, Harbor Goods and Meadow Supply (catalog.sql, the default);
+# a cell's synthetic shop gets its product from the control plane (Phase 4).
 set -eu
 : "${PGHOST:?}" "${DB_MIGRATOR_PASSWORD:?}"
 PGUSER=migrator PGPASSWORD="$DB_MIGRATOR_PASSWORD" PGDATABASE=shop \

@@ -12,7 +12,7 @@ const config = {
   pollIntervalMs: Number(process.env.LIFECYCLE_POLL_MS ?? 250),
   /** The edge, reached by Host like a buyer's browser, to check a shop once it is active. */
   router: { routerUrl: requiredEnv("EDGE_URL"), baseDomain: requiredEnv("TENANT_BASE_DOMAIN").toLowerCase() },
-  /** Each cell's token for its purge endpoints, one file per cell; the URLs come from the cell directory. */
+  /** Each cell's token for its purge and synthetic-catalog endpoints, one file per cell; the URLs come from the cell directory. */
   cellCredentialsDir: requiredEnv("CELL_CREDENTIALS_DIR"),
   /** Between a deletion's first purge and its verifying second one; longer than any settle job. */
   deleteGraceMs: Number(process.env.DELETE_GRACE_MS ?? 15_000),
@@ -47,7 +47,7 @@ const ops = createService({ name: "platform-worker", environment: config.environ
 function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome> {
   switch (event.action) {
     case "provision":
-      return provision(db, config.router, event);
+      return provision(db, config.router, credentials, event);
     case "delete":
       return deleteShop(db, credentials, event, config.deleteGraceMs);
   }
