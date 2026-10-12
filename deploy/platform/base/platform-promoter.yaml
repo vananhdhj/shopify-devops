@@ -1,0 +1,127 @@
+# The promoter (Phase 4): soaks each release in its wave and, when the gate passes, dispatches the
+# promote workflow for the next wave (ADR-0003: GitHub commits, the promoter only asks). It reads
+# the cell Applications (a read-only ClusterRole: the overlay's namespace would move a Role out of
+# argocd), Prometheus, and the registry, and buys from each cell's synthetic shop through the edge.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: platform-promoter
+automountServiceAccountToken: true # it lists Argo CD Applications through the Kubernetes API
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shop-platform-promoter
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shop-platform-promoter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shop-platform-promoter
+subjects:
+  - kind: ServiceAccount
+    name: platform-promoter
+    namespace: platform-dev # set again by the overlay's namespace
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-promoter
+spec:
+  # One promoter: two would soak and dispatch the same release side by side.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-promoter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-promoter
+    spec:
+      serviceAccountName: platform-promoter
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # node in the image; numeric so the kubelet can verify non-root
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: platform-promoter
+          image: ghcr.io/vananhdhj/shopify-devops/platform
+          command: ["node", "dist/promoter-server.js"]
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform-secrets, key: DB_PLATFORM_APP_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgres://platform_app:$(DB_PASSWORD)@platform-db:5432/platform?sslmode=disable"
+            # Fine-grained, Actions: write on this repository only (created by the author; make secrets).
+            - name: GITHUB_PROMOTE_TOKEN
+              valueFrom: { secretKeyRef: { name: platform-secrets, key: GITHUB_PROMOTE_TOKEN } }
+            - name: GITHUB_REPOSITORY
+              value: vananhdhj/shopify-devops
+            - name: RELEASE_IMAGE_PREFIX
+              value: ghcr.io/vananhdhj/shopify-devops/
+            - name: PROMETHEUS_URL
+              value: http://monitoring-kube-prometheus-prometheus.monitoring:9090
+          envFrom:
+            - configMapRef:
+                name: platform-env # the edge's address and the base domain, per environment
+          ports:
+            - name: ops
+              containerPort: 8103
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            httpGet: { path: /health/live, port: ops }
+            periodSeconds: 2
+            failureThreshold: 60
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health/live, port: ops }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /health/ready, port: ops }
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 10m, memory: 48Mi }
+            limits: { memory: 160Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# A halted release pages the operator until the wave moves on (the revert). Created before the
+# monitoring CRDs exist on a fresh cluster, so Argo CD skips the dry run until they do.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: promoter-alerts
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: promoter
+      rules:
+        - alert: PromotionHalted
+          expr: max by (wave) (promotion_halted) == 1
+          labels:
+            severity: page
+          annotations:
+            summary: "The release in wave {{ $labels.wave }} failed its gate and was not promoted: see make fleet, then revert its merge commit"
