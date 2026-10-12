@@ -158,7 +158,11 @@ The bad-release drill is written up step by step in
 1. **Pull request.** CI runs lint (Biome), typecheck and image builds for the affected services,
    the service-HTTP tests against a throwaway Compose stack on both amd64 and arm64 runners, Gitleaks, and rendering plus schema
    validation (kubeconform) of the dev and staging overlays, the monitoring config, and the Argo CD
-   Applications, including a check that every image is pinned by digest. One aggregate check,
+   Applications, including a check that every image is pinned by digest. Migrations may only
+   expand the schema unless marked as a contract step, and the `compat` job runs the last wave's
+   cell images against the change's migrations, control plane, and edge
+   ([ADR-0021](docs/adr/0021-migrations-expand-then-contract-across-waves.md); `make compat`
+   locally). One aggregate check,
    `ci-ok`, is the only required check, so skipped jobs never leave the pull request waiting. Pull
    requests get no deployment credentials.
 2. **Merge to `main`.** The release workflow builds each affected image once, natively on amd64
