@@ -22,6 +22,13 @@ spec:
           - path: deploy/cells/dev/*/cell.json
   syncPolicy:
     preserveResourcesOnDeletion: true
+  # A drill pauses one cell's automated sync by hand (make drill-cell-outage), so self-heal does not
+  # undo the outage it makes; this controller leaves that one field of a generated Application as
+  # it finds it, so the pause holds until the drill puts it back. A change to `automated` below
+  # therefore reaches existing cells only once their Applications are recreated.
+  ignoreApplicationDifferences:
+    - jsonPointers:
+        - /spec/syncPolicy/automated
   template:
     metadata:
       name: "cell-{{.cell}}-dev"

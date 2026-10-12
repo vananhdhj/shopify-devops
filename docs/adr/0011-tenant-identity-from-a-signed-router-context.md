@@ -23,3 +23,7 @@ The router, the cell's only unit on the ingress, maps the request's host (`<hand
 ## Amended 2026-10-11: the router reads the control plane
 
 The static tenant table is retired (Phase 2). The router loads its routing table from the control plane's internal listener at start and every 2 seconds, keeping the last good copy when the control plane is down (ADR-0013), and serves only active shops; a shop being set up or suspended gets a fixed page, and a deleted one answers like an unknown address. The tenant context now also carries the shop's credential version (ADR-0014). The bare base domain is forwarded, without any tenant context, to the control plane's public signup pages.
+
+## Amended 2026-10-12: the edge signs for every cell
+
+The router is no longer a unit of the cell (Phase 3, ADR-0018). One edge router serves every cell. It signs each request's context with the secret of the shop's cell, so a cell's units still accept only contexts signed with their own secret. A shop whose cell is unknown to the edge, or whose secret the edge lacks, gets a 503, never another cell's page.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (API), 05 (cluster columns)
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `GET /operator/cells`: directory, shop counts by status, live readiness of each cell's catalog and order APIs (short timeout, never fails as a whole)
 - [ ] `make fleet`: that view plus, from the cluster, each cell Application's sync and health and its image digests (short form), and the edge's
@@ -18,3 +18,5 @@ Implementation notes (2026-10-12):
 - Tests: `cells.test.ts` checks the view is operator-only, counts a test cell's shops as one is placed and activated, reports its unreachable orders API without failing, matches pool-1's count, and lists a retired cell unregistered and unasked. `containment.test.ts` (two cells): with dedicated-1's PostgreSQL stopped the view marks dedicated-1's catalog and order APIs `not_ready` and pool-1's `ready`, and dedicated-1's ready again once its database is back.
 
 `make test CELLS=2` with the k3d cluster stopped: 32 files passed and the new fleet test failed in the first run (its plus signup took an earlier test's dedicated cell, free again once that cell's shop was deleted); with the earlier test cells retired first, `cells.test.ts` and `containment.test.ts` pass (15 tests).
+
+Resolved 2026-10-12 with PR #33 (`834c9e8`, digests `0a30065`): no secret or manifest change; `make fleet` on the cluster showed the three cells ready with their shop counts, the five Applications Synced and Healthy at `0a30065`, and one digest per unit across all three cells (output in `docs/evidence/2026-10-12-phase-3-cluster.md`).
