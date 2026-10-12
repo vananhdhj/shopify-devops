@@ -1,4 +1,4 @@
-# Storefront: serves every shop of the cell, behind the router; only the router reaches it.
+# Storefront: serves every shop of the cell, behind the edge; only the edge reaches it.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

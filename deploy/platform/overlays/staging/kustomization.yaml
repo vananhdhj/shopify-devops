@@ -10,7 +10,7 @@ configMapGenerator:
     literals:
       - APP_ENV=staging
       - TENANT_BASE_DOMAIN=shop-staging.localhost
-      - CELL_ROUTER_URL=http://router.shop-staging:8000
+      - EDGE_URL=http://edge.edge-staging:8000
 replicas:
   - name: platform-api
     count: 2

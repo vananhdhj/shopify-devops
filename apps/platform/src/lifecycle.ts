@@ -86,7 +86,7 @@ function asRendered(name: string): string {
 }
 
 /**
- * Asks the cell's router for the shop's home page, as a buyer's browser would (by Host), and
+ * Asks the edge for the shop's home page, as a buyer's browser would (by Host), and
  * reports whether it answered 200 with the shop's name. `fetch` cannot set Host, so this uses
  * node:http directly.
  */

@@ -13,7 +13,7 @@ const platformHost = `${baseDomain}:${routerPort}`;
 /** Pool-1's own registration, exactly as the stack's cell-register job sends it. */
 const pool1: CellRegistration = {
   role: "pooled",
-  capacity: 100,
+  capacity: 10_000,
   storefrontUrl: "http://storefront:3000",
   catalogUrl: "http://catalog-cart-api:4001",
   ordersUrl: "http://order-service:4002",
@@ -129,7 +129,7 @@ describe("cell registration", () => {
     expect((await register("pool-1", { ...pool1, storefrontUrl: "not a url" }, token)).status).toBe(400);
 
     const [row] = await platformQuery<{ role: string; capacity: number }>("SELECT role, capacity FROM platform.cells WHERE id = 'pool-1'");
-    expect(row).toEqual({ role: "pooled", capacity: 100 });
+    expect(row).toEqual({ role: "pooled", capacity: 10_000 });
   });
 });
 

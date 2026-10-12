@@ -31,12 +31,3 @@ export function cellUpstreams(routes: RouteSource, credentials: CellCredentials)
     return { cell: cell.id, storefrontUrl: cell.storefrontUrl, tenantContextSecret };
   };
 }
-
-/**
- * A router inside one cell (Phase 1 and 2): every shop goes to that cell's storefront. Removed when
- * the edge takes the ingress (Phase 3 ticket 03).
- */
-export function singleCellUpstream(cell: string, storefrontUrl: string, tenantContextSecret: string): UpstreamFor {
-  const upstream = { cell, storefrontUrl, tenantContextSecret };
-  return () => upstream;
-}

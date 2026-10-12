@@ -14,7 +14,6 @@ resources:
   - apps/order-service.yaml
   - apps/worker.yaml
   - apps/storefront.yaml
-  - apps/router.yaml
   - observability/podmonitors.yaml
   - observability/alerts.yaml
 configMapGenerator:
