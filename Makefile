@@ -29,8 +29,10 @@ dev-up: secrets hooks
 seed: secrets
 	$(COMPOSE) run --rm seed
 
-## Typecheck, then run the service-HTTP tests against the running stack
+## Typecheck, then run the service-HTTP tests against the running stack (warns if the lab cluster
+## is running too: the shared CPUs make the suite flaky)
 test: install dev-up
+	@scripts/warn-cluster-running.sh $(CLUSTER)
 	pnpm typecheck
 	pnpm test:integration
 

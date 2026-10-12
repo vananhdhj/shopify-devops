@@ -1,4 +1,4 @@
-import replyFrom from "@fastify/reply-from";
+import replyFrom, { type FastifyReplyFromHooks } from "@fastify/reply-from";
 import Fastify from "fastify";
 import type { Registry } from "prom-client";
 import { loggingOptions, observeRequests } from "@shop/service-kit";
@@ -22,6 +22,7 @@ const noShop = "No shop at this address.\n";
 const beingSetUp = "This shop is being set up. Try again in a few seconds.\n";
 const unavailable = "This shop is temporarily unavailable.\n";
 const starting = "The platform is starting. Try again in a few seconds.\n";
+const upstreamDown = "This service is temporarily unavailable. Try again in a few seconds.\n";
 
 /**
  * The shop handle a Host header names: the single label in front of the base domain
@@ -66,9 +67,16 @@ export function buildApp(deps: AppDeps) {
   });
 
   const text = "text/plain; charset=utf-8";
+  // An unreachable storefront or signup listener is a dependency outage: 503 with a fixed body,
+  // not reply-from's generic 500, and the reason in the log rather than the response.
+  const onError: NonNullable<FastifyReplyFromHooks["onError"]> = (reply, { error }) => {
+    reply.log.warn({ err: error }, "upstream unavailable");
+    reply.code(503).header("retry-after", "5").type(text).send(upstreamDown);
+  };
   app.all("/*", async (req, reply) => {
     if (isPlatformHost(req.headers.host, deps.baseDomain)) {
       return reply.from(`${deps.platformPublicUrl}${req.url}`, {
+        onError,
         rewriteRequestHeaders: (_original, headers) => {
           const { [tenantContextHeader]: _fromClient, ...rest } = headers;
           return { ...rest, host: req.headers.host, "x-request-id": req.id };
@@ -93,6 +101,7 @@ export function buildApp(deps: AppDeps) {
     // The "request completed" line then names the shop the request was routed to.
     reply.log = req.log = req.log.child({ tenant: tenant.handle });
     return reply.from(`${deps.storefrontUrl}${req.url}`, {
+      onError,
       rewriteRequestHeaders: (_original, headers) => {
         const { [tenantContextHeader]: _fromClient, ...rest } = headers;
         return {

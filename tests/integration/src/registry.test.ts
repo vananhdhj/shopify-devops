@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { TenantRouteTable } from "@shop/contracts";
 import { platformQuery } from "./db.ts";
 import { platformInternalUrl } from "./http.ts";
-import { shopFetch } from "./router.ts";
+import { shopFetch, viaRouter } from "./router.ts";
 import { secret } from "./secrets.ts";
 import { compose, restartService } from "./stack.ts";
 import { tenants } from "./tenants.ts";
@@ -102,6 +102,28 @@ describe("tenant registry", () => {
       const metrics = compose("exec", "-T", "router", "wget", "-qO-", "http://127.0.0.1:8001/metrics");
       expect(metrics).toMatch(/^router_routes_refresh_failures_total [1-9]/m);
       expect(compose("exec", "-T", "router", "wget", "-qO-", "http://127.0.0.1:8001/health/ready")).toContain("ready");
+    });
+
+    it("answers a signup at the platform address with a clean 503", async () => {
+      compose("stop", "platform-api");
+      const res = await viaRouter("shop.localhost:8000", "/signups", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idempotencyKey: randomUUID(), handle: "x-outage", name: "x", password: "a-long-enough-password" }),
+      });
+      expect(res.status).toBe(503);
+      expect(res.body).toBe("This service is temporarily unavailable. Try again in a few seconds.\n");
+    });
+
+    it("brings a restarted router back ready on the table it saved", async () => {
+      compose("stop", "platform-api");
+      // Same container, so the table it saved in /tmp is still there; the control plane is not.
+      compose("restart", "router");
+      await expect
+        .poll(async () => (await shopFetch("/", {}, "harbor")).status, { timeout: 30_000, interval: 500 })
+        .toBe(200);
+      expect((await shopFetch("/", {}, "meadow")).status).toBe(200);
+      expect(compose("logs", "--no-log-prefix", "--since", "1m", "router")).toContain("serving the saved routing table");
     });
   });
 });
