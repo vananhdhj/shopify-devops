@@ -1,5 +1,6 @@
 import { Registry } from "prom-client";
 import { createPool, runService } from "@shop/service-kit";
+import { CellCredentials } from "@shop/tenancy";
 import { config } from "./config.ts";
 import { buildInternalApp } from "./internal-app.ts";
 import { buildPublicApp } from "./public-app.ts";
@@ -10,7 +11,7 @@ const internal = buildInternalApp({
   db,
   environment: config.environment,
   routerToken: config.routerToken,
-  storefrontToken: config.storefrontToken,
+  credentials: new CellCredentials(config.cellCredentialsDir),
   operatorToken: config.operatorToken,
   registry,
 });

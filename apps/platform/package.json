@@ -11,6 +11,7 @@
   "dependencies": {
     "@fastify/formbody": "^9.0.1",
     "@shop/service-kit": "workspace:*",
+    "@shop/tenancy": "workspace:*",
     "fastify": "^5.12.5",
     "pg": "^8.23.1",
     "prom-client": "^15.1.3"

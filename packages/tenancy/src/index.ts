@@ -88,3 +88,5 @@ export function verifyTenantContext(
   if (age > maxAgeSeconds || age < -maxSkewSeconds) return undefined;
   return { id, handle, name, credentialVersion: cv };
 }
+
+export { CellCredentials, type CellCredentialKey, cellIdPattern } from "./cell-credentials.ts";

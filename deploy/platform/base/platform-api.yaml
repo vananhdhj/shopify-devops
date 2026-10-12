@@ -38,10 +38,11 @@ spec:
               value: "postgres://platform_app:$(DB_PASSWORD)@platform-db:5432/platform?sslmode=disable"
             - name: PLATFORM_ROUTER_TOKEN
               valueFrom: { secretKeyRef: { name: platform-secrets, key: PLATFORM_ROUTER_TOKEN } }
-            - name: PLATFORM_STOREFRONT_TOKEN
-              valueFrom: { secretKeyRef: { name: platform-secrets, key: PLATFORM_STOREFRONT_TOKEN } }
             - name: PLATFORM_OPERATOR_TOKEN
               valueFrom: { secretKeyRef: { name: platform-secrets, key: PLATFORM_OPERATOR_TOKEN } }
+            # Each cell's registration and storefront tokens, one file per cell and key.
+            - name: CELL_CREDENTIALS_DIR
+              value: /run/cell-credentials
           envFrom:
             - configMapRef:
                 name: platform-env # generated per environment by the overlay
@@ -71,9 +72,16 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: cell-credentials
+              mountPath: /run/cell-credentials
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        # One file per cell and key, from `make secrets`; a cell added later appears in place.
+        - name: cell-credentials
+          secret:
+            secretName: cell-credentials
 ---
 apiVersion: v1
 kind: Service

@@ -146,6 +146,30 @@ export interface TenantRoute {
   status: TenantStatus;
   /** Changes when the shop's Merchant credential changes; sessions are bound to it. */
   credentialVersion: number;
+  /** The cell holding the shop's data; null until provisioning places it. */
+  cell: string | null;
+}
+
+/** A registered cell as the edge needs it: where to send its shops' requests. */
+export interface CellRoute {
+  id: string;
+  storefrontUrl: string;
+}
+
+/** What a shop pays for: `starter` shares a pooled cell, `plus` gets a dedicated cell of its own. */
+export type Plan = "starter" | "plus";
+
+/** What each cell is for: the release canary, shared by starter shops, or one plus shop alone. */
+export type CellRole = "canary" | "pooled" | "dedicated";
+
+/** Sent by a cell once its units are healthy: it enters (or updates) the control plane's cell directory. */
+export interface CellRegistration {
+  role: CellRole;
+  /** The most shops the cell takes; always 1 for a dedicated cell. */
+  capacity: number;
+  storefrontUrl: string;
+  catalogUrl: string;
+  ordersUrl: string;
 }
 
 /** Asked by a cell's storefront when a Merchant signs in; the credential never leaves the control plane. */
@@ -157,7 +181,8 @@ export interface MerchantSignInRequest {
 /** The answer: whether the password is this active shop's, and the credential version a session binds to. */
 export type MerchantSignInResult = { ok: true; credentialVersion: number } | { ok: false };
 
-/** The control plane's routing table: every shop that has not been deleted. */
+/** The control plane's routing table: every shop that has not been deleted, and every registered cell. */
 export interface TenantRouteTable {
   tenants: TenantRoute[];
+  cells: CellRoute[];
 }

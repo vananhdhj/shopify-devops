@@ -13,10 +13,10 @@ INSERT INTO platform.tenant_events (tenant_id, from_status, to_status, step, act
 SELECT id, NULL, 'PROVISIONING', 'created', 'seed' FROM created;
 
 WITH activated AS (
-  UPDATE platform.tenants SET status = 'ACTIVE', cell = 'cell-1'
+  UPDATE platform.tenants SET status = 'ACTIVE', cell = 'pool-1'
    WHERE id IN ('10000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002')
      AND status = 'PROVISIONING'
   RETURNING id
 )
 INSERT INTO platform.tenant_events (tenant_id, from_status, to_status, step, actor, detail)
-SELECT id, 'PROVISIONING', 'ACTIVE', 'activated', 'seed', '{"cell": "cell-1"}' FROM activated;
+SELECT id, 'PROVISIONING', 'ACTIVE', 'activated', 'seed', '{"cell": "pool-1"}' FROM activated;

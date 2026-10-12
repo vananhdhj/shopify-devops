@@ -1,14 +1,8 @@
 import type { Pool } from "pg";
 import { withTransaction } from "@shop/service-kit";
+import type { CellCredentials } from "@shop/tenancy";
+import { endpointsOf } from "./cells.ts";
 import { type LifecycleEvent, complete, recordEvent } from "./lifecycle.ts";
-
-/** Where a cell's two APIs take purge requests from the control plane. */
-export interface CellEndpoints {
-  catalogUrl: string;
-  ordersUrl: string;
-  /** Presented to the cell's purge endpoints; only the control plane holds it. */
-  cellToken: string;
-}
 
 /** Rows a purge removed and rows of the shop left afterwards, per table. */
 export interface PurgeReport {
@@ -31,23 +25,40 @@ const total = (counts: Record<string, number>) => Object.values(counts).reduce((
 export type DeletionOutcome = "deleted" | "verify_later" | "nothing_to_do";
 
 /**
- * Deletes one shop from its cell, in two passes. Routing already stopped when the operator asked
+ * Deletes one shop from the cell that holds it, in two passes, through that cell's APIs and with
+ * that cell's own token (a cell's token opens no other cell). Routing already stopped when the operator asked
  * (DELETING). Each pass purges the shop's Orders first, so no settle job can load one afterwards,
  * then its catalog. A job that had loaded an Order just before the first pass may still write an
  * Inventory effect for a few seconds, so the first pass is followed, after `graceMs`, by a
  * second; the shop is DELETED only when a pass finds nothing left to delete and nothing remains
  * in any of the eight tenant-owned tables. Every pass is recorded with its counts. Purging is
- * idempotent, so a crash at any point only repeats a pass.
+ * idempotent, so a crash at any point only repeats a pass. A cell that cannot be reached, or
+ * whose token the control plane lacks, fails the attempt, which is retried.
  */
-export async function deleteShop(db: Pool, cell: CellEndpoints, event: LifecycleEvent, graceMs: number): Promise<DeletionOutcome> {
-  const { rows } = await db.query<{ status: string }>("SELECT status FROM platform.tenants WHERE id = $1", [event.tenantId]);
-  if (rows[0]?.status !== "DELETING") {
+export async function deleteShop(
+  db: Pool,
+  credentials: CellCredentials,
+  event: LifecycleEvent,
+  graceMs: number,
+): Promise<DeletionOutcome> {
+  const { rows } = await db.query<{ status: string; cell: string | null }>(
+    "SELECT status, cell FROM platform.tenants WHERE id = $1",
+    [event.tenantId],
+  );
+  const tenant = rows[0];
+  if (tenant?.status !== "DELETING") {
     await complete(db, event.eventId);
     return "nothing_to_do";
   }
 
-  const orders = await purge(cell.ordersUrl, cell.cellToken, event.tenantId);
-  const catalog = await purge(cell.catalogUrl, cell.cellToken, event.tenantId);
+  // Only an active or suspended shop can be deleted, and neither exists without a cell.
+  const cell = tenant.cell === null ? undefined : await endpointsOf(db, tenant.cell);
+  if (!cell) throw new Error(`cell ${tenant.cell} of the shop is not registered`);
+  const cellToken = credentials.get(cell.id, "platform-cell-token");
+  if (!cellToken) throw new Error(`no platform-cell-token for cell ${cell.id}`);
+
+  const orders = await purge(cell.ordersUrl, cellToken, event.tenantId);
+  const catalog = await purge(cell.catalogUrl, cellToken, event.tenantId);
   const deleted = { ...orders.deleted, ...catalog.deleted };
   const remaining = { ...orders.remaining, ...catalog.remaining };
 

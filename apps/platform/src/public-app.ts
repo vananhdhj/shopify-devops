@@ -4,6 +4,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import type { Registry } from "prom-client";
 import { Counter } from "prom-client";
+import type { Plan } from "@shop/contracts";
 import { isUuid, loggingOptions, observeRequests } from "@shop/service-kit";
 import { acceptSignup, minimumPasswordLength, type SignupRefusal, type SignupRequest, signupStatus } from "./signup.ts";
 
@@ -21,8 +22,10 @@ const refusalMessages: Record<SignupRefusal, string> = {
   invalid_name: "A shop name is 1 to 80 characters.",
   weak_password: `Choose a password of at least ${minimumPasswordLength} characters.`,
   invalid_key: "Something went wrong with the form. Reload the page and try again.",
+  invalid_plan: "Choose the Starter or the Plus plan.",
   handle_taken: "That shop address is taken. Choose another.",
   signup_key_reused: "This form was already used for a different shop. Reload the page and try again.",
+  no_capacity: "There is no room for a new shop on this plan right now. Try again later, or choose another plan.",
 };
 
 const refusalStatus: Record<SignupRefusal, number> = {
@@ -31,8 +34,10 @@ const refusalStatus: Record<SignupRefusal, number> = {
   invalid_name: 422,
   weak_password: 422,
   invalid_key: 422,
+  invalid_plan: 422,
   handle_taken: 409,
   signup_key_reused: 409,
+  no_capacity: 409,
 };
 
 function escapeHtml(text: string): string {
@@ -43,6 +48,7 @@ function page(title: string, body: string, head = ""): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${head}
 <style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5}
 label{display:block;margin:.8rem 0}input{display:block;width:100%;padding:.4rem;font:inherit}
+input[type=radio]{display:inline;width:auto;margin-right:.4rem}fieldset{margin:.8rem 0}
 button{margin-top:1rem;padding:.5rem 1rem;font:inherit}.error{color:#a00}</style></head>
 <body>${body}</body></html>`;
 }
@@ -57,6 +63,10 @@ ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
   <label>Shop address<input name="handle" required value="${escapeHtml(values.handle ?? "")}" placeholder="e.g. corner-books"></label>
   <label>Shop name<input name="name" required value="${escapeHtml(values.name ?? "")}"></label>
   <label>Merchant password<input type="password" name="password" required minlength="${minimumPasswordLength}" autocomplete="new-password"></label>
+  <fieldset><legend>Plan</legend>
+    <label><input type="radio" name="plan" value="starter"${values.plan === "plus" ? "" : " checked"}> Starter: shares its cell with other shops</label>
+    <label><input type="radio" name="plan" value="plus"${values.plan === "plus" ? " checked" : ""}> Plus: a cell of its own</label>
+  </fieldset>
   <button type="submit">Open my shop</button>
 </form>`,
   );
@@ -112,6 +122,7 @@ export function buildPublicApp(deps: PublicAppDeps) {
       handle: String(body.handle ?? ""),
       name: String(body.name ?? ""),
       password: String(body.password ?? ""),
+      plan: (body.plan ?? "starter") as Plan,
     };
     const result = await acceptSignup(deps.db, request);
     signups.inc({ outcome: result.outcome === "accepted" ? "accepted" : result.reason });

@@ -1,0 +1,117 @@
+import type { CellRegistration, CellRole, CellRoute, Plan } from "@shop/contracts";
+import type { Queryable } from "@shop/service-kit";
+import { withTransaction } from "@shop/service-kit";
+import type { Pool } from "pg";
+
+/** Where a registered cell's APIs answer. */
+export interface CellEndpoints {
+  id: string;
+  storefrontUrl: string;
+  catalogUrl: string;
+  ordersUrl: string;
+}
+
+/** The role of the cells a shop may be placed in: internal shops go to the canary only. */
+export function roleFor(plan: Plan, internal: boolean): CellRole {
+  if (internal) return "canary";
+  return plan === "plus" ? "dedicated" : "pooled";
+}
+
+export interface Candidate {
+  id: string;
+  capacity: number;
+  /** Shops placed in the cell and not yet deleted. */
+  shops: number;
+}
+
+/**
+ * The cell a new shop goes to among the registered cells of its role: the one with the fewest
+ * shops that still has room (ties broken by id, so the choice is repeatable). A dedicated cell
+ * has room for one shop, so a plus shop only ever lands in an empty one. Undefined: no room.
+ */
+export function choose(candidates: Candidate[]): string | undefined {
+  return candidates
+    .filter((cell) => cell.shops < cell.capacity)
+    .sort((a, b) => a.shops - b.shops || a.id.localeCompare(b.id))[0]?.id;
+}
+
+/**
+ * Places one shop, inside the caller's transaction. Every registered cell of the role is locked
+ * first, so two placements of the same role run one after the other and see each other's shop:
+ * two plus signups cannot both take the last dedicated cell. Returns the cell, or undefined when
+ * none has room.
+ */
+export async function place(client: Queryable, tenantId: string, role: CellRole): Promise<string | undefined> {
+  const { rows } = await client.query<{ id: string; capacity: number }>(
+    "SELECT id, capacity FROM platform.cells WHERE role = $1 AND registered_at IS NOT NULL ORDER BY id FOR UPDATE",
+    [role],
+  );
+  if (rows.length === 0) return undefined;
+  const counts = await client.query<{ cell: string; n: number }>(
+    "SELECT cell, count(*)::int AS n FROM platform.tenants WHERE cell = ANY($1) AND status <> 'DELETED' GROUP BY cell",
+    [rows.map((row) => row.id)],
+  );
+  const shops = new Map(counts.rows.map((row) => [row.cell, row.n]));
+  const cell = choose(rows.map((row) => ({ id: row.id, capacity: row.capacity, shops: shops.get(row.id) ?? 0 })));
+  if (cell) await client.query("UPDATE platform.tenants SET cell = $2 WHERE id = $1 AND cell IS NULL", [tenantId, cell]);
+  return cell;
+}
+
+export type RegistrationResult = { outcome: "registered"; created: boolean } | { outcome: "refused"; reason: string };
+
+/**
+ * Enters a cell into the directory, or updates its URLs and capacity: a cell registers on every
+ * sync, so registering again is the normal case. A cell holding shops cannot change role, and its
+ * capacity cannot drop below the shops it holds; both would strand shops placed by the old rules.
+ */
+export async function register(db: Pool, id: string, cell: CellRegistration): Promise<RegistrationResult> {
+  return withTransaction(db, async (client) => {
+    const { rows } = await client.query<{ role: CellRole }>("SELECT role FROM platform.cells WHERE id = $1 FOR UPDATE", [id]);
+    const existing = rows[0];
+    if (existing) {
+      const held = await client.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM platform.tenants WHERE cell = $1 AND status <> 'DELETED'",
+        [id],
+      );
+      const shops = held.rows[0]!.n;
+      if (existing.role !== cell.role && shops > 0) {
+        return { outcome: "refused", reason: `cell ${id} holds ${shops} shops as ${existing.role}; its role cannot change` };
+      }
+      if (cell.capacity < shops) {
+        return { outcome: "refused", reason: `cell ${id} holds ${shops} shops, more than a capacity of ${cell.capacity}` };
+      }
+      await client.query(
+        `UPDATE platform.cells
+            SET role = $2, capacity = $3, storefront_url = $4, catalog_url = $5, orders_url = $6,
+                registered_at = coalesce(registered_at, now()), updated_at = now()
+          WHERE id = $1`,
+        [id, cell.role, cell.capacity, cell.storefrontUrl, cell.catalogUrl, cell.ordersUrl],
+      );
+      return { outcome: "registered", created: false };
+    }
+    await client.query(
+      `INSERT INTO platform.cells (id, role, capacity, storefront_url, catalog_url, orders_url, registered_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now())`,
+      [id, cell.role, cell.capacity, cell.storefrontUrl, cell.catalogUrl, cell.ordersUrl],
+    );
+    return { outcome: "registered", created: true };
+  });
+}
+
+/** A registered cell's endpoints, or undefined for an unknown or unregistered cell. */
+export async function endpointsOf(db: Queryable, id: string): Promise<CellEndpoints | undefined> {
+  const { rows } = await db.query<{ id: string; storefront_url: string; catalog_url: string; orders_url: string }>(
+    "SELECT id, storefront_url, catalog_url, orders_url FROM platform.cells WHERE id = $1 AND registered_at IS NOT NULL",
+    [id],
+  );
+  const row = rows[0];
+  return row && { id: row.id, storefrontUrl: row.storefront_url, catalogUrl: row.catalog_url, ordersUrl: row.orders_url };
+}
+
+/** Every registered cell, for the edge's routing table. */
+export async function cellRoutes(db: Queryable): Promise<CellRoute[]> {
+  const { rows } = await db.query<{ id: string; storefront_url: string }>(
+    "SELECT id, storefront_url FROM platform.cells WHERE registered_at IS NOT NULL ORDER BY id",
+  );
+  return rows.map((row) => ({ id: row.id, storefrontUrl: row.storefront_url }));
+}

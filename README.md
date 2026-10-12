@@ -122,7 +122,7 @@ name resolves to this machine, so no hosts-file entries are needed.
 ### On the lab cluster with GitOps
 
 ```sh
-make secrets            # .secrets/dev.env (if not already there)
+make secrets            # .secrets/ (the platform's file, one per cell; only what is missing)
 make bootstrap-gitops   # k3d cluster, Argo CD, cluster Secrets, the shop-dev, platform-dev, and monitoring apps
 kubectl --context k3d-shop -n argocd get applications   # wait for Synced / Healthy
 make smoke              # both shops, an unknown shop's 404, a Checkout, and a throwaway shop's whole lifecycle
@@ -176,9 +176,12 @@ The bad-release drill is written up step by step in
 
 ## Security model
 
-- **Secrets never enter Git.** `make secrets` generates random values into `.secrets/dev.env`
-  (git-ignored, mode 600) and copies them into Kubernetes Secrets; Argo CD Applications only
-  reference Secrets by name. Gitleaks runs as a pre-commit hook (`make hooks`) and in CI.
+- **Secrets never enter Git.** `make secrets` generates random values into `.secrets/`
+  (git-ignored): the platform's own keys in `dev.env`, and one file per cell
+  (`cells/<cell>.env`, the same key names in each), so a leaked cell secret opens one cell. It
+  copies them into Kubernetes Secrets; Argo CD Applications only reference Secrets by name. The
+  control plane holds each cell's registration and storefront tokens as files
+  (`cell-credentials`), and trusts a cell, or its storefront, for that cell and its shops only. Gitleaks runs as a pre-commit hook (`make hooks`) and in CI.
 - **Tenants.** A request's shop comes only from the router's signed tenant context; the storefront
   and both APIs refuse requests without a valid one, and the database refuses any row outside the
   transaction's tenant. Keys and foreign keys are tenant-scoped, so even the table owner cannot
@@ -291,7 +294,7 @@ make cluster-down   # deletes the k3d cluster, including Argo CD and monitoring
 colima stop
 ```
 
-Generated secrets stay in `.secrets/dev.env`; delete the folder to start from scratch.
+Generated secrets stay in `.secrets/`; delete the folder (and the stack's volumes) to start from scratch.
 
 ## Repository map
 

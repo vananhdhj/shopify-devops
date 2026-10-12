@@ -45,8 +45,9 @@ describe("tenant registry", () => {
 
     const table = (await (await routes()).json()) as TenantRouteTable;
     for (const tenant of [tenants.harbor, tenants.meadow]) {
-      expect(table.tenants).toContainEqual({ ...tenant, status: "ACTIVE", credentialVersion: 1 });
+      expect(table.tenants).toContainEqual({ ...tenant, status: "ACTIVE", credentialVersion: 1, cell: "pool-1" });
     }
+    expect(table.cells).toContainEqual({ id: "pool-1", storefrontUrl: "http://storefront:3000" });
   });
 
   it("routes a shop by its registry status: being set up, active, suspended, being deleted, deleted", async () => {

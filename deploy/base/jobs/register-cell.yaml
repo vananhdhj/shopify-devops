@@ -1,0 +1,55 @@
+# Enters this cell into its control plane's cell directory after every sync, once all its units are
+# healthy (PostSync): its id, role, and capacity (from the overlay's shop-env) and where its APIs
+# answer, signed with the cell's own token. Registering again only refreshes the entry. Until the
+# cell has registered, the control plane places no new shop in it. A control plane that is not up
+# yet only delays this: the Job retries with backoff.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: register-cell
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 8
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      serviceAccountName: db-migrate
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70 # postgres in the image; only its busybox wget is used
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: register-cell
+          image: ghcr.io/vananhdhj/shopify-devops/db-migrations
+          command:
+            - sh
+            - -c
+            - >-
+              wget -qO- -T 10
+              --header "content-type: application/json"
+              --header "x-platform-token: $PLATFORM_CELL_TOKEN"
+              --post-data "{\"role\":\"$CELL_ROLE\",\"capacity\":$CELL_CAPACITY,
+              \"storefrontUrl\":\"http://storefront.$NAMESPACE:3000\",
+              \"catalogUrl\":\"http://catalog-cart-api.$NAMESPACE:4001\",
+              \"ordersUrl\":\"http://order-service.$NAMESPACE:4002\"}"
+              "$PLATFORM_API_URL/internal/cells/$CELL_ID/registration"
+          env:
+            - name: NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: PLATFORM_CELL_TOKEN
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: PLATFORM_CELL_TOKEN } }
+          envFrom:
+            - configMapRef:
+                name: shop-env # CELL_ID, CELL_ROLE, CELL_CAPACITY, PLATFORM_API_URL
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }

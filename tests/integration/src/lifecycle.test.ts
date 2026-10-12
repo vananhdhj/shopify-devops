@@ -108,7 +108,7 @@ describe("operator actions", () => {
 
   it("list shops with their status and cell", async () => {
     const list = (await (await operator("/operator/tenants")).json()) as { tenants: { handle: string; status: string; cell: string }[] };
-    expect(list.tenants).toContainEqual(expect.objectContaining({ handle: "harbor", status: "ACTIVE", cell: "cell-1" }));
+    expect(list.tenants).toContainEqual(expect.objectContaining({ handle: "harbor", status: "ACTIVE", cell: "pool-1" }));
   });
 
   it("suspend a shop at the router, keep its data, let a Pending order settle, and reinstate it", async () => {

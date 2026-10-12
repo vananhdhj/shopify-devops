@@ -12,6 +12,10 @@ configMapGenerator:
       - APP_ENV=dev
       - COOKIE_SECURE=false # plain http on the lab ingress
       - TENANT_BASE_DOMAIN=shop.localhost
+      # This cell in its control plane's cell directory (registered by the register-cell hook).
+      - CELL_ID=pool-1
+      - CELL_ROLE=pooled
+      - CELL_CAPACITY=100
       # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
       - PLATFORM_API_URL=http://platform-api.platform-dev:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100

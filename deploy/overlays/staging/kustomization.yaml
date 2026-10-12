@@ -12,6 +12,10 @@ configMapGenerator:
       - APP_ENV=staging
       - COOKIE_SECURE=true
       - TENANT_BASE_DOMAIN=shop-staging.localhost
+      # This cell in its control plane's cell directory (registered by the register-cell hook).
+      - CELL_ID=pool-1
+      - CELL_ROLE=pooled
+      - CELL_CAPACITY=100
       # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
       - PLATFORM_API_URL=http://platform-api.platform-staging:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-staging:8100
