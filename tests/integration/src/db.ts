@@ -1,5 +1,5 @@
 import pg from "pg";
-import { secret } from "./secrets.ts";
+import { cellSecret, secret } from "./secrets.ts";
 
 const identities = {
   superuser: ["postgres", "DB_SUPERUSER_PASSWORD"],
@@ -32,6 +32,26 @@ export async function platformQuery<T extends pg.QueryResultRow>(sql: string, pa
     database: "platform",
     user: "postgres",
     password: secret("DB_PLATFORM_SUPERUSER_PASSWORD"),
+  });
+  await client.connect();
+  try {
+    return (await client.query<T>(sql, params)).rows;
+  } finally {
+    await client.end();
+  }
+}
+
+/** Where each Compose cell's PostgreSQL listens on the host (dedicated-1 only with CELLS=2). */
+const cellDatabasePorts: Record<string, number> = { "pool-1": 55432, "dedicated-1": 55434 };
+
+/** Reads a cell's own database as its superuser, for assertions about where a shop's rows live. */
+export async function cellQuery<T extends pg.QueryResultRow>(cell: string, sql: string, params: unknown[] = []): Promise<T[]> {
+  const client = new pg.Client({
+    host: "127.0.0.1",
+    port: cellDatabasePorts[cell],
+    database: "shop",
+    user: "postgres",
+    password: cellSecret(cell, "DB_SUPERUSER_PASSWORD"),
   });
   await client.connect();
   try {

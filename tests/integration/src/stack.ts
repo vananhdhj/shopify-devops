@@ -4,9 +4,19 @@ import { secret } from "./secrets.ts";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
+/** The Makefile's Compose invocation: both cells' files and every secrets file. */
+const composeArgs = [
+  "compose",
+  "-f", "compose.yaml",
+  "-f", "compose.dedicated-1.yaml",
+  "--env-file", ".secrets/dev.env",
+  "--env-file", ".secrets/cells/pool-1.env",
+  "--env-file", ".secrets/compose-cells.env",
+];
+
 /** Runs `docker compose` against the local stack, the same way the Makefile does. */
 export function compose(...args: string[]): string {
-  return execFileSync("docker", ["compose", "--env-file", ".secrets/dev.env", "--env-file", ".secrets/cells/pool-1.env", ...args], {
+  return execFileSync("docker", [...composeArgs, ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -57,3 +67,14 @@ export function logLinesWith(service: string, correlationId: string): Record<str
     .filter((entry) => entry.requestId === correlationId);
 }
 
+
+/** True when the opt-in second cell (`make dev-up CELLS=2`) is running and healthy. */
+export function secondCellRunning(): boolean {
+  try {
+    return compose("ps", "--status", "running", "--format", "{{.Service}} {{.Health}}", "dedicated-1-storefront").includes(
+      "dedicated-1-storefront healthy",
+    );
+  } catch {
+    return false;
+  }
+}

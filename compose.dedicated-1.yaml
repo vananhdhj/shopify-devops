@@ -1,0 +1,224 @@
+# The opt-in second cell, `dedicated-1`: a complete cell of its own (PostgreSQL, Redis, both APIs,
+# the worker, the storefront) for one plus shop, registered with the same control plane and served
+# through the same edge. Started only by `make dev-up CELLS=2` (profile cells-2), for the
+# containment tests; the default stack keeps one cell. Every name carries the cell's prefix, so on
+# the shared network no service of one cell answers for the other's. Its secrets are its own
+# (.secrets/cells/dedicated-1.env, as DEDICATED_1_* in .secrets/compose-cells.env).
+# Generated from compose.yaml's pool-1 services; keep the two in step.
+
+services:
+  dedicated-1-postgres:
+    profiles: [cells-2]
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DEDICATED_1_DB_SUPERUSER_PASSWORD:?run make secrets}
+      POSTGRES_DB: shop
+    volumes:
+      - dedicated-1-pgdata:/var/lib/postgresql
+    # Host access for tests that check identity isolation and end state; loopback only.
+    ports:
+      - "127.0.0.1:55434:5432"
+    healthcheck:
+      # TCP, not the Unix socket: during first-run init the image runs a temporary
+      # socket-only server, which would otherwise report healthy before the real one starts.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "shop"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  dedicated-1-redis:
+    profiles: [cells-2]
+    image: redis:8-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${DEDICATED_1_REDIS_PASSWORD:?run make secrets}
+    volumes:
+      - dedicated-1-redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    environment:
+      REDIS_PASSWORD: ${DEDICATED_1_REDIS_PASSWORD}
+
+  dedicated-1-db-roles:
+    profiles: [cells-2]
+    image: postgres:18-alpine
+    environment:
+      PGHOST: dedicated-1-postgres
+      PGUSER: postgres
+      PGDATABASE: shop
+      PGPASSWORD: ${DEDICATED_1_DB_SUPERUSER_PASSWORD:?run make secrets}
+      DB_MIGRATOR_PASSWORD: ${DEDICATED_1_DB_MIGRATOR_PASSWORD:?run make secrets}
+      DB_CATALOG_PASSWORD: ${DEDICATED_1_DB_CATALOG_PASSWORD:?run make secrets}
+      DB_ORDER_PASSWORD: ${DEDICATED_1_DB_ORDER_PASSWORD:?run make secrets}
+    volumes:
+      - ./db/roles.sh:/roles.sh:ro
+    entrypoint: ["sh", "/roles.sh"]
+    depends_on:
+      dedicated-1-postgres:
+        condition: service_healthy
+
+  dedicated-1-migrate-catalog:
+    profiles: [cells-2]
+    image: ghcr.io/amacneil/dbmate:2
+    environment:
+      DATABASE_URL: postgres://migrator:${DEDICATED_1_DB_MIGRATOR_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /migrations
+      DBMATE_MIGRATIONS_TABLE: catalog.schema_migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db/catalog/migrations:/migrations:ro
+    command: ["--wait", "up"]
+    depends_on:
+      dedicated-1-db-roles:
+        condition: service_completed_successfully
+
+  dedicated-1-migrate-orders:
+    profiles: [cells-2]
+    image: ghcr.io/amacneil/dbmate:2
+    environment:
+      DATABASE_URL: postgres://migrator:${DEDICATED_1_DB_MIGRATOR_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /migrations
+      DBMATE_MIGRATIONS_TABLE: orders.schema_migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db/orders/migrations:/migrations:ro
+    command: ["--wait", "up"]
+    depends_on:
+      dedicated-1-db-roles:
+        condition: service_completed_successfully
+
+  dedicated-1-catalog-cart-api:
+    profiles: [cells-2]
+    build:
+      context: .
+      dockerfile: apps/catalog-cart-api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://catalog_app:${DEDICATED_1_DB_CATALOG_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
+      INTERNAL_INVENTORY_TOKEN: ${DEDICATED_1_INTERNAL_INVENTORY_TOKEN:?run make secrets}
+      ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}
+      TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
+      PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
+      APP_ENV: dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4001/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      dedicated-1-migrate-catalog:
+        condition: service_completed_successfully
+
+  dedicated-1-order-service:
+    profiles: [cells-2]
+    build:
+      context: .
+      dockerfile: apps/order-service/Dockerfile
+    environment:
+      DATABASE_URL: postgres://order_app:${DEDICATED_1_DB_ORDER_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
+      CATALOG_API_URL: http://dedicated-1-catalog-cart-api:4001
+      ORDER_TOKEN_SECRET: ${DEDICATED_1_ORDER_TOKEN_SECRET:?run make secrets}
+      ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}
+      TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
+      PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
+      APP_ENV: dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4002/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      dedicated-1-migrate-orders:
+        condition: service_completed_successfully
+      dedicated-1-catalog-cart-api:
+        condition: service_healthy
+
+  # No host port: the worker's listener is operational only, and the service can be scaled.
+  dedicated-1-worker:
+    profiles: [cells-2]
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      DATABASE_URL: postgres://order_app:${DEDICATED_1_DB_ORDER_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
+      REDIS_URL: redis://:${DEDICATED_1_REDIS_PASSWORD}@dedicated-1-redis:6379
+      CATALOG_API_URL: http://dedicated-1-catalog-cart-api:4001
+      INTERNAL_INVENTORY_TOKEN: ${DEDICATED_1_INTERNAL_INVENTORY_TOKEN:?run make secrets}
+      APP_ENV: dev
+      # Short retry and reconciliation windows in dev, so failure drills finish in seconds.
+      SETTLE_ATTEMPTS: "5"
+      SETTLE_BACKOFF_MS: "250"
+      RECONCILE_INTERVAL_MS: "2000"
+      RECONCILE_STALE_AFTER_MS: "5000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4003/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      dedicated-1-migrate-orders:
+        condition: service_completed_successfully
+      dedicated-1-catalog-cart-api:
+        condition: service_healthy
+      dedicated-1-redis:
+        condition: service_healthy
+
+  dedicated-1-storefront:
+    profiles: [cells-2]
+    build:
+      context: .
+      dockerfile: apps/storefront/Dockerfile
+    environment:
+      CATALOG_API_URL: http://dedicated-1-catalog-cart-api:4001
+      ORDER_SERVICE_URL: http://dedicated-1-order-service:4002
+      ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}
+      SESSION_SECRET: ${DEDICATED_1_SESSION_SECRET:?run make secrets}
+      # Merchant sign-in is checked by the control plane; the credentials never reach the cell.
+      PLATFORM_API_URL: http://platform-api:8101
+      PLATFORM_STOREFRONT_TOKEN: ${DEDICATED_1_PLATFORM_STOREFRONT_TOKEN:?run make secrets}
+      TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
+      APP_ENV: dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      dedicated-1-catalog-cart-api:
+        condition: service_healthy
+      dedicated-1-order-service:
+        condition: service_healthy
+
+  # Enters the cell into the control plane's cell directory once its units are healthy, as the
+  # cluster's PostSync hook does: role, capacity, and where its APIs answer, with its own token.
+  # A one-shot run by `make dev-up CELLS=2` after the cell is up (nothing waits on it, so `up --wait`
+  # would count its normal exit as a failure).
+  dedicated-1-cell-register:
+    profiles: [cells-2-jobs]
+    image: postgres:18-alpine
+    environment:
+      PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        wget -qO- --header "content-type: application/json" --header "x-platform-token: $$PLATFORM_CELL_TOKEN"
+        --post-data '{"role":"dedicated","capacity":1,"storefrontUrl":"http://dedicated-1-storefront:3000","catalogUrl":"http://dedicated-1-catalog-cart-api:4001","ordersUrl":"http://dedicated-1-order-service:4002"}'
+        http://platform-api:8101/internal/cells/dedicated-1/registration
+    depends_on:
+      dedicated-1-storefront:
+        condition: service_healthy
+      platform-api:
+        condition: service_healthy
+
+volumes:
+  dedicated-1-pgdata:
+  dedicated-1-redisdata:

@@ -1,6 +1,10 @@
 SHELL := /bin/bash
-# The platform's secrets, then the default cell's (pool-1): Compose runs the control plane and one cell.
-COMPOSE := docker compose --env-file .secrets/dev.env --env-file .secrets/cells/pool-1.env
+# The platform's secrets, then the default cell's (pool-1), then the other cells' (prefixed): Compose
+# runs the control plane and one cell, plus the opt-in second cell (dedicated-1) with CELLS=2.
+COMPOSE := docker compose -f compose.yaml -f compose.dedicated-1.yaml --env-file .secrets/dev.env \
+  --env-file .secrets/cells/pool-1.env --env-file .secrets/compose-cells.env
+CELLS ?= 1
+CELL_PROFILES := $(if $(filter 2,$(CELLS)),--profile cells-2,)
 CLUSTER := shop
 CONTEXT := k3d-$(CLUSTER)
 NAMESPACE := shop-dev
@@ -22,9 +26,11 @@ hooks:
 install:
 	@pnpm install --frozen-lockfile
 
-## Build and start the seeded stack; returns only once every health check passes
+## Build and start the seeded stack; returns only once every health check passes.
+## CELLS=2 adds the second cell (dedicated-1) for the containment tests.
 dev-up: secrets hooks
-	$(COMPOSE) up --detach --build --wait --remove-orphans
+	$(COMPOSE) $(CELL_PROFILES) up --detach --build --wait --remove-orphans
+	$(if $(filter 2,$(CELLS)),$(COMPOSE) --profile cells-2 run --rm dedicated-1-cell-register)
 	$(COMPOSE) run --rm seed
 
 ## Reset seed products to their seed price and stock
@@ -38,8 +44,9 @@ test: install dev-up
 	pnpm typecheck
 	pnpm test:integration
 
+## Stop the stack, both cells; volumes are kept
 dev-down:
-	$(COMPOSE) down
+	$(COMPOSE) --profile cells-2 down
 
 ## Create the single-node k3d lab cluster on Colima (Traefik on 127.0.0.1:8080)
 cluster-up:
