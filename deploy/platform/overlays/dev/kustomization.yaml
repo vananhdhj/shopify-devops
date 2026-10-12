@@ -16,6 +16,6 @@ configMapGenerator:
       - SEED_CANARY_SHOP=true
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
-    digest: sha256:0bf5d5b0757a1de7a8ebbd7d19e415f0232bdde60415ca5f8691877aebe98c55
+    digest: sha256:59a06260441a00f42c1c5c237082cab0ce5306e1aa74ac012a9769c7156300d9
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:7b61fb8ada694f9ad89981834975c30faccfcabbcf539b2aead066c90ad59cea
+    digest: sha256:c348413c91ec7996ba542e8c3a6e6adfa2db4bb838eabb774c63622b9db39484
