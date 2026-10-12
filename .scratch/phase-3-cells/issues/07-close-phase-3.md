@@ -4,7 +4,7 @@
 
 **Blocked by:** 05, 06
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `make drill-cell-outage CELL=dedicated-1`: scales the cell's PostgreSQL to zero, shows its shop answering 503 and the other cells' shops serving, restores it, and shows recovery; timings recorded
 - [ ] Memory per cell, edge, control plane, and node total with three cells, against the Phase 2 numbers
@@ -21,3 +21,5 @@ Implementation notes (2026-10-12):
 - Memory with three cells, against Phase 2: `docs/evidence/2026-10-12-phase-3-cluster.md` (a cell about 170 MiB, the edge 34 MiB, the control plane 88 MiB; 5.4 GB still available in the VM).
 - ADRs 0018 (one edge router for every cell), 0019 (cells register themselves with credentials of their own), 0020 (placement by plan in the signup transaction); ADR-0011 amended. `CONTEXT.md`: Cell (with its roles), Cell directory, Plan, Placement, Edge router, Fleet view.
 - `make fleet` was run on the cluster once ticket 06's image landed; its output opens the evidence.
+
+Resolved 2026-10-12 with PR #34 (`72e762e`, digests `e80cc5e`): the fleet Synced and Healthy on `e80cc5e`, and the live `cells-dev` ApplicationSet matches main.
