@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet compat
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -43,6 +43,16 @@ test: install dev-up
 	@scripts/warn-cluster-running.sh $(CLUSTER)
 	pnpm typecheck
 	pnpm test:integration
+
+## Mixed-version check (ADR-0021): the previous release's cell images (the last wave's pins) with
+## this tree's migrations, control plane, and edge, then a shop's whole life through the edge
+COMPAT_OVERRIDE := .local/compose.compat.yaml
+compat: secrets
+	@mkdir -p .local && scripts/compat-override.py > $(COMPAT_OVERRIDE)
+	$(COMPOSE) -f $(COMPAT_OVERRIDE) up --detach --build --wait --remove-orphans
+	$(COMPOSE) -f $(COMPAT_OVERRIDE) run --rm seed
+	pnpm turbo run build --filter="@shop/integration-tests^..." # the workspace packages the tests import
+	pnpm --filter @shop/integration-tests exec vitest run src/compat.test.ts
 
 ## Stop the stack, both cells, and the promoter if a test left it; volumes are kept
 dev-down:
