@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # What runs where: every cell in the control plane's directory (role, shops by status against its
 # capacity, readiness of its catalog and order APIs, its synthetic shop) and, on the lab cluster, each Argo CD
-# Application of the cells, the edge, and the control plane (sync, health, revision) with the
+# Application of the cells, the edge, and the control plane (release wave, sync, health, revision) with the
 # image digests each one runs, one row per image so a cell left behind stands out.
 #   fleet.sh cluster <context> <platform-namespace>   (port-forwards the control plane's internal listener)
 #   fleet.sh compose                                  (the local stack, http://127.0.0.1:8101)
@@ -38,6 +38,7 @@ jq -r '
 apps="$(kubectl --context "$context" -n argocd get applications.argoproj.io -o json |
   jq '[.items[] | select(.metadata.name | test("^(cell-|edge-|platform-)")) | {
     name: .metadata.name,
+    wave: (.metadata.labels["shop.example/wave"] // "-"),
     sync: (.status.sync.status // "-"),
     health: (.status.health.status // "-"),
     revision: ((.status.sync.revision // "-")[0:7]),
@@ -45,7 +46,7 @@ apps="$(kubectl --context "$context" -n argocd get applications.argoproj.io -o j
       | {unit, version: ([.tag, .digest] | map(select(.)) | join("@") | if . == "" then "-" else . end)}]
   }] | sort_by(.name)')"
 echo
-jq -r '["APPLICATION", "SYNC", "HEALTH", "REVISION"], (.[] | [.name, .sync, .health, .revision]) | @tsv' <<<"$apps" | column -t -s $'\t'
+jq -r '["APPLICATION", "WAVE", "SYNC", "HEALTH", "REVISION"], (.[] | [.name, .wave, .sync, .health, .revision]) | @tsv' <<<"$apps" | column -t -s $'\t'
 echo
 jq -r '
   (map(.name)) as $names

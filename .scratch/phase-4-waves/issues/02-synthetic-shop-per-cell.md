@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Registration ensures the cell's synthetic shop: handle `synthetic-<cell>` (the canary keeps its seeded `canary`), internal, placed in that cell, provisioned through the outbox; at most one internal shop per cell (unique index)
 - [ ] `place()` and the registration capacity check count only non-internal shops; the fleet view's `placed` likewise, with the synthetic shop shown apart
@@ -26,3 +26,5 @@ Implementation notes (2026-10-13):
 Rollout: no new secret. At the merge commit, the old images run without the seed settings, which they treat as off. After the digest commit, the platform migration runs and each cell registers again on its sync. If a cell's registration reached the old control plane first, its synthetic shop appears on that cell's next sync. Provisioning retries until the cell's new catalog API answers.
 
 `make test CELLS=2` with the k3d cluster stopped: 32 files passed. In `cells.test.ts` two tests failed, both test mistakes: a check that ran before the shop's check step was recorded, and, as a result, a later plus signup that took that test's free dedicated cell. After the fixes `cells.test.ts` and `containment.test.ts` pass (17 tests). Locally `synthetic-pool-1` and `synthetic-dedicated-1` are ACTIVE, and a decline Checkout in each ends Rejected.
+
+Resolved 2026-10-13 with PR #37 (`b26208b`, digests `8f073f3`). The rollout reached a node starved by the host: Argo CD's repo server crash-looped on its 1 s probes, so no cell could render (fixed by #39, already applied), and the cells took about 40 minutes to sync. As expected, pool-1 and dedicated-1 had registered against the old control plane. One manual sync of each re-ran its registration hook, and both synthetic shops were ACTIVE within a minute. `make fleet` shows `canary`, `synthetic-pool-1`, and `synthetic-dedicated-1` ACTIVE, with dedicated-1 at 1/1 placed (the plus shop) beside its synthetic shop. A decline Checkout through the ingress in each ended Rejected.

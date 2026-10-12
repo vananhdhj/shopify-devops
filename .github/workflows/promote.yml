@@ -1,0 +1,69 @@
+name: promote
+
+# Phase 4: moves a release one wave on. Dispatched by the promoter in the lab cluster once the
+# previous wave passed its gate (or by the operator: `gh workflow run promote.yml -f wave=1`). The
+# promoter holds only a token that can dispatch workflows; the commit is made here with the deploy
+# key, the one identity that may push to main (ADR-0003). The script refuses any digest the
+# previous wave does not run, so a dispatch can only move a gated release on, never introduce one.
+on:
+  workflow_dispatch:
+    inputs:
+      wave:
+        description: The wave to promote to (1 pooled, 2 dedicated)
+        required: true
+        type: string
+      digests:
+        description: 'Gated digests as JSON {"<image>": "sha256:…"}; empty takes the previous wave''s'
+        required: false
+        default: ""
+        type: string
+      gate:
+        description: What the gate saw (recorded in the commit)
+        required: false
+        default: promoted by hand
+        type: string
+
+permissions:
+  contents: read
+
+# One promotion at a time; never cancel one half way.
+concurrency:
+  group: promote-dev
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+      - name: Point the wave's cells at the gated digests
+        env:
+          WAVE: ${{ inputs.wave }}
+          DIGESTS: ${{ inputs.digests }}
+        run: .github/scripts/promote-wave.sh "$WAVE" "$DIGESTS"
+      - name: Commit and push the promotion
+        env:
+          WAVE: ${{ inputs.wave }}
+          GATE: ${{ inputs.gate }}
+        run: |
+          if git diff --quiet; then
+            echo "wave ${WAVE} already runs these digests" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cells="$(git diff --name-only | xargs -n1 dirname | xargs -n1 basename | sort -u | paste -sd, -)"
+          images="$(git diff -U0 | sed -nE 's/^\+ +digest: sha256:(.{12}).*/\1/p' | sort -u | paste -sd, -)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "deploy(dev): promote to wave ${WAVE} (${cells})" -m "Digests: ${images}" -m "Gate: ${GATE}"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "promoted wave ${WAVE} (${cells}): ${images}" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "push rejected (main moved); rebasing, attempt ${attempt}"
+            git pull --rebase origin main
+          done
+          exit 1
