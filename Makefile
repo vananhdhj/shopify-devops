@@ -51,6 +51,7 @@ compat: secrets
 	@mkdir -p .local && scripts/compat-override.py > $(COMPAT_OVERRIDE)
 	$(COMPOSE) -f $(COMPAT_OVERRIDE) up --detach --build --wait --remove-orphans
 	$(COMPOSE) -f $(COMPAT_OVERRIDE) run --rm seed
+	pnpm turbo run build --filter="@shop/integration-tests^..." # the workspace packages the tests import
 	pnpm --filter @shop/integration-tests exec vitest run src/compat.test.ts
 
 ## Stop the stack, both cells, and the promoter if a test left it; volumes are kept
