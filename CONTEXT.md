@@ -19,8 +19,28 @@ The signed statement, attached at the platform's edge, of which tenant a request
 _Avoid_: Tenant header, tenant ID parameter
 
 **Cell**:
-One complete, independently deployed copy of the shop system, serving a group of tenants.
+One complete, independently deployed copy of the shop system, with its own database and secrets, serving a group of tenants. Each cell has a role: the **canary** (the platform's own synthetic shop), **pooled** (many starter shops), or **dedicated** (one plus shop alone). A failure inside one cell reaches only that cell's tenants.
 _Avoid_: Pod, cluster, shard, environment
+
+**Cell directory**:
+The control plane's list of cells: each one's role, capacity in shops, and where it answers. A cell enters it by registering itself once it is healthy; only a registered cell takes new shops.
+_Avoid_: Cell registry, inventory, fleet (for the list itself)
+
+**Plan**:
+What a tenant pays for, which decides the kind of cell it runs in: **starter** shares a pooled cell; **plus** gets a dedicated cell of its own.
+_Avoid_: Tier, package, subscription
+
+**Placement**:
+The choice of a new tenant's cell by its plan, made once when the tenant is created; when no cell of the plan's kind has room, the signup is refused rather than queued.
+_Avoid_: Scheduling, assignment, allocation
+
+**Edge router**:
+The one entry point for every shop: it finds the tenant a request's address names and that tenant's cell, and passes the request to that cell with a tenant context only that cell accepts.
+_Avoid_: Ingress, gateway, load balancer, (cell) router
+
+**Fleet view**:
+The platform operator's picture of every cell at once: its role, how full it is, whether it is ready, and which version it runs.
+_Avoid_: Dashboard, status page, inventory
 
 **Platform operator**:
 The person who runs the platform itself (cells, releases, incidents); never a Merchant of any tenant.
@@ -32,18 +52,18 @@ _Avoid_: Admin backend, management API, master
 
 **Registry**:
 The control plane's record of every tenant: its handle, name, status, cell, and Merchant credential.
-_Avoid_: Tenant table, shop database, directory
+_Avoid_: Tenant table, shop database, tenant directory
 
 **Signup**:
 A prospective Merchant's request for a new tenant; one signup makes at most one tenant, however often it is retried.
 _Avoid_: Registration, onboarding, account creation
 
 **Provisioning**:
-The steps that turn a new tenant into a working shop: placing it in a cell, activating it, and checking it as a buyer would.
+The steps that turn a new tenant into a working shop: placing it in a cell if signup did not, activating it, and checking it as a buyer would.
 _Avoid_: Setup, onboarding, deployment
 
 **Active shop**:
-A tenant that the routers serve to buyers and its Merchant can sign in to.
+A tenant that the edge router serves to buyers and its Merchant can sign in to.
 _Avoid_: Live shop, enabled tenant
 
 **Suspended shop**:

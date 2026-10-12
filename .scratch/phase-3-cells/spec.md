@@ -1,6 +1,6 @@
 # Spec: Phase 3 — cells
 
-**Status:** ready-for-agent (decisions approved by the author on 2026-10-12; tickets under `issues/`)
+**Status:** resolved (2026-10-12: tickets 01–07 resolved; PRs #27–#33 and the ticket 07 PR merged and deployed to the lab cluster)
 
 Background: the blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`) puts Phase 3 after the control plane: "Cells: ApplicationSet, three cells, placement by plan, fleet view, memory measurement", with the exit gate "Tenants on different cells; one cell's failure is contained; measured memory recorded." Phases 1 and 2 are resolved; ADRs 0001–0016 are binding. Lessons that shape this phase: dependencies deploy before dependents, a release that adds a Secret key needs `make secrets` against the cluster first, and local suites run with the cluster stopped.
 

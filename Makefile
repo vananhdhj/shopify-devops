@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -81,6 +81,11 @@ drill-stale-pending:
 ## Control-plane outage drill: platform-api stopped; existing shops keep serving, signups fail then recover
 drill-control-plane-outage:
 	@scripts/drill-control-plane-outage.sh
+
+## Cell outage drill: one cell's PostgreSQL stopped; its shop fails, other cells' shops keep serving
+CELL ?= dedicated-1
+drill-cell-outage:
+	@scripts/drill-cell-outage.sh $(CELL)
 
 ## The platform operator's shop actions (control plane, internal listener; PLATFORM_URL for the cluster)
 tenant-list:

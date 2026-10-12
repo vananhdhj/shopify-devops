@@ -244,10 +244,11 @@ The bad-release drill is written up step by step in
 
 ## Measured results
 
-All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11.
+All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11, Phase 3 on 2026-10-12.
 
 | What | Result |
 |---|---|
+| Three cells on the cluster (Phase 3) | Starter shops in `pool-1`, the synthetic shop in `canary`, a plus shop alone in `dedicated-1` (a second plus signup refused: no capacity); with `dedicated-1`'s PostgreSQL stopped for 60 s its shop failed within 1 s while the other cells served 120 of 120 pages, and it recovered 5 s after the restore; a cell uses about 170 MiB, the edge router 34 MiB, with 5.4 GB still available in the VM ([Phase 3 evidence](docs/evidence/2026-10-12-phase-3-cluster.md)) |
 | Control plane on the cluster (Phase 2) | A shop signed up through `make smoke` was ACTIVE 0.24 s after signup and checked through the router at 1.84 s; deleted with every one of its rows verified gone 15.4 s after the request; through a 60 s control-plane outage, 120 of 120 buyer pages served and signups recovered 21 s after restore; the control plane uses 108 MiB, with 6.1 GB still free in the VM ([Phase 2 evidence](docs/evidence/2026-10-11-phase-2-cluster.md)) |
 | Service-HTTP, isolation, and lifecycle suite (Phase 2) | 167 tests in 30 files pass in CI on amd64 and arm64, including signup retries (20 concurrent → one shop), crash-resumed provisioning and deletion, two lifecycle workers, and deletion leaving zero rows |
 | Service-HTTP and isolation suite (Phase 1) | 139 tests in 26 files pass from a wiped stack and in CI on amd64 and arm64, including the cross-tenant suite (API, tenant context, storefront, database, schema) and a worker that survives 40 connection cuts while Orders settle |
