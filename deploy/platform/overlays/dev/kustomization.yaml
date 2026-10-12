@@ -14,6 +14,6 @@ configMapGenerator:
       - EDGE_URL=http://edge.edge-dev:8000
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
-    digest: sha256:906a717a5dfcde57e845a97497478e9b172cc7d25b3bef2e3669032380d619af
+    digest: sha256:fd48981c3c72f2e065627b394be371e69577cbc7ac2b404106dd76e9ae3edbf2
   - name: ghcr.io/vananhdhj/shopify-devops/db-migrations
-    digest: sha256:e706c696bffe2e26ea75798c20f2c1467c681d614618461ab2889cc26ec8d92e
+    digest: sha256:7426f0bd27ffdeb7882814e3ad8ae755a65ffa647299012152d8f83f2bf1c798
