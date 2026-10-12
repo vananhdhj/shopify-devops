@@ -99,9 +99,23 @@ const stepCount = async (tenantId: string, step: string) =>
 const operator = (path: string) =>
   fetch(`${platformInternalUrl}${path}`, { method: "POST", headers: { "x-operator-token": secret("PLATFORM_OPERATOR_TOKEN") } });
 
-beforeAll(retireTestCells);
+/**
+ * The stack's own dedicated cell (dedicated-1, with CELLS=2) is set aside while this file runs, so
+ * the placement tests see only the dedicated cells they register; restored afterwards as it was.
+ */
+let setAside: { id: string; registered_at: Date }[] = [];
+beforeAll(async () => {
+  await retireTestCells();
+  setAside = await platformQuery(
+    "SELECT id, registered_at FROM platform.cells WHERE role = 'dedicated' AND id NOT LIKE 'test-%' AND registered_at IS NOT NULL",
+  );
+  await platformQuery("UPDATE platform.cells SET registered_at = NULL WHERE id = ANY($1)", [setAside.map((cell) => cell.id)]);
+});
 afterAll(async () => {
   await retireTestCells();
+  for (const cell of setAside) {
+    await platformQuery("UPDATE platform.cells SET registered_at = $2 WHERE id = $1", [cell.id, cell.registered_at]);
+  }
   for (const file of written) rmSync(file, { force: true });
 });
 

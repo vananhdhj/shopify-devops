@@ -7,8 +7,8 @@
 #                              one file per cell and key, as the cluster mounts them from a Secret
 set -euo pipefail
 
-# The cells this laptop runs, in Compose and on the lab cluster.
-cells=(pool-1)
+# The cells this laptop runs, in Compose (dedicated-1 only with CELLS=2) and on the lab cluster.
+cells=(pool-1 dedicated-1)
 # What every cell has of its own.
 cell_keys=(
   DB_SUPERUSER_PASSWORD DB_MIGRATOR_PASSWORD DB_CATALOG_PASSWORD DB_ORDER_PASSWORD REDIS_PASSWORD
@@ -108,3 +108,15 @@ for cell in "${cells[@]}"; do
   printf '%s' "$(cell_value "$cell" TENANT_CONTEXT_SECRET)" >".secrets/mounts/edge/$cell.tenant-context-secret"
 done
 chmod 644 .secrets/mounts/platform/* .secrets/mounts/edge/*
+
+# Compose reads one set of variables for the whole stack, so every cell but the default one is also
+# written with its id as prefix (dedicated-1's DB_SUPERUSER_PASSWORD as DEDICATED_1_DB_SUPERUSER_PASSWORD),
+# for compose.dedicated-1.yaml. Rewritten every run, from the cell files.
+compose_file=".secrets/compose-cells.env"
+: >"$compose_file"
+chmod 600 "$compose_file"
+for cell in "${cells[@]}"; do
+  [ "$cell" = pool-1 ] && continue
+  prefix="$(printf '%s' "$cell" | tr 'a-z-' 'A-Z_')_"
+  sed "s/^/$prefix/" ".secrets/cells/$cell.env" >>"$compose_file"
+done
