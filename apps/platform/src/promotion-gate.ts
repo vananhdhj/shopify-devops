@@ -45,7 +45,9 @@ export interface Candidate {
 
 /**
  * Every wave whose cells agree on a release the next wave does not run yet, and so must be soaked
- * before promotion. The last wave has no next wave and is never a candidate.
+ * before promotion. Only a settled wave counts: while a cell is rolling (not Synced and Healthy) it
+ * runs a mix of old and new images, which is no release at all. The last wave has no next wave and
+ * is never a candidate.
  */
 export function candidates(cells: CellState[]): Candidate[] {
   const waves = [...new Set(cells.map((cell) => cell.wave))].sort((a, b) => a - b);
@@ -53,8 +55,9 @@ export function candidates(cells: CellState[]): Candidate[] {
   for (const wave of waves) {
     const here = cells.filter((cell) => cell.wave === wave);
     const next = cells.filter((cell) => cell.wave === wave + 1);
+    const settled = here.every((cell) => cell.synced && cell.healthy);
     const release = waveRelease(here);
-    if (release && Object.keys(release).length > 0 && next.length > 0 && !runsRelease(next, release)) {
+    if (settled && release && Object.keys(release).length > 0 && next.length > 0 && !runsRelease(next, release)) {
       result.push({ wave, release, cells: here });
     }
   }

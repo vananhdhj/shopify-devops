@@ -46,6 +46,10 @@ describe("which wave holds a release to soak", () => {
     expect(candidates([cell("canary", 0, B), cell("p1", 1, A), cell("p2", 1, B), cell("d1", 2, A)]).map((c) => c.wave)).toEqual([0]);
   });
 
+  it("waits while a wave's cell is still rolling (its images a mix of two releases)", () => {
+    expect(candidates([cell("canary", 0, B, false), cell("pool-1", 1, A), cell("dedicated-1", 2, A)])).toEqual([]);
+  });
+
   it("names a release by its digests, whatever their order", () => {
     expect(releaseKey({ "img/worker": "sha256:a2", "img/storefront": "sha256:a1" })).toBe(releaseKey(A));
     expect(releaseKey(A)).not.toBe(releaseKey(B));
