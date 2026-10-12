@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `deploy/cells/dev/<cell>/cell.json` gains `wave` (canary 0, pool-1 1, dedicated-1 2); the ApplicationSet labels each Application `shop.example/wave`
 - [ ] `.github/workflows/promote.yml` (`workflow_dispatch`: `wave`, `digests` as JSON `{image: digest}`, `gate` summary): checks that every cell of wave `wave - 1` pins exactly `digests` on `main`, writes them into every cell of `wave`, commits `deploy(dev): promote … to wave <n> (<cells>)` with the deploy key; one promotion at a time; refuses wave 0 and unknown images
@@ -21,3 +21,7 @@ Implementation notes (2026-10-13):
 - CI checks every dev cell's `cell.json`: `cell` matches its directory, a namespace, an integer wave, and waves 0, 1, 2… with no gap.
 
 Tested `promote-wave.sh` in an Alpine container (bash 5, yq 4, jq) on a copy of the dev cells. Refused: wave 0, a wave with no cells, malformed JSON, and a digest the canary does not run. Done: wave 1 took the canary's newer digest, a repeat changed nothing, and wave 2 by hand took wave 1's pins. After the merge the ApplicationSet must be applied by hand (`kubectl apply -f deploy/argocd/cells-dev.yaml`) for the wave labels; the workflow is then dispatched once by hand.
+
+Resolved 2026-10-13 with PR #38 (`190965d`, digests `9bbb25a`). The ApplicationSet was applied from `main`: the cell Applications carry `shop.example/wave` 0 (canary), 1 (pool-1), and 2 (dedicated-1). `promote.yml` was dispatched twice by hand:
+- `wave=1` with no digests: green, "wave 1 already runs these digests", nothing pushed (every cell ran `9bbb25a`'s digests). Run 38302734749.
+- `wave=1` with a storefront digest the canary does not run: failed, "wave 0 does not run exactly these digests", nothing pushed. Run 38302778055.
