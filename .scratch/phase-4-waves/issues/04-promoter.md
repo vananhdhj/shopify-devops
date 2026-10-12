@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02, 03
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `platform.promotions` and `platform.promotion_events` (migration): digest set, wave, state `soaking|promoted|halted`, soak start, gate results, exposed cells and real-tenant count
 - [ ] `apps/platform/src/promoter-server.ts` in the platform image; `deploy/platform/base/platform-promoter.yaml` (one replica, probes per ADR-0017, a ServiceAccount with a Role to read Applications in `argocd`)
@@ -49,3 +49,5 @@ Part 2 (this PR, after part 1's digest commit and `make secrets`):
 - `platform-secrets` already holds `GITHUB_PROMOTE_TOKEN`: `make secrets` ran on 2026-10-13 before this PR.
 
 Server dry-run on the cluster: the ServiceAccount, ClusterRole, ClusterRoleBinding, Deployment, and PrometheusRule are accepted.
+
+Resolved 2026-10-13 with PRs #40 (`1d28dd1`, digests `78c60d2`) and #41 (`cac3981`). On the cluster: the migration made `platform.promotions`; `platform-promoter` Ready with no restart at 21:03; its ticks succeed (listing Argo CD's Applications through its ClusterRole works), and with every wave on the same release it soaked nothing and dispatched nothing (no row in `platform.promotions`); Prometheus scrapes it (`up` 1) and has loaded `PromotionHalted` (health ok).
