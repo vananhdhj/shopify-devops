@@ -1,4 +1,4 @@
-# Dev only: after every sync, reset the seed products to their seed price and Stock, so the
+# Dev only: after every sync, reset the cell's seed products to their seed price and Stock, so the
 # lab always starts from known data. Never part of a production-like overlay.
 apiVersion: batch/v1
 kind: Job
@@ -26,6 +26,8 @@ spec:
           env:
             - name: PGHOST
               value: postgres
+            - name: SEED_FILE
+              value: catalog.sql # pool-1's shops; the canary cell patches it
             - name: DB_MIGRATOR_PASSWORD
               valueFrom: { secretKeyRef: { name: shop-secrets, key: DB_MIGRATOR_PASSWORD } }
           securityContext:

@@ -1,11 +1,14 @@
-# The dev environment on the laptop's k3d cluster. CI rewrites the `digest:` lines below after
-# each release build (ADR-0003); everything else changes only through pull requests.
+# Cell canary of the dev environment: the first cell every release reaches (Phase 4 adds the
+# waves). It holds only internal shops, the platform's own synthetic shop "canary", whose seed
+# catalog is reset after every sync. CI rewrites the `digest:` lines below after each release
+# build (ADR-0003).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: shop-dev
+namespace: cell-canary-dev
 resources:
-  - ../../base
-  - seed-job.yaml
+  - ../../../base
+components:
+  - ../../components/dev-seed
 configMapGenerator:
   - name: shop-env
     literals:
@@ -13,12 +16,28 @@ configMapGenerator:
       - COOKIE_SECURE=false # plain http on the lab ingress
       - TENANT_BASE_DOMAIN=shop.localhost
       # This cell in its control plane's cell directory (registered by the register-cell hook).
-      - CELL_ID=pool-1
-      - CELL_ROLE=pooled
-      - CELL_CAPACITY=100
+      - CELL_ID=canary
+      - CELL_ROLE=canary
+      - CELL_CAPACITY=5
       # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
       - PLATFORM_API_URL=http://platform-api.platform-dev:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100
+patches:
+  # The seed job resets the synthetic shop's catalog, not pool-1's shops.
+  - target: { kind: Job, name: db-seed }
+    patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: db-seed
+      spec:
+        template:
+          spec:
+            containers:
+              - name: db-seed
+                env:
+                  - name: SEED_FILE
+                    value: canary.sql
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
     digest: sha256:2b51124d4583c71703ba116ebd9eebcf5fa3d1e4bd6795606be6b56d51c8fc7f

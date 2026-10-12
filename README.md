@@ -145,7 +145,7 @@ kubectl --context k3d-shop -n monitoring port-forward svc/monitoring-grafana 808
 
 ```sh
 make drill-stale-pending    # stops the worker: ShopOldestPendingOrderStale fires, then resolves
-make smoke MODE=fault       # after merging a commit that sets FAULT_CHECKOUT_ERRORS=true in deploy/overlays/dev
+make smoke MODE=fault       # after merging a commit that sets FAULT_CHECKOUT_ERRORS=true in deploy/cells/dev/pool-1
 make smoke MODE=recover     # start before merging the `git revert`; ends when the alert has resolved
 ```
 
@@ -162,8 +162,8 @@ The bad-release drill is written up step by step in
    requests get no deployment credentials.
 2. **Merge to `main`.** The release workflow builds each affected image once, natively on amd64
    and arm64 runners, pushes it to GHCR by digest, and merges a multi-arch index.
-3. **Digest commit.** The `deploy-dev` job commits the new digests into `deploy/overlays/dev`
-   with the deploy key, the one identity allowed to bypass the ruleset. Commits that touch only
+3. **Digest commit.** The `deploy-dev` job commits the new digests into every dev cell's directory
+   (`deploy/cells/dev/<cell>`), the control plane's, and the edge's overlay with the deploy key, the one identity allowed to bypass the ruleset. Commits that touch only
    `deploy/` do not start another release.
 4. **GitOps.** Argo CD polls `main`, syncs the dev overlay with automated prune and self-heal,
    runs the database migration as a PreSync job, rolls the Deployments, and reseeds the dev data
@@ -303,8 +303,9 @@ Generated secrets stay in `.secrets/`; delete the folder (and the stack's volume
   catalog-cart-api, order-service, worker, db-migrations
 - `packages/`: shared API contracts, service plumbing, and tenancy (the signed tenant context)
 - `tests/integration/`: the service-HTTP test suite
-- `deploy/`: Kustomize base and overlays for the cell (`deploy/base`, `deploy/overlays`) and the
-  control plane (`deploy/platform`), Argo CD Applications, monitoring, k3d config
+- `deploy/`: Kustomize: the cell's base (`deploy/base`) and one directory per cell
+  (`deploy/cells/<env>/<cell>`), the control plane (`deploy/platform`), the edge (`deploy/edge`),
+  Argo CD Applications and the cells' ApplicationSet, monitoring, k3d config
 - `scripts/`: secrets, smoke and drills
 - `docs/adr/`: decisions; `docs/evidence/`: measurements and drill records
 - `.scratch/`: specs and tickets, one folder per phase

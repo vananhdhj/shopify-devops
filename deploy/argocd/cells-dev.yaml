@@ -1,0 +1,51 @@
+# The dev cells, one Argo CD Application per directory under deploy/cells/dev (from its cell.json:
+# the cell's id and namespace), so adding a cell is a pull request that adds a directory. Each
+# Application syncs and fails on its own: automated sync, prune last, self-heal, retries, as for
+# the control plane and the edge. Rollback is a Git revert.
+#
+# Removing a cell's directory, or this ApplicationSet, deletes the Application but never the
+# cell's resources (preserveResourcesOnDeletion): a cell holds shops' data, and emptying one is a
+# deliberate move of its shops first (Phase 6), not a side effect of a deleted directory.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cells-dev
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/vananhdhj/shopify-devops.git
+        revision: main
+        files:
+          - path: deploy/cells/dev/*/cell.json
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "cell-{{.cell}}-dev"
+      labels:
+        shop.example/cell: "{{.cell}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/vananhdhj/shopify-devops.git
+        targetRevision: main
+        path: "{{.path.path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{.namespace}}" # created, with the cell's Secret, by `make secrets`
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          # Prune only after every other resource of the sync is healthy (Phase 2 hardening).
+          - PruneLast=true
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m

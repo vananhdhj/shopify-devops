@@ -1,12 +1,16 @@
 # Argo CD for the laptop lab (chart pinned in the Makefile). Only what GitOps for one repo needs:
-# no SSO (Dex), no notifications, no ApplicationSets. The UI/API stays a ClusterIP service,
+# no SSO (Dex), no notifications; the ApplicationSet controller makes one Application per cell
+# (deploy/argocd/cells-dev.yaml). The UI/API stays a ClusterIP service,
 # reached only through `kubectl port-forward`; plain HTTP is fine on that loopback tunnel.
 dex:
   enabled: false
 notifications:
   enabled: false
 applicationSet:
-  replicas: 0
+  replicas: 1
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
 configs:
   params:
     server.insecure: true

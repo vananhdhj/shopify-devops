@@ -7,8 +7,10 @@
 #                              one file per cell and key, as the cluster mounts them from a Secret
 set -euo pipefail
 
-# The cells this laptop runs, in Compose (dedicated-1 only with CELLS=2) and on the lab cluster.
-cells=(pool-1 dedicated-1)
+# The cells this laptop runs: one per directory under deploy/cells/dev (the lab cluster), the same
+# ids in Compose (pool-1, and dedicated-1 with CELLS=2). Adding a cell's directory adds its secrets.
+cells=()
+for dir in deploy/cells/dev/*/; do cells+=("$(basename "$dir")"); done
 # What every cell has of its own.
 cell_keys=(
   DB_SUPERUSER_PASSWORD DB_MIGRATOR_PASSWORD DB_CATALOG_PASSWORD DB_ORDER_PASSWORD REDIS_PASSWORD
