@@ -36,8 +36,9 @@ for cell_json in deploy/cells/dev/*/cell.json; do
   cell_namespace="$(sed -n 's/.*"namespace": *"\([^"]*\)".*/\1/p' "$cell_json")"
   apply_secret "$cell_namespace" shop-secrets <".secrets/cells/$cell.env"
 done
-# The control plane: its own database passwords, its tokens, and the seeded shops' password hashes.
-grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS)=' .secrets/dev.env |
+# The control plane: its own database passwords, its tokens, the seeded shops' password hashes, and
+# the promoter's GitHub token (created by the author, never generated: Actions write on this repo only).
+grep -E '^(DB_PLATFORM_[A-Z_]+|PLATFORM_[A-Z_]+_TOKEN|MERCHANT_CREDENTIALS|GITHUB_PROMOTE_TOKEN)=' .secrets/dev.env |
   apply_secret "$platform_namespace" platform-secrets
 # The per-cell secrets the platform-level units hold, as files `<cell>.<key>` (see
 # scripts/secrets.sh): the control plane's cell and storefront tokens, the edge's tenant-context

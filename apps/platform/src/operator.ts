@@ -103,3 +103,47 @@ export async function act(db: Pool, handle: string, action: OperatorAction): Pro
     return { outcome: "done", tenantId: tenant.id, status: move.to };
   });
 }
+
+export interface PromotionSummary {
+  id: string;
+  wave: number;
+  cells: string[];
+  state: string;
+  digests: Record<string, string>;
+  soakStartedAt: string;
+  dispatchedAt: string | null;
+  decidedAt: string | null;
+  failure: { cell: string; check: string; detail: string } | null;
+  exposedCells: string[] | null;
+  exposedTenants: number | null;
+}
+
+/** The promoter's most recent releases, newest first (Phase 4). */
+export async function listPromotions(db: Queryable, limit = 20): Promise<PromotionSummary[]> {
+  const { rows } = await db.query<{
+    id: string;
+    wave: number;
+    cells: string[];
+    state: string;
+    digests: Record<string, string>;
+    soak_started_at: Date;
+    dispatched_at: Date | null;
+    decided_at: Date | null;
+    gate: { failure?: { cell: string; check: string; detail: string } };
+    exposed_cells: string[] | null;
+    exposed_tenants: number | null;
+  }>("SELECT * FROM platform.promotions ORDER BY id DESC LIMIT $1", [limit]);
+  return rows.map((row) => ({
+    id: row.id,
+    wave: row.wave,
+    cells: row.cells,
+    state: row.state,
+    digests: row.digests,
+    soakStartedAt: row.soak_started_at.toISOString(),
+    dispatchedAt: row.dispatched_at?.toISOString() ?? null,
+    decidedAt: row.decided_at?.toISOString() ?? null,
+    failure: row.gate.failure ?? null,
+    exposedCells: row.exposed_cells,
+    exposedTenants: row.exposed_tenants,
+  }));
+}
