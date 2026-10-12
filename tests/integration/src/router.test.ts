@@ -18,7 +18,7 @@ describe("router", () => {
     await expect
       .poll(() => logLinesWith("storefront", requestId)[0], { timeout: 5_000 })
       .toMatchObject({ tenant: tenant.handle, req: { method: "GET", path: "/" } });
-    await expect.poll(() => logLinesWith("router", requestId).at(-1), { timeout: 5_000 }).toMatchObject({
+    await expect.poll(() => logLinesWith("edge", requestId).at(-1), { timeout: 5_000 }).toMatchObject({
       tenant: tenant.handle,
       res: { statusCode: 200 },
     });
@@ -44,7 +44,7 @@ describe("router", () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toBe("No shop at this address.\n");
-    await expect.poll(() => logLinesWith("router", requestId).at(-1), { timeout: 5_000 }).toMatchObject({
+    await expect.poll(() => logLinesWith("edge", requestId).at(-1), { timeout: 5_000 }).toMatchObject({
       res: { statusCode: 404 },
     });
     expect(logLinesWith("storefront", requestId)).toEqual([]);

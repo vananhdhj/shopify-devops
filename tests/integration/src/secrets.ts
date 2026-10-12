@@ -25,3 +25,6 @@ export function secret(name: string): string {
 
 /** Where `make secrets` writes the per-cell secrets the control plane holds, mounted into it in Compose. */
 export const platformCredentialsDir = `${secretsDir}mounts/platform`;
+
+/** Where `make secrets` writes each cell's tenant-context secret for the edge, mounted into it in Compose. */
+export const edgeCredentialsDir = `${secretsDir}mounts/edge`;

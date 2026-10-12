@@ -1,12 +1,14 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import type { FastifyBaseLogger } from "fastify";
 import { Counter, Gauge, type Registry } from "prom-client";
-import type { TenantRoute, TenantRouteTable } from "@shop/contracts";
+import type { CellRoute, TenantRoute, TenantRouteTable } from "@shop/contracts";
 
-/** Where the router learns which shops exist and in what state. */
+/** Where the router learns which shops exist, in what state, and which cells they live in. */
 export interface RouteSource {
   /** The shop a handle names, or undefined when it names none (or a deleted one). */
   lookup(handle: string): TenantRoute | undefined;
+  /** A registered cell, or undefined for a cell the control plane does not list as registered. */
+  cell(id: string): CellRoute | undefined;
   /** False until a first routing table is in hand. */
   ready(): boolean;
 }
@@ -32,7 +34,14 @@ export interface RegistryRoutesOptions {
  */
 export function registryRoutes({ platformApiUrl, routerToken, refreshMs, registry, log, cacheFile }: RegistryRoutesOptions) {
   let byHandle: Map<string, TenantRoute> | undefined;
+  let cells = new Map<string, CellRoute>();
   let loadedAt = 0;
+
+  function use(table: TenantRouteTable): void {
+    byHandle = new Map(table.tenants.map((tenant) => [tenant.handle, tenant]));
+    // A table saved by a router older than the cell directory has no cells.
+    cells = new Map((table.cells ?? []).map((cell) => [cell.id, cell]));
+  }
   let failing = false;
 
   new Gauge({
@@ -58,7 +67,7 @@ export function registryRoutes({ platformApiUrl, routerToken, refreshMs, registr
       if (!res.ok) throw new Error(`control plane answered ${res.status}`);
       const table = (await res.json()) as TenantRouteTable;
       if (!Array.isArray(table.tenants)) throw new Error("routing table without tenants");
-      byHandle = new Map(table.tenants.map((tenant) => [tenant.handle, tenant]));
+      use(table);
       loadedAt = Date.now();
       save(table);
       if (failing) log.info({ tenants: table.tenants.length }, "routing table refreshed again");
@@ -88,7 +97,7 @@ export function registryRoutes({ platformApiUrl, routerToken, refreshMs, registr
     try {
       const saved = JSON.parse(readFileSync(cacheFile, "utf8")) as TenantRouteTable & { savedAt: string };
       if (!Array.isArray(saved.tenants)) return;
-      byHandle = new Map(saved.tenants.map((tenant) => [tenant.handle, tenant]));
+      use(saved);
       log.warn({ savedAt: saved.savedAt, tenants: saved.tenants.length }, "control plane unreachable; serving the saved routing table");
     } catch {
       // Nothing saved yet (a new pod): stay unready until the control plane answers.
@@ -98,6 +107,7 @@ export function registryRoutes({ platformApiUrl, routerToken, refreshMs, registr
   let timer: NodeJS.Timeout | undefined;
   const source: RouteSource & { start(): Promise<void>; stop(): void } = {
     lookup: (handle) => byHandle?.get(handle),
+    cell: (id) => cells.get(id),
     ready: () => byHandle !== undefined,
     async start() {
       await refresh();

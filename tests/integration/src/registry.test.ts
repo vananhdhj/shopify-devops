@@ -11,13 +11,13 @@ import { tenants } from "./tenants.ts";
 const routes = (token: string | null = secret("PLATFORM_ROUTER_TOKEN")) =>
   fetch(`${platformInternalUrl}/internal/routes`, { headers: token ? { "x-platform-token": token } : {} });
 
-/** A shop entered straight into the registry, as provisioning will (ticket 03); random handle, no rows in the cell. */
-async function registryShop(): Promise<{ id: string; handle: string; name: string }> {
+/** A shop entered straight into the registry, placed in pool-1; random handle, no rows in the cell. */
+async function registryShop(cell: string | null = "pool-1"): Promise<{ id: string; handle: string; name: string }> {
   const handle = `t-${randomUUID().slice(0, 8)}`;
   const name = `Registry Test ${handle}`;
   const [row] = await platformQuery<{ id: string }>(
-    "INSERT INTO platform.tenants (handle, name, merchant_password_hash) VALUES ($1, $2, 'scrypt:00:00') RETURNING id",
-    [handle, name],
+    "INSERT INTO platform.tenants (handle, name, merchant_password_hash, cell) VALUES ($1, $2, 'scrypt:00:00', $3) RETURNING id",
+    [handle, name, cell],
   );
   return { id: row!.id, handle, name };
 }
@@ -92,7 +92,7 @@ describe("tenant registry", () => {
   describe("while the control plane is down", () => {
     afterEach(() => restartService("platform-api"));
 
-    it("keeps serving existing shops from the router's cached table", async () => {
+    it("keeps serving existing shops from the edge's cached table", async () => {
       compose("stop", "platform-api");
       // Longer than several refresh intervals: every refresh in between fails.
       await new Promise((resolve) => setTimeout(resolve, 5_000));
@@ -100,9 +100,9 @@ describe("tenant registry", () => {
       for (const handle of ["harbor", "meadow"]) {
         expect((await shopFetch("/", {}, handle)).status).toBe(200);
       }
-      const metrics = compose("exec", "-T", "router", "wget", "-qO-", "http://127.0.0.1:8001/metrics");
+      const metrics = compose("exec", "-T", "edge", "wget", "-qO-", "http://127.0.0.1:8001/metrics");
       expect(metrics).toMatch(/^router_routes_refresh_failures_total [1-9]/m);
-      expect(compose("exec", "-T", "router", "wget", "-qO-", "http://127.0.0.1:8001/health/ready")).toContain("ready");
+      expect(compose("exec", "-T", "edge", "wget", "-qO-", "http://127.0.0.1:8001/health/ready")).toContain("ready");
     });
 
     it("answers a signup at the platform address with a clean 503", async () => {
@@ -116,15 +116,15 @@ describe("tenant registry", () => {
       expect(res.body).toBe("This service is temporarily unavailable. Try again in a few seconds.\n");
     });
 
-    it("brings a restarted router back ready on the table it saved", async () => {
+    it("brings a restarted edge back ready on the table it saved", async () => {
       compose("stop", "platform-api");
       // Same container, so the table it saved in /tmp is still there; the control plane is not.
-      compose("restart", "router");
+      compose("restart", "edge");
       await expect
         .poll(async () => (await shopFetch("/", {}, "harbor")).status, { timeout: 30_000, interval: 500 })
         .toBe(200);
       expect((await shopFetch("/", {}, "meadow")).status).toBe(200);
-      expect(compose("logs", "--no-log-prefix", "--since", "1m", "router")).toContain("serving the saved routing table");
+      expect(compose("logs", "--no-log-prefix", "--since", "1m", "edge")).toContain("serving the saved routing table");
     });
   });
 });

@@ -145,7 +145,7 @@ jobs:
       - name: Point the dev overlays at the new digests
         env:
           # The cell's overlay first: a new unit's first digest is added there.
-          OVERLAYS: deploy/overlays/dev/kustomization.yaml deploy/platform/overlays/dev/kustomization.yaml
+          OVERLAYS: deploy/overlays/dev/kustomization.yaml deploy/platform/overlays/dev/kustomization.yaml deploy/edge/overlays/dev/kustomization.yaml
         run: |
           read -ra overlays <<<"$OVERLAYS"
           for file in digests/*.json; do

@@ -1,18 +1,19 @@
 import replyFrom, { type FastifyReplyFromHooks } from "@fastify/reply-from";
 import Fastify from "fastify";
-import type { Registry } from "prom-client";
+import { Counter, type Registry } from "prom-client";
 import { loggingOptions, observeRequests } from "@shop/service-kit";
 import { signTenantContext, tenantContextHeader } from "@shop/tenancy";
 import type { RouteSource } from "./routes.ts";
+import type { UpstreamFor } from "./upstreams.ts";
 
 export interface AppDeps {
   environment: string;
   routes: RouteSource;
   baseDomain: string;
-  storefrontUrl: string;
+  /** The storefront and tenant-context secret of an active shop's cell. */
+  upstreamFor: UpstreamFor;
   /** The control plane's public listener (signup pages), served at the bare base domain. */
   platformPublicUrl: string;
-  tenantContextSecret: string;
   /** Where request durations are recorded; served by the private operational listener. */
   registry: Registry;
 }
@@ -44,15 +45,28 @@ export function isPlatformHost(host: string | undefined, baseDomain: string): bo
 }
 
 /**
- * The cell's edge: resolves the request's host to a tenant and proxies the request to the
- * storefront with a freshly signed tenant context. A context sent by the client is dropped, so
+ * The edge: resolves the request's host to a tenant and proxies the request to the storefront of
+ * the tenant's cell with a tenant context freshly signed for that cell. A context sent by the client is dropped, so
  * the only tenant anything downstream believes is the one the router chose. Only an active shop
- * is proxied; one being set up or suspended gets a fixed page, and a deleted one is unknown. The
+ * is proxied; one being set up or suspended, or whose cell this router cannot use, gets a fixed
+ * page, and a deleted one is unknown. The
  * bare base domain goes to the control plane's signup pages, without any tenant context.
  */
 export function buildApp(deps: AppDeps) {
   const app = Fastify(loggingOptions("router", deps.environment));
   observeRequests(app, deps.registry);
+  const proxied = new Counter({
+    name: "router_proxied_requests_total",
+    help: "Requests proxied to a cell's storefront, by cell",
+    labelNames: ["cell"] as const,
+    registers: [deps.registry],
+  });
+  const unroutable = new Counter({
+    name: "router_unroutable_requests_total",
+    help: "Requests for an active shop whose cell this router cannot use, by reason",
+    labelNames: ["reason"] as const,
+    registers: [deps.registry],
+  });
 
   // Bodies stream through untouched, whatever their content type: the storefront parses them.
   app.removeAllContentTypeParsers();
@@ -98,9 +112,17 @@ export function buildApp(deps: AppDeps) {
         return reply.code(404).type(text).send(noShop);
     }
 
-    // The "request completed" line then names the shop the request was routed to.
-    reply.log = req.log = req.log.child({ tenant: tenant.handle });
-    return reply.from(`${deps.storefrontUrl}${req.url}`, {
+    const upstream = deps.upstreamFor(tenant);
+    if (typeof upstream === "string") {
+      unroutable.inc({ reason: upstream });
+      req.log.warn({ tenant: tenant.handle, cell: tenant.cell, reason: upstream }, "shop's cell unusable from this router");
+      return reply.code(503).header("retry-after", "5").type(text).send(unavailable);
+    }
+    proxied.inc({ cell: upstream.cell });
+
+    // The "request completed" line then names the shop and the cell the request was routed to.
+    reply.log = req.log = req.log.child({ tenant: tenant.handle, cell: upstream.cell });
+    return reply.from(`${upstream.storefrontUrl}${req.url}`, {
       onError,
       rewriteRequestHeaders: (_original, headers) => {
         const { [tenantContextHeader]: _fromClient, ...rest } = headers;
@@ -110,7 +132,7 @@ export function buildApp(deps: AppDeps) {
           host: req.headers.host,
           // One id follows the request through the storefront and the APIs' logs.
           "x-request-id": req.id,
-          [tenantContextHeader]: signTenantContext(tenant, deps.tenantContextSecret),
+          [tenantContextHeader]: signTenantContext(tenant, upstream.tenantContextSecret),
         };
       },
     });

@@ -5,10 +5,21 @@ export const config = {
   /** Private listener for health and metrics: the public port is on the ingress. */
   opsPort: Number(process.env.OPS_PORT ?? 8001),
   environment: process.env.APP_ENV ?? "dev",
-  storefrontUrl: required("STOREFRONT_URL"),
   /** Shops live at `<handle>.<baseDomain>`. */
   baseDomain: required("TENANT_BASE_DOMAIN").toLowerCase(),
-  tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
+  /**
+   * Set: the edge, for every cell. Each shop goes to its cell's storefront (from the routing table)
+   * with a context signed by that cell's secret, read from `<cell>.tenant-context-secret` here.
+   */
+  cellCredentialsDir: process.env.CELL_CREDENTIALS_DIR,
+  /** Unset: a router inside one cell (until Phase 3 ticket 03), sending every shop to it. */
+  singleCell: process.env.CELL_CREDENTIALS_DIR
+    ? undefined
+    : {
+        cell: process.env.CELL_ID ?? "pool-1",
+        storefrontUrl: required("STOREFRONT_URL"),
+        tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
+      },
   /** The control plane's internal listener, where the routing table is read. */
   platformApiUrl: required("PLATFORM_API_URL"),
   /** The control plane's public listener: the signup pages at the bare base domain. */

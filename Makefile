@@ -5,6 +5,7 @@ CLUSTER := shop
 CONTEXT := k3d-$(CLUSTER)
 NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
+EDGE_NAMESPACE := edge-dev
 
 .PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete
 
@@ -12,7 +13,7 @@ PLATFORM_NAMESPACE := platform-dev
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
 secrets:
 	@scripts/secrets.sh
-	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE)
+	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE) $(EDGE_NAMESPACE)
 
 ## Point git at the repo's hooks (Gitleaks pre-commit)
 hooks:
@@ -23,7 +24,7 @@ install:
 
 ## Build and start the seeded stack; returns only once every health check passes
 dev-up: secrets hooks
-	$(COMPOSE) up --detach --build --wait
+	$(COMPOSE) up --detach --build --wait --remove-orphans
 	$(COMPOSE) run --rm seed
 
 ## Reset seed products to their seed price and stock
@@ -55,8 +56,8 @@ bootstrap-gitops: cluster-up
 	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
 	  --version $(ARGOCD_CHART_VERSION) --namespace argocd --create-namespace \
 	  --kube-context $(CONTEXT) --values deploy/argocd/values.yaml --wait --timeout 10m
-	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE)
-	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml -f deploy/argocd/platform-dev.yaml -f deploy/monitoring/application.yaml
+	@scripts/cluster-secrets.sh $(CONTEXT) $(NAMESPACE) $(PLATFORM_NAMESPACE) $(EDGE_NAMESPACE)
+	kubectl --context $(CONTEXT) apply -f deploy/argocd/shop-dev.yaml -f deploy/argocd/platform-dev.yaml -f deploy/argocd/edge-dev.yaml -f deploy/monitoring/application.yaml
 	@echo "Argo CD UI: kubectl --context $(CONTEXT) -n argocd port-forward svc/argocd-server 8081:80"
 	@echo "Grafana:    kubectl --context $(CONTEXT) -n monitoring port-forward svc/monitoring-grafana 8082:80  (admin / GRAFANA_ADMIN_PASSWORD)"
 

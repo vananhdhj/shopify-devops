@@ -1,0 +1,109 @@
+# The edge: the platform's one router for every cell (the router image in edge mode). Maps
+# <handle>.<base domain> to a tenant and its cell from the control plane's routing table, and
+# proxies to that cell's storefront with a tenant context signed by that cell's own secret
+# (mounted from `cell-credentials`, one file per cell); the bare base domain goes to the control
+# plane's signup pages. It holds every cell's tenant-context secret, so it runs in its own
+# namespace, apart from every cell.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: edge
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: edge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: edge
+    spec:
+      serviceAccountName: edge
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # node in the image; numeric so the kubelet can verify non-root
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: edge
+          image: ghcr.io/vananhdhj/shopify-devops/router
+          env:
+            - name: CELL_CREDENTIALS_DIR
+              value: /run/cell-credentials
+            - name: PLATFORM_ROUTER_TOKEN
+              valueFrom: { secretKeyRef: { name: edge-secrets, key: PLATFORM_ROUTER_TOKEN } }
+          envFrom:
+            - configMapRef:
+                name: edge-env # per environment: TENANT_BASE_DOMAIN and the control plane's addresses
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: ops # private: health and metrics, not behind the Service or the ingress
+              containerPort: 8001
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            httpGet: { path: /health/live, port: ops }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /health/live, port: ops }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health/ready, port: ops }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { memory: 192Mi }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp # the saved routing table survives a container restart
+            - name: cell-credentials
+              mountPath: /run/cell-credentials
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # One file per cell (`<cell>.tenant-context-secret`), from `make secrets`; a cell added
+        # later appears in place, with no restart.
+        - name: cell-credentials
+          secret:
+            secretName: cell-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge
+spec:
+  selector:
+    app.kubernetes.io/name: edge
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+# Prometheus scrapes the edge on its private ops port (requests per cell, unroutable shops, the
+# routing table's age). Skips the dry run until the monitoring CRDs exist on a fresh cluster.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: edge
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: edge
+  podMetricsEndpoints:
+    - port: ops
+      path: /metrics
