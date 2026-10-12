@@ -12,10 +12,12 @@ export interface CellView {
   capacity: number;
   /** When the cell first registered; null for a cell in the directory that never has (or was set aside). */
   registeredAt: string | null;
-  /** Shops placed in the cell, by status, every status present (zero when none). */
+  /** Shops placed in the cell, by status, every status present (zero when none); its synthetic shop aside. */
   shops: Record<(typeof statuses)[number], number>;
-  /** Shops counting against the capacity: every status but DELETED. */
+  /** Shops counting against the capacity: every status but DELETED, the synthetic shop aside. */
   placed: number;
+  /** The cell's synthetic shop (Phase 4), which the promoter buys from; null until it has one. */
+  synthetic: { handle: string; status: string } | null;
   /** Readiness of the cell's catalog and order APIs, asked now; null for an unregistered cell. */
   apis: { catalog: Readiness; orders: Readiness } | null;
 }
@@ -51,13 +53,17 @@ export async function fleetView(db: Queryable): Promise<CellView[]> {
     orders_url: string | null;
   }>("SELECT id, role, capacity, registered_at, catalog_url, orders_url FROM platform.cells ORDER BY id");
   const counts = await db.query<{ cell: string; status: (typeof statuses)[number]; n: number }>(
-    "SELECT cell, status, count(*)::int AS n FROM platform.tenants WHERE cell IS NOT NULL GROUP BY cell, status",
+    "SELECT cell, status, count(*)::int AS n FROM platform.tenants WHERE cell IS NOT NULL AND NOT internal GROUP BY cell, status",
+  );
+  const synthetic = await db.query<{ cell: string; handle: string; status: string }>(
+    "SELECT cell, handle, status FROM platform.tenants WHERE internal AND cell IS NOT NULL AND status <> 'DELETED'",
   );
 
   return Promise.all(
     cells.rows.map(async (cell): Promise<CellView> => {
       const shops = Object.fromEntries(statuses.map((status) => [status, 0])) as CellView["shops"];
       for (const row of counts.rows) if (row.cell === cell.id) shops[row.status] = row.n;
+      const own = synthetic.rows.find((row) => row.cell === cell.id);
       const registered = cell.registered_at !== null && cell.catalog_url !== null && cell.orders_url !== null;
       const [catalog, orders] = registered
         ? await Promise.all([readiness(cell.catalog_url!), readiness(cell.orders_url!)])
@@ -69,6 +75,7 @@ export async function fleetView(db: Queryable): Promise<CellView[]> {
         registeredAt: cell.registered_at?.toISOString() ?? null,
         shops,
         placed: statuses.filter((status) => status !== "DELETED").reduce((sum, status) => sum + shops[status], 0),
+        synthetic: own ? { handle: own.handle, status: own.status } : null,
         apis: catalog && orders ? { catalog, orders } : null,
       };
     }),

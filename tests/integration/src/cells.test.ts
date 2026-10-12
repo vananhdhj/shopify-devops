@@ -2,8 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { rmSync, writeFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CellRegistration } from "@shop/contracts";
-import { platformQuery } from "./db.ts";
-import { platformInternalUrl } from "./http.ts";
+import { cellQuery, platformQuery } from "./db.ts";
+import { catalogApiUrl, platformInternalUrl } from "./http.ts";
 import { baseDomain, routerPort, viaRouter } from "./router.ts";
 import { cellSecret, edgeCredentialsDir, platformCredentialsDir, secret } from "./secrets.ts";
 import { tenants } from "./tenants.ts";
@@ -175,29 +175,70 @@ describe("placement by plan", () => {
     const cell = await aliasCell("dedicated");
     const answers = await Promise.all(Array.from({ length: 6 }, () => signup("plus")));
     expect(answers.map((answer) => answer.status).sort()).toEqual([202, 409, 409, 409, 409, 409]);
-    const [placed] = await platformQuery<{ n: number }>("SELECT count(*)::int AS n FROM platform.tenants WHERE cell = $1", [cell]);
+    const [placed] = await platformQuery<{ n: number }>("SELECT count(*)::int AS n FROM platform.tenants WHERE cell = $1 AND NOT internal", [
+      cell,
+    ]);
     expect(placed?.n).toBe(1);
   });
 
-  it("holds an internal shop until a canary cell registers, then places and activates it there", async () => {
-    const handle = `i-${randomUUID().slice(0, 8)}`;
-    const [shop] = await platformQuery<{ id: string }>(
-      "INSERT INTO platform.tenants (handle, name, merchant_password_hash, internal) VALUES ($1, $1, 'scrypt:00:00', true) RETURNING id",
-      [handle],
-    );
-    await platformQuery("INSERT INTO platform.lifecycle_outbox (tenant_id, action) VALUES ($1, 'provision')", [shop!.id]);
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-    expect(await tenantRow(shop!.id)).toMatchObject({ cell: null, status: "PROVISIONING" });
+});
 
-    const cell = await aliasCell("canary");
-    await expect.poll(async () => (await tenantRow(shop!.id))?.status, { timeout: 30_000, interval: 250 }).toBe("ACTIVE");
-    expect((await tenantRow(shop!.id))?.cell).toBe(cell);
+describe("synthetic shops", () => {
+  const syntheticOf = async (cell: string) =>
+    platformQuery<{ id: string; handle: string; status: string; plan: string }>(
+      "SELECT id, handle, status, plan FROM platform.tenants WHERE cell = $1 AND internal AND status <> 'DELETED'",
+      [cell],
+    );
+  const fillCatalog = (tenantId: string, token: string | null) =>
+    fetch(`${catalogApiUrl}/internal/tenants/${tenantId}/synthetic-catalog`, {
+      method: "POST",
+      headers: token ? { "x-platform-token": token } : {},
+    });
+
+  it("gives every registered cell one synthetic shop, active, with a product to buy, outside its capacity", async () => {
+    // The only free dedicated cell (an earlier test's is free again once its shop is deleted).
+    await retireTestCells();
+    const cell = await aliasCell("dedicated");
+    await expect.poll(async () => (await syntheticOf(cell))[0]?.status, { timeout: 30_000, interval: 250 }).toBe("ACTIVE");
+    const [shop] = await syntheticOf(cell);
+    expect(shop!.handle).toBe(`synthetic-${cell}`);
+    // Checked through the edge right after its activation.
+    await expect.poll(() => stepCount(shop!.id, "checked"), { timeout: 15_000, interval: 250 }).toBe(1);
+    // The alias cell is pool-1's units, so its products are in pool-1's database.
+    const products = await cellQuery<{ name: string; stock: number }>("pool-1", "SELECT name, stock FROM catalog.products WHERE tenant_id = $1", [shop!.id]);
+    expect(products).toEqual([{ name: "Synthetic Probe", stock: 1_000_000 }]);
+
+    // Registering again changes nothing; the dedicated cell still takes one plus shop, and only one.
+    expect((await register(cell, { ...pool1, role: "dedicated", capacity: 1 }, cellSecret("pool-1", "PLATFORM_CELL_TOKEN"))).status).toBe(200);
+    expect(await syntheticOf(cell)).toHaveLength(1);
+    const plus = await signup("plus");
+    expect(plus.status).toBe(202);
+    expect(await tenantRow(plus.body.tenantId!)).toMatchObject({ cell });
+    expect(await signup("plus")).toMatchObject({ status: 409, body: { error: "no_capacity" } });
+  });
+
+  it("fills a synthetic catalog only for the cell's own token, and only once", async () => {
+    const tenantId = randomUUID();
+    expect((await fillCatalog(tenantId, null)).status).toBe(401);
+    expect((await fillCatalog(tenantId, randomBytes(24).toString("hex"))).status).toBe(401);
+    const token = cellSecret("pool-1", "PLATFORM_CELL_TOKEN");
+    const first = (await (await fillCatalog(tenantId, token)).json()) as { id: string; name: string };
+    const again = (await (await fillCatalog(tenantId, token)).json()) as { id: string };
+    expect(first.name).toBe("Synthetic Probe");
+    expect(again.id).toBe(first.id);
+    await cellQuery("pool-1", "SELECT catalog.purge_tenant($1)", [tenantId]);
+  });
+
+  it("keeps the synthetic- handles for the platform", async () => {
+    const { status, body } = await signup("starter", `synthetic-${randomUUID().slice(0, 8)}`);
+    expect({ status, error: body.error }).toEqual({ status: 422, error: "reserved_handle" });
   });
 });
 
 describe("a shop's cell, for the control plane's calls into cells", () => {
   it("purges a deleted shop through the APIs of the cell holding it", async () => {
-    // A dedicated cell whose orders API cannot be reached: the deletion waits on it.
+    // A dedicated cell whose orders API cannot be reached, the only one free: the deletion waits on it.
+    await retireTestCells();
     const cell = await aliasCell("dedicated", { ordersUrl: "http://nowhere.invalid:4002" });
     const { body } = await signup("plus");
     expect(await tenantRow(body.tenantId!)).toMatchObject({ cell });
@@ -238,6 +279,7 @@ describe("the fleet view", () => {
     registeredAt: string | null;
     shops: Record<string, number>;
     placed: number;
+    synthetic: { handle: string; status: string } | null;
     apis: { catalog: string; orders: string } | null;
   }
   const fleet = async () => {
@@ -265,6 +307,7 @@ describe("the fleet view", () => {
       registeredAt: expect.any(String),
       shops: noShops,
       placed: 0,
+      synthetic: { handle: `synthetic-${cell}`, status: expect.any(String) },
       apis: { catalog: "ready", orders: "unreachable" },
     });
 
@@ -274,7 +317,9 @@ describe("the fleet view", () => {
     expect(await viewOf(cell)).toMatchObject({ shops: { ...noShops, ACTIVE: 1 }, placed: 1 });
 
     // pool-1 counts every shop placed in it that is not deleted, and its APIs are ready.
-    const [pool] = await platformQuery<{ n: number }>("SELECT count(*)::int AS n FROM platform.tenants WHERE cell = 'pool-1' AND status <> 'DELETED'");
+    const [pool] = await platformQuery<{ n: number }>(
+      "SELECT count(*)::int AS n FROM platform.tenants WHERE cell = 'pool-1' AND status <> 'DELETED' AND NOT internal",
+    );
     expect(await viewOf("pool-1")).toMatchObject({ role: "pooled", placed: pool!.n, apis: { catalog: "ready", orders: "ready" } });
     expect((await viewOf("pool-1"))!.shops.ACTIVE).toBeGreaterThanOrEqual(2);
 

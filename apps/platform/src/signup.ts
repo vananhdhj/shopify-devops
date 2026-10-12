@@ -29,7 +29,7 @@ export type SignupResult = { outcome: "accepted"; tenantId: string } | { outcome
 
 /** A single DNS label of 3–30 characters: lower-case letters, digits, and inner hyphens. */
 const handlePattern = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
-/** Addresses the platform keeps for itself, now or later. */
+/** Addresses the platform keeps for itself, now or later; `synthetic-…` names the cells' synthetic shops. */
 const reservedHandles = new Set(["www", "admin", "api", "platform", "shop", "app", "status", "mail", "canary"]);
 export const minimumPasswordLength = 12;
 
@@ -49,7 +49,7 @@ const plans: readonly Plan[] = ["starter", "plus"];
 function refusalFor(request: SignupRequest): SignupRefusal | undefined {
   if (request.idempotencyKey.length < 8 || request.idempotencyKey.length > 128) return "invalid_key";
   if (!handlePattern.test(request.handle)) return "invalid_handle";
-  if (reservedHandles.has(request.handle)) return "reserved_handle";
+  if (reservedHandles.has(request.handle) || request.handle.startsWith("synthetic-")) return "reserved_handle";
   if (request.name.length === 0 || request.name.length > 80) return "invalid_name";
   if (request.password.length < minimumPasswordLength || request.password.length > 200) return "weak_password";
   if (!plans.includes(request.plan)) return "invalid_plan";

@@ -12,8 +12,6 @@ configMapGenerator:
       - TENANT_BASE_DOMAIN=shop.localhost
       # Where a new shop is checked like a buyer would; each cell's APIs come from the cell directory.
       - EDGE_URL=http://edge.edge-dev:8000
-      # This environment has a canary cell: the platform seed enters its synthetic shop.
-      - SEED_CANARY_SHOP=true
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/platform
     digest: sha256:426617e1ff38202e8247df15befe31ae4d08506bfe023b199a14b6fb26f734c1

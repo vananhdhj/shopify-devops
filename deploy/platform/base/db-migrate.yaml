@@ -46,8 +46,6 @@ spec:
               valueFrom: { secretKeyRef: { name: platform-secrets, key: DB_PLATFORM_APP_PASSWORD } }
             - name: MERCHANT_CREDENTIALS
               valueFrom: { secretKeyRef: { name: platform-secrets, key: MERCHANT_CREDENTIALS } }
-            - name: SEED_CANARY_SHOP # set by an overlay whose environment has a canary cell
-              valueFrom: { configMapKeyRef: { name: platform-env, key: SEED_CANARY_SHOP, optional: true } }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

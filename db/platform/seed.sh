@@ -12,9 +12,3 @@ meadow_hash="$(hash_of 10000000-0000-4000-8000-000000000002)"
 [ -n "$harbor_hash" ] && [ -n "$meadow_hash" ] || { echo "MERCHANT_CREDENTIALS lacks a seeded shop" >&2; exit 1; }
 
 psql -v ON_ERROR_STOP=1 -v harbor_hash="$harbor_hash" -v meadow_hash="$meadow_hash" -f "$(dirname "$0")/seed.sql"
-
-# The canary cell's synthetic shop, only where a canary cell exists (the lab cluster); elsewhere it
-# would wait for placement forever.
-if [ "${SEED_CANARY_SHOP:-false}" = true ]; then
-  psql -v ON_ERROR_STOP=1 -f "$(dirname "$0")/canary-shop.sql"
-fi

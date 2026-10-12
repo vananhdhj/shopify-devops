@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
 import type { Plan } from "@shop/contracts";
 import { withTransaction } from "@shop/service-kit";
-import { place, roleFor } from "./cells.ts";
+import type { CellCredentials } from "@shop/tenancy";
+import { endpointsOf, place, roleFor } from "./cells.ts";
 import { type LifecycleEvent, type ShopCheck, checkShop, complete, recordEvent, retryLater } from "./lifecycle.ts";
 
 interface TenantRow {
@@ -24,17 +25,44 @@ async function load(db: Pool, tenantId: string): Promise<TenantRow | undefined> 
 export type ProvisionOutcome = "active" | "retry" | "nothing_to_do";
 
 /**
+ * Asks the shop's cell to give its synthetic shop a product to buy (idempotent: the cell keeps
+ * one). Through the cell's catalog API with that cell's own token, as purges are.
+ */
+async function fillSyntheticCatalog(db: Pool, credentials: CellCredentials, tenantId: string, cell: string): Promise<boolean> {
+  const endpoints = await endpointsOf(db, cell);
+  const token = credentials.get(cell, "platform-cell-token");
+  if (!endpoints || !token) return false;
+  try {
+    const res = await fetch(`${endpoints.catalogUrl}/internal/tenants/${tenantId}/synthetic-catalog`, {
+      method: "POST",
+      headers: { "x-platform-token": token },
+      signal: AbortSignal.timeout(10_000),
+    });
+    await res.body?.cancel();
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Provisions one shop, step by step; every step looks at the shop's state first, so running this
  * again after a crash, or twice side by side, changes nothing already done and records each step
  * once. Pooled tenancy needs nothing created in the cell: the shop's rows appear on its first
  * write (ADR-0010).
  *   1. place it in a cell, unless signup already did (a shop entered without one, such as the
  *      platform's internal synthetic shop, waits here until a cell of its role has registered);
- *   2. activate it (the router picks that up within one refresh);
- *   3. check it through the router, retrying with backoff until it answers. A failed check is
+ *   2. for a cell's synthetic shop (internal), have the cell fill its catalog;
+ *   3. activate it (the router picks that up within one refresh);
+ *   4. check it through the router, retrying with backoff until it answers. A failed check is
  *      recorded and retried; it does not undo the activation.
  */
-export async function provision(db: Pool, router: ShopCheck, event: LifecycleEvent): Promise<ProvisionOutcome> {
+export async function provision(
+  db: Pool,
+  router: ShopCheck,
+  credentials: CellCredentials,
+  event: LifecycleEvent,
+): Promise<ProvisionOutcome> {
   const tenant = await load(db, event.tenantId);
   if (!tenant) {
     await complete(db, event.eventId);
@@ -59,6 +87,12 @@ export async function provision(db: Pool, router: ShopCheck, event: LifecycleEve
         await retryLater(db, event);
         return "retry";
       }
+    }
+    const placed = await load(db, event.tenantId);
+    if (placed?.internal && placed.cell && !(await fillSyntheticCatalog(db, credentials, event.tenantId, placed.cell))) {
+      await recordEvent(db, event.tenantId, "catalog_failed", { cell: placed.cell, attempt: event.attempts });
+      await retryLater(db, event);
+      return "retry";
     }
     await withTransaction(db, async (client) => {
       const activated = await client.query(
