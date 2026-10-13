@@ -184,5 +184,72 @@ export function buildApp(deps: AppDeps) {
     },
   );
 
+  // Internal, Phase 6: the control plane moves or restores a shop by exporting its rows from one
+  // cell, importing them into another, and comparing each table's count and checksum in both. Same
+  // token and pattern as a purge: the schema's narrow functions do the work, scoped to one tenant.
+  // An import refuses a shop that already has rows here (409) and rows of another tenant (422).
+  app.post<{ Params: { tenantId: string } }>(
+    "/internal/tenants/:tenantId/export",
+    { ...withoutTenant, preHandler: requireSecretHeader("x-platform-token", deps.platformCellToken) },
+    async (req, reply) => {
+      const { tenantId } = req.params;
+      if (!isUuid(tenantId)) return reply.code(404).send({ error: "tenant_not_found", message: "not a tenant id" });
+      const tenant = tenantId.toLowerCase();
+      const { rows } = await deps.db.query<{ rows: Record<string, unknown[]>; checksums: TenantChecksums }>(
+        "SELECT orders.export_tenant($1) AS rows, orders.tenant_checksums($1) AS checksums",
+        [tenant],
+      );
+      req.log.info({ tenantId, checksums: rows[0]!.checksums }, "tenant exported");
+      return { tenantId: tenant, ...rows[0]! };
+    },
+  );
+
+  app.post<{ Params: { tenantId: string }; Body: { rows: Record<string, unknown[]> } }>(
+    "/internal/tenants/:tenantId/import",
+    {
+      ...withoutTenant,
+      preHandler: requireSecretHeader("x-platform-token", deps.platformCellToken),
+      bodyLimit: importBodyLimit,
+      schema: { body: { type: "object", required: ["rows"], properties: { rows: { type: "object" } } } },
+    },
+    async (req, reply) => {
+      const { tenantId } = req.params;
+      if (!isUuid(tenantId)) return reply.code(404).send({ error: "tenant_not_found", message: "not a tenant id" });
+      try {
+        const { rows } = await deps.db.query<{ checksums: TenantChecksums }>(
+          "SELECT orders.import_tenant($1, $2) AS checksums",
+          [tenantId.toLowerCase(), JSON.stringify(req.body.rows)],
+        );
+        req.log.info({ tenantId, checksums: rows[0]!.checksums }, "tenant imported");
+        return { checksums: rows[0]!.checksums };
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === "23505") return reply.code(409).send({ error: "tenant_not_empty", message: (err as Error).message });
+        if (code === "23514") return reply.code(422).send({ error: "rows_refused", message: (err as Error).message });
+        throw err;
+      }
+    },
+  );
+
+  app.get<{ Params: { tenantId: string } }>(
+    "/internal/tenants/:tenantId/checksums",
+    { ...withoutTenant, preHandler: requireSecretHeader("x-platform-token", deps.platformCellToken) },
+    async (req, reply) => {
+      const { tenantId } = req.params;
+      if (!isUuid(tenantId)) return reply.code(404).send({ error: "tenant_not_found", message: "not a tenant id" });
+      const { rows } = await deps.db.query<{ checksums: TenantChecksums }>(
+        "SELECT orders.tenant_checksums($1) AS checksums",
+        [tenantId.toLowerCase()],
+      );
+      return { checksums: rows[0]!.checksums };
+    },
+  );
+
   return app;
 }
+
+/** Each table's row count and md5 over its rows in key order, as the schema computes them. */
+type TenantChecksums = Record<string, { rows: number; md5: string }>;
+
+/** A shop's rows arrive in one request; lab shops are far smaller than this. */
+const importBodyLimit = 32 * 1024 * 1024;
