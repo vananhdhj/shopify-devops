@@ -48,6 +48,18 @@ export interface CheckoutRequest {
 /** Why a Checkout created no Order. Distinct from a Rejected order, which exists and is terminal. */
 export type CheckoutRefusal = "cart_not_found" | "cart_empty" | "checkout_key_reused" | "cart_already_ordered";
 
+/**
+ * What a shop uses against its plan (Phase 5), for its Merchant's admin: products in the catalog
+ * and the plan's limits on products and on requests through the edge.
+ */
+export interface AdminUsage {
+  plan: string;
+  products: number;
+  productLimit: number;
+  requestsPerSecond: number;
+  burst: number;
+}
+
 /** Every `error` code POST /checkout can answer with. */
 export type CheckoutError = CheckoutRefusal | "dependency_unavailable" | "invalid_request" | "checkout_busy";
 

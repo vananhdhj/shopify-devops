@@ -100,6 +100,9 @@ services:
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
       PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
+      # The seeded shops' catalogs grow with every test run (the volume outlives the stack): no
+      # product quota for them here only.
+      PRODUCT_QUOTA_EXEMPT: harbor,meadow
       APP_ENV: dev
     ports:
       - "127.0.0.1:4001:4001"

@@ -1,5 +1,5 @@
 import "server-only";
-import type { AdminOrderList, NewProduct } from "@shop/contracts";
+import type { AdminOrderList, AdminUsage, NewProduct } from "@shop/contracts";
 import { backendFetch } from "./backend";
 import { requiredEnv } from "./env";
 
@@ -26,14 +26,26 @@ export async function fulfillOrder(orderId: string): Promise<boolean> {
   return true;
 }
 
-/** True when the catalog accepted the product; false when it refused the input. */
-export async function addProduct(product: NewProduct): Promise<boolean> {
+/** Whether the catalog accepted the product, refused the input, or refused it over the plan's quota. */
+export async function addProduct(product: NewProduct): Promise<"added" | "invalid" | "quota"> {
   const res = await backendFetch("CATALOG_API_URL", "/admin/products", {
     method: "POST",
     headers: adminHeaders(),
     body: JSON.stringify(product),
   });
-  if (res.status === 400) return false;
+  if (res.status === 400) return "invalid";
+  if (res.status === 409) return "quota";
   if (!res.ok) throw new Error(`add product failed: ${res.status}`);
-  return true;
+  return "added";
+}
+
+/**
+ * The shop's products and plan limits, for its Merchant (Phase 5). Undefined from a catalog API of
+ * the previous release, which a storefront can meet while its cell rolls: the page then omits it.
+ */
+export async function usage(): Promise<AdminUsage | undefined> {
+  const res = await backendFetch("CATALOG_API_URL", "/admin/usage", { headers: adminHeaders() });
+  if (res.status === 404) return undefined;
+  if (!res.ok) throw new Error(`usage failed: ${res.status}`);
+  return (await res.json()) as AdminUsage;
 }

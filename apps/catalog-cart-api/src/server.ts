@@ -10,5 +10,6 @@ const app = buildApp({
   adminServiceToken: config.adminServiceToken,
   tenantContextSecret: config.tenantContextSecret,
   platformCellToken: config.platformCellToken,
+  productQuotaExempt: config.productQuotaExempt,
 });
 await runService(app, db, config.port);
