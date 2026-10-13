@@ -18,6 +18,8 @@ export const config = {
   platformPublicUrl: required("PLATFORM_PUBLIC_URL"),
   routerToken: required("PLATFORM_ROUTER_TOKEN"),
   routesRefreshMs: Number(process.env.ROUTES_REFRESH_MS ?? 2_000),
+  /** Handles (and `platform`) never rate limited: none in the cluster; the Compose test stack's seeded shops. */
+  rateLimitExempt: new Set((process.env.RATE_LIMIT_EXEMPT ?? "").split(",").filter(Boolean)),
   /** In the pod's /tmp (an emptyDir in the cluster), so it survives a container restart. */
   routesCacheFile: process.env.ROUTES_CACHE_FILE ?? "/tmp/routing-table.json",
 };

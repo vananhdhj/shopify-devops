@@ -39,6 +39,7 @@ const proxy = buildApp({
   upstreamFor: cellUpstreams(routes, new CellCredentials(config.cellCredentialsDir)),
   platformPublicUrl: config.platformPublicUrl,
   registry,
+  rateLimitExempt: config.rateLimitExempt,
 });
 
 await proxy.listen({ host: "0.0.0.0", port: config.port });
