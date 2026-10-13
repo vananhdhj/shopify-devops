@@ -4,7 +4,7 @@
 
 **Blocked by:** 06
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Dashboards: `fleet`, `cell` (replaces `shop-overview`), `tenant`, `control-plane`
 - [ ] `tenant_info` from the control plane (ticket 06; plays the planned `tenant_plan`); recording rules and the burn-rate alert (14.4× 1 h/5 m page, 6× 6 h/30 m ticket) for plus tenants
@@ -31,3 +31,5 @@ Implementation notes (2026-10-13):
 - The README's known limits drop "no tenant dimension"; it names the dashboards and notes that per-shop limits live in each process's memory.
 
 Verified locally: promtool check (6 rules) and test pass; the monitoring config renders one dashboards ConfigMap and the rule. The dashboards render on the cluster after #54's labels and this PR are live.
+
+Resolved 2026-10-14 with PR #55 (`01e4cff`). Grafana has Fleet, Cell, Tenant, and Control plane; with the noisy-neighbour experiment's traffic their queries showed the noisy shop's 429s, the quiet shops' Checkout p95 (11–14 ms), and requests and synthetic Checkouts by cell. The SLO recording rules and both burn-rate alerts are loaded and healthy (inactive).

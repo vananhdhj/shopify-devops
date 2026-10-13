@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet compat
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete fleet compat
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -91,6 +91,11 @@ drill-stale-pending:
 ## Control-plane outage drill: platform-api stopped; existing shops keep serving, signups fail then recover
 drill-control-plane-outage:
 	@scripts/drill-control-plane-outage.sh
+
+## Noisy-neighbour experiment (Phase 5): one starter shop at 10x its rate quota beside three quiet
+## ones in pool-1; it must get 429s and no 5xx, and their Checkout p95 stay within 20% of baseline
+experiment-noisy-neighbour:
+	@scripts/experiment-noisy-neighbour.sh
 
 ## Cell outage drill: one cell's PostgreSQL stopped; its shop fails, other cells' shops keep serving
 CELL ?= dedicated-1

@@ -27,8 +27,24 @@ The control plane's list of cells: each one's role, capacity in shops, and where
 _Avoid_: Cell registry, inventory, fleet (for the list itself)
 
 **Plan**:
-What a tenant pays for, which decides the kind of cell it runs in: **starter** shares a pooled cell; **plus** gets a dedicated cell of its own.
+What a tenant pays for, which decides the kind of cell it runs in (**starter** shares a pooled cell; **plus** gets a dedicated cell of its own) and how much of that cell it may use: its rate quota, its Checkouts at once, and its product quota.
 _Avoid_: Tier, package, subscription
+
+**Rate quota**:
+How many requests a second a tenant's buyers may send through the edge, with a short burst above it, set by its plan; past it, a request is told to slow down and never reaches the cell.
+_Avoid_: Throttle, rate limit (alone), cap
+
+**Product quota**:
+The most products a tenant's catalog may hold, set by its plan and shown to its Merchant beside what it uses.
+_Avoid_: Product limit, catalog size
+
+**Noisy neighbour**:
+A tenant whose traffic, or burst of Orders, would take a pooled cell's shared resources from the other tenants in it; the quotas and fair dispatch hold it to its share.
+_Avoid_: Bad tenant, abuser, hot shop
+
+**Synthetic Checkout**:
+A Checkout the platform makes in a cell's synthetic shop to see that the cell's buyers can check out, on a fixed interval and whenever a release soaks there.
+_Avoid_: Health check, probe, test order
 
 **Placement**:
 The choice of a new tenant's cell by its plan, made once when the tenant is created; when no cell of the plan's kind has room, the signup is refused rather than queued.

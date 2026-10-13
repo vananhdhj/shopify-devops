@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `router_requests_total{cell,tenant,code_class}`, `router_request_duration_seconds{cell,tenant}`, `checkout_duration_seconds{tenant,outcome}`, `orders_settled_total{tenant,outcome}`, `orders_oldest_pending_age_seconds{tenant}`
 - [ ] PodMonitors add `cell` from a pod label set by each cell's kustomization
@@ -35,3 +35,5 @@ Tests:
 - Updated for the label: `metrics.test.ts` (a slow Order's tenant series), `worker-ops.test.ts`, `rate-limit.test.ts`.
 
 `make test` with the cluster stopped: 41 files, 216 tests passed (320 s).
+
+Resolved 2026-10-14 with PRs #54 (`08068ce`) and #56 (`e26e126`, the fix for #54's cell label, which had stopped every cell's sync: Phase 5 evidence). On the cluster, `router_requests_total{tenant_id}`, the rate-limit counter, and `checkout_duration_seconds` carry the shop; `tenant_info` joins them to handles; every cell series carries `cell`; each cell's synthetic shop is bought from about once a minute (a round waits for its Orders before the 30 s pause); `SyntheticCheckoutFailing` is loaded. The first release after the two-tick rule had no superseded soak.
