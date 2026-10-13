@@ -49,7 +49,7 @@ export interface CheckoutRequest {
 export type CheckoutRefusal = "cart_not_found" | "cart_empty" | "checkout_key_reused" | "cart_already_ordered";
 
 /** Every `error` code POST /checkout can answer with. */
-export type CheckoutError = CheckoutRefusal | "dependency_unavailable" | "invalid_request";
+export type CheckoutError = CheckoutRefusal | "dependency_unavailable" | "invalid_request" | "checkout_busy";
 
 /** Returned with 202: the Order exists and is Pending, not yet confirmed. */
 export interface CheckoutAccepted {

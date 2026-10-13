@@ -123,6 +123,8 @@ services:
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
       PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
+      # The seeded shops' contention tests send 100 concurrent Checkouts: no cap for them here only.
+      CHECKOUT_LIMIT_EXEMPT: harbor,meadow
       APP_ENV: dev
     ports:
       - "127.0.0.1:4002:4002"
