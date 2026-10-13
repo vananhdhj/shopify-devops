@@ -43,11 +43,31 @@ export function proxy(request: NextRequest) {
     });
   }
 
+  // A shop frozen for a move or a restore (Phase 6) is browsed but not written: its cart, Checkout,
+  // and Merchant forms get the updating page (the APIs would refuse the writes anyway). Signing in
+  // and out writes nothing in the cell, so the Merchant can still read their admin.
+  if (tenant.readOnly && request.method === "POST" && !request.nextUrl.pathname.startsWith("/admin/session")) {
+    return shopUpdating(requestId);
+  }
+
   const headers = new Headers(request.headers);
   headers.set("x-request-id", requestId);
   const response = NextResponse.next({ request: { headers } });
   response.headers.set("x-request-id", requestId);
   return response;
+}
+
+/** 503 with Retry-After: the shop is moments from taking writes again, not broken. */
+function shopUpdating(requestId: string): NextResponse {
+  const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>This shop is updating</title></head>
+<body><main><h1>This shop is updating</h1>
+<p>This shop is updating, try again in a moment. You can keep browsing meanwhile.</p>
+<p><a href="/">Back to the shop</a></p></main></body></html>`;
+  return new NextResponse(page, {
+    status: 503,
+    headers: { "content-type": "text/html; charset=utf-8", "retry-after": "5", "x-request-id": requestId },
+  });
 }
 
 export const config = {

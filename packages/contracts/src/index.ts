@@ -148,7 +148,7 @@ export interface NewProduct {
 
 
 /** Where a shop stands in its lifecycle, as the control plane's registry records it. */
-export type TenantStatus = "PROVISIONING" | "ACTIVE" | "SUSPENDED" | "DELETING" | "DELETED";
+export type TenantStatus = "PROVISIONING" | "ACTIVE" | "SUSPENDED" | "MOVING" | "RESTORING" | "DELETING" | "DELETED";
 
 /** One shop as the router needs it: enough to route a request and sign its tenant context. */
 export interface TenantRoute {

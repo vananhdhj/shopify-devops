@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [x] Migrations (expand-only) in `catalog` and `orders`: `export_tenant(uuid) → jsonb`, `import_tenant(uuid, jsonb)`, `tenant_checksums(uuid) → (table, rows, md5)` over the eight tenant-owned tables
 - [x] Catalog API and order service: `POST /internal/tenants/:id/export`, `POST /internal/tenants/:id/import`, `GET /internal/tenants/:id/checksums` (cell token)
@@ -23,3 +23,7 @@ Implementation notes (2026-10-14):
 Tests (`tenant-data.test.ts`, two cells): Harbor's rows (with a fresh CONFIRMED and REJECTED_PAYMENT Order, after its Pending Orders settle) exported from pool-1 and imported into dedicated-1 with every table's array reversed give the source's checksums, in the import's answer and on a fresh read; Meadow's checksums in both cells are unchanged. A second import answers 409, rows under Meadow's id 422, and neither writes anything. No token or pool-1's token answers 401 in dedicated-1. A purge of the copy leaves pool-1's original unchanged. In the run, Harbor's 2,716 Orders in all four end statuses moved in about a second.
 
 `make test CELLS=2` with the cluster stopped: 43 files, 225 tests passed (326 s).
+
+Resolved 2026-10-14 with PR #59 (`1f7b146`). The release went through the waves with no human step: canary soaked 303 s (21 synthetic Checkouts), pool-1 promoted 21:56 and soaked 301 s, dedicated-1 promoted 22:04 UTC. On the cluster, in each cell's pods with the cell's own token: the checksums of the canary's shop (3 products, 683 Orders, 1,365 inventory effects), Harbor's in pool-1 (215 Orders), and the plus shop's in dedicated-1 (1 Order). Without the token: 401.
+
+Found after the merge (fixed in ticket 02's PR, migration `20261014000109`): the Order import's status steps joined the Orders with ids read out of the JSON, which compared every Order with every exported row. Harbor's 3,072 Orders took 2.8 s for one step and the import passed the APIs' 5 s statement timeout (500). As index lookups over an array of ids the step takes 34 ms.

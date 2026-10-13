@@ -28,9 +28,9 @@ esac
 cells="$(curl -fsS --max-time 10 -H "x-operator-token: $token" "$url/operator/cells")" ||
   { echo "fleet: the control plane at $url did not answer /operator/cells" >&2; exit 1; }
 jq -r '
-  ["CELL", "ROLE", "PLACED/CAP", "ACTIVE", "PROVISIONING", "SUSPENDED", "DELETING", "DELETED", "CATALOG", "ORDERS", "SYNTHETIC"],
+  ["CELL", "ROLE", "PLACED/CAP", "ACTIVE", "PROVISIONING", "SUSPENDED", "FROZEN", "DELETING", "DELETED", "CATALOG", "ORDERS", "SYNTHETIC"],
   (.cells[] | [.id, .role, "\(.placed)/\(.capacity)", .shops.ACTIVE, .shops.PROVISIONING, .shops.SUSPENDED,
-    .shops.DELETING, .shops.DELETED, (.apis.catalog // "unregistered"), (.apis.orders // "unregistered"),
+    ((.shops.MOVING // 0) + (.shops.RESTORING // 0)), .shops.DELETING, .shops.DELETED, (.apis.catalog // "unregistered"), (.apis.orders // "unregistered"),
     (if .synthetic then "\(.synthetic.handle) \(.synthetic.status)" else "-" end)])
   | @tsv' <<<"$cells" | column -t -s $'\t'
 

@@ -288,7 +288,7 @@ describe("the fleet view", () => {
     return ((await res.json()) as { cells: CellView[] }).cells;
   };
   const viewOf = async (cell: string) => (await fleet()).find((view) => view.id === cell);
-  const noShops = { PROVISIONING: 0, ACTIVE: 0, SUSPENDED: 0, DELETING: 0, DELETED: 0 };
+  const noShops = { PROVISIONING: 0, ACTIVE: 0, SUSPENDED: 0, MOVING: 0, RESTORING: 0, DELETING: 0, DELETED: 0 };
 
   it("is for the platform operator only", async () => {
     expect((await fetch(`${platformInternalUrl}/operator/cells`)).status).toBe(401);

@@ -9,7 +9,7 @@ const shop = { id: "10000000-0000-4000-8000-000000000001", handle: "harbor", nam
 describe("the plan in the tenant context", () => {
   it("round-trips every limit class", () => {
     for (const plan of ["starter", "plus", "internal"] as const) {
-      expect(verifyTenantContext(signTenantContext({ ...shop, plan }, secret), secret)).toEqual({ ...shop, plan });
+      expect(verifyTenantContext(signTenantContext({ ...shop, plan }, secret), secret)).toEqual({ ...shop, plan, readOnly: false });
     }
   });
 
@@ -18,12 +18,23 @@ describe("the plan in the tenant context", () => {
       JSON.stringify({ id: shop.id, handle: shop.handle, name: shop.name, cv: 3, iat: Math.floor(Date.now() / 1000) }),
     ).toString("base64url");
     const old = `${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
-    expect(verifyTenantContext(old, secret)).toEqual({ ...shop, plan: "starter" });
+    expect(verifyTenantContext(old, secret)).toEqual({ ...shop, plan: "starter", readOnly: false });
   });
 
   it("refuses a context naming an unknown class", () => {
     const payload = Buffer.from(
       JSON.stringify({ id: shop.id, handle: shop.handle, name: shop.name, cv: 3, p: "unlimited", iat: Math.floor(Date.now() / 1000) }),
+    ).toString("base64url");
+    expect(verifyTenantContext(`${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`, secret)).toBeUndefined();
+  });
+
+  it("carries the read-only flag of a frozen shop (Phase 6), and reads its absence as false", () => {
+    const frozen = signTenantContext({ ...shop, plan: "starter", readOnly: true }, secret);
+    expect(verifyTenantContext(frozen, secret)).toEqual({ ...shop, plan: "starter", readOnly: true });
+    const open = signTenantContext({ ...shop, plan: "starter", readOnly: false }, secret);
+    expect(JSON.parse(Buffer.from(open.split(".")[0]!, "base64url").toString("utf8"))).not.toHaveProperty("ro");
+    const payload = Buffer.from(
+      JSON.stringify({ id: shop.id, handle: shop.handle, name: shop.name, cv: 3, ro: "yes", iat: Math.floor(Date.now() / 1000) }),
     ).toString("base64url");
     expect(verifyTenantContext(`${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`, secret)).toBeUndefined();
   });
