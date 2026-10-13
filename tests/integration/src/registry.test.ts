@@ -45,8 +45,10 @@ describe("tenant registry", () => {
 
     const table = (await (await routes()).json()) as TenantRouteTable;
     for (const tenant of [tenants.harbor, tenants.meadow]) {
-      expect(table.tenants).toContainEqual({ ...tenant, status: "ACTIVE", credentialVersion: 1, cell: "pool-1" });
+      expect(table.tenants).toContainEqual({ ...tenant, status: "ACTIVE", credentialVersion: 1, cell: "pool-1", internal: false });
     }
+    // Each shop's plan and whether it is a cell's synthetic shop, for the edge's limits (Phase 5).
+    expect(table.tenants.find((tenant) => tenant.handle === "synthetic-pool-1")).toMatchObject({ plan: "starter", internal: true });
     expect(table.cells).toContainEqual({ id: "pool-1", storefrontUrl: "http://storefront:3000" });
   });
 

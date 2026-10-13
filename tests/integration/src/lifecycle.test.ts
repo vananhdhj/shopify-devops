@@ -49,7 +49,7 @@ async function signedUpShop(): Promise<TenantContext> {
   });
   const { tenantId } = JSON.parse(res.body) as { tenantId: string };
   await expect.poll(() => stepCount(tenantId, "checked"), { timeout: 15_000, interval: 250 }).toBe(1);
-  return { id: tenantId, handle, name, credentialVersion: 1 };
+  return { id: tenantId, handle, name, credentialVersion: 1, plan: "starter" };
 }
 
 /** Gives a shop a product, a Cart holding it, and Orders, so every one of its eight tables has rows. */

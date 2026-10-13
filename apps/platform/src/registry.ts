@@ -1,4 +1,4 @@
-import type { TenantRoute, TenantStatus } from "@shop/contracts";
+import type { Plan, TenantRoute, TenantStatus } from "@shop/contracts";
 import type { Queryable } from "@shop/service-kit";
 
 interface RouteRow {
@@ -8,6 +8,8 @@ interface RouteRow {
   status: TenantStatus;
   credential_version: number;
   cell: string | null;
+  plan: Plan;
+  internal: boolean;
 }
 
 /**
@@ -16,7 +18,7 @@ interface RouteRow {
  */
 export async function routingTable(db: Queryable): Promise<TenantRoute[]> {
   const { rows } = await db.query<RouteRow>(
-    `SELECT id, handle, name, status, credential_version, cell
+    `SELECT id, handle, name, status, credential_version, cell, plan, internal
        FROM platform.tenants
       WHERE status <> 'DELETED'
       ORDER BY handle`,
@@ -28,6 +30,8 @@ export async function routingTable(db: Queryable): Promise<TenantRoute[]> {
     status: row.status,
     credentialVersion: row.credential_version,
     cell: row.cell,
+    plan: row.plan,
+    internal: row.internal,
   }));
 }
 
