@@ -4,7 +4,7 @@ import type { Settlement } from "./settle.ts";
 
 export interface WorkerMetrics {
   registry: Registry;
-  settled: Counter<"outcome">;
+  settled: Counter<"tenant_id" | "outcome">;
   failures: Counter;
   exhausted: Counter;
   requeued: Counter;
@@ -16,8 +16,8 @@ export function workerMetrics(queue: JobCounter): WorkerMetrics {
 
   const settled = new Counter({
     name: "orders_settled_total",
-    help: "Orders moved out of PENDING by this worker, by outcome",
-    labelNames: ["outcome"] as const,
+    help: "Orders moved out of PENDING by this worker, by tenant and outcome",
+    labelNames: ["tenant_id", "outcome"] as const,
     registers: [registry],
   });
   const failures = new Counter({
@@ -48,6 +48,6 @@ export function workerMetrics(queue: JobCounter): WorkerMetrics {
   return { registry, settled, failures, exhausted, requeued };
 }
 
-export function recordSettlement(metrics: WorkerMetrics, settlement: Settlement): void {
-  if (settlement !== "already_settled") metrics.settled.inc({ outcome: settlement });
+export function recordSettlement(metrics: WorkerMetrics, tenantId: string, settlement: Settlement): void {
+  if (settlement !== "already_settled") metrics.settled.inc({ tenant_id: tenantId, outcome: settlement });
 }

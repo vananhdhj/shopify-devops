@@ -125,3 +125,11 @@ spec:
             severity: page
           annotations:
             summary: "The release in wave {{ $labels.wave }} failed its gate and was not promoted: see make fleet, then revert its merge commit"
+        # Phase 5: every cell's synthetic shop is bought from every 30 s; two failures in a row
+        # mean its shops' buyers likely cannot check out, real traffic or not.
+        - alert: SyntheticCheckoutFailing
+          expr: max by (cell) (synthetic_checkout_consecutive_failures) >= 2
+          labels:
+            severity: page
+          annotations:
+            summary: "The synthetic Checkout in cell {{ $labels.cell }} failed twice in a row: its buyers likely cannot check out"

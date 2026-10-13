@@ -70,6 +70,6 @@ describe("the edge's rate quota", () => {
     expect((await viaRouter(shopHost(handle), "/healthz")).status).toBe(200);
 
     const metrics = compose("exec", "-T", "edge", "wget", "-qO-", "http://127.0.0.1:8001/metrics");
-    expect(metrics).toMatch(new RegExp(`^router_rate_limited_total\\{cell="pool-1",tenant="${handle}"\\} [1-9]`, "m"));
+    expect(metrics).toMatch(new RegExp(`^router_rate_limited_total\\{cell="pool-1",tenant_id="${tenantId}"\\} [1-9]`, "m"));
   }, 60_000);
 });

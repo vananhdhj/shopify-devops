@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { Registry } from "prom-client";
+import { Gauge, type Registry } from "prom-client";
 import type { CellRegistration, MerchantSignInRequest, MerchantSignInResult, TenantRouteTable } from "@shop/contracts";
 import { createService, requireSecretHeader, secretsEqual, uuidPatternSource } from "@shop/service-kit";
 import { type CellCredentials, cellIdPattern } from "@shop/tenancy";
@@ -50,6 +50,25 @@ const registrationBody = {
  */
 export function buildInternalApp(deps: InternalAppDeps) {
   const app = createService({ name: "platform-api", environment: deps.environment, db: deps.db, registry: deps.registry });
+
+  // Phase 5: the cells' tenant-labelled metrics carry only the tenant id; this maps each to its
+  // handle, plan, and cell, for dashboards and for alerts that apply to one plan (`* on (tenant_id)
+  // group_left (tenant, plan) tenant_info`). Read at scrape time; deleted shops are left out.
+  new Gauge({
+    name: "tenant_info",
+    help: "1 for every shop that is not deleted, labelled with its id, handle, plan, cell, and whether it is internal",
+    labelNames: ["tenant_id", "tenant", "plan", "cell", "internal"] as const,
+    registers: [deps.registry],
+    async collect() {
+      const { rows } = await deps.db.query<{ id: string; handle: string; plan: string; cell: string | null; internal: boolean }>(
+        "SELECT id, handle, plan, cell, internal FROM platform.tenants WHERE status <> 'DELETED'",
+      );
+      this.reset();
+      for (const row of rows) {
+        this.set({ tenant_id: row.id, tenant: row.handle, plan: row.plan, cell: row.cell ?? "", internal: String(row.internal) }, 1);
+      }
+    },
+  });
 
   app.get(
     "/internal/routes",

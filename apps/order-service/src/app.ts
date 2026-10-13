@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
 import { createService, isUuid, requireSecretHeader, tenantOf, withTenant, withoutTenant } from "@shop/service-kit";
 import { planLimits, tenantContextHeader } from "@shop/tenancy";
-import { Counter } from "prom-client";
+import { Counter, Histogram } from "prom-client";
 import { fulfillOrder, listOrders } from "./admin.ts";
 import { orderMetrics } from "./metrics.ts";
 import { CatalogUnavailableError } from "./catalog-client.ts";
@@ -67,13 +67,26 @@ export function buildApp(deps: AppDeps) {
   const busy = new Counter({
     name: "checkouts_busy_total",
     help: "Checkouts refused with 429 because the shop already had its plan's Checkouts in flight, by tenant",
-    labelNames: ["tenant"] as const,
+    labelNames: ["tenant_id"] as const,
+    registers: [registry],
+  });
+  // Phase 5's tenant dimension: Checkout latency per shop, by outcome.
+  const checkoutDuration = new Histogram({
+    name: "checkout_duration_seconds",
+    help: "Checkout duration by tenant and outcome (accepted, refused, busy, unavailable, error)",
+    labelNames: ["tenant_id", "outcome"] as const,
+    buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
     registers: [registry],
   });
 
   app.post<{ Body: CheckoutRequest }>("/checkout", { schema: { body: checkoutBody } }, async (req, reply) => {
-    const refuse = (reason: CheckoutRefusal) =>
-      reply.code(refusalStatus[reason]).send({ error: reason, message: reason.replaceAll("_", " ") });
+    const started = process.hrtime.bigint();
+    const observe = (outcome: string) =>
+      checkoutDuration.observe({ tenant_id: tenantOf(req).id, outcome }, Number(process.hrtime.bigint() - started) / 1e9);
+    const refuse = (reason: CheckoutRefusal) => {
+      observe("refused");
+      return reply.code(refusalStatus[reason]).send({ error: reason, message: reason.replaceAll("_", " ") });
+    };
 
     if (deps.checkoutFault) throw new Error("checkout fault injected (FAULT_CHECKOUT_ERRORS)");
     if (!isUuid(req.body.cartToken)) return refuse("cart_not_found");
@@ -82,7 +95,8 @@ export function buildApp(deps: AppDeps) {
     const shop = tenantOf(req);
     const capped = !deps.checkoutLimitExempt?.has(shop.handle);
     if (capped && !inFlight.tryTake(shop.id, planLimits[shop.plan].checkoutsInFlight)) {
-      busy.inc({ tenant: shop.handle });
+      busy.inc({ tenant_id: shop.id });
+      observe("busy");
       return reply
         .code(429)
         .header("retry-after", "1")
@@ -94,6 +108,7 @@ export function buildApp(deps: AppDeps) {
       const result = await acceptCheckout(deps.db, deps.catalogApiUrl, tenant, request);
       if (result.outcome === "refused") return refuse(result.reason);
       req.log.info({ orderId: result.orderId }, "checkout accepted");
+      observe("accepted");
       const accepted: CheckoutAccepted = {
         orderId: result.orderId,
         orderToken: orderTokenFor(tenant.id, result.orderId, deps.orderTokenSecret),
@@ -101,7 +116,11 @@ export function buildApp(deps: AppDeps) {
       };
       return reply.code(202).header("location", `/orders/${result.orderId}`).send(accepted);
     } catch (err) {
-      if (!(err instanceof CatalogUnavailableError)) throw err;
+      if (!(err instanceof CatalogUnavailableError)) {
+        observe("error");
+        throw err;
+      }
+      observe("unavailable");
       req.log.warn({ err }, "catalog unavailable during checkout");
       return reply.code(503).send({ error: "dependency_unavailable", message: "try again shortly" });
     } finally {

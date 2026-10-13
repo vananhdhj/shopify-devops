@@ -105,6 +105,13 @@ const dispatchesOf = (r: Record<string, string>) => stub.dispatches.filter((d) =
 const promoterMetrics = async () => (await fetch("http://127.0.0.1:8103/metrics")).text();
 
 describe("the promoter", () => {
+  it("buys from every cell's synthetic shop continuously, soak or not, and times its own ticks", async () => {
+    await expect.poll(promoterMetrics, { timeout: 30_000, interval: 1_000 }).toMatch(/^synthetic_checkout_total\{cell="pool-1",outcome="passed"\} [1-9]/m);
+    const metrics = await promoterMetrics();
+    expect(metrics).toMatch(/^synthetic_checkout_consecutive_failures\{cell="pool-1"\} 0$/m);
+    expect(metrics).toMatch(/^promoter_tick_seconds_count [1-9]/m);
+  }, 60_000);
+
   it("soaks a release the next wave lacks, dispatches its promotion once, and marks it promoted", async () => {
     const old = release();
     const fresh = release();

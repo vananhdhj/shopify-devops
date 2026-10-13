@@ -5,6 +5,7 @@ import { effectsFor, stockOf } from "./inventory.ts";
 import { seedProducts } from "./seed.ts";
 import { checkoutOf, readOrder, settled } from "./shopping.ts";
 import { compose, restartService, workerMetrics } from "./stack.ts";
+import { tenants } from "./tenants.ts";
 
 describe("worker operations", () => {
   it("survives its database connections being cut mid-transaction, and still settles every Order", async () => {
@@ -31,7 +32,7 @@ describe("worker operations", () => {
     await settled(orderId, orderToken);
 
     const metrics = workerMetrics();
-    expect(metrics).toMatch(/^orders_settled_total\{outcome="confirmed"\} [1-9]/m);
+    expect(metrics).toMatch(new RegExp(`^orders_settled_total\\{tenant_id="${tenants.harbor.id}",outcome="confirmed"\\} [1-9]`, "m"));
     expect(metrics).toMatch(/^orders_queue_depth \d+/m);
     expect(metrics).toMatch(/^worker_job_failures_total \d+/m);
   });

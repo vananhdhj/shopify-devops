@@ -1,11 +1,13 @@
-import { Counter, Gauge, Registry } from "prom-client";
+import { Counter, Gauge, Histogram, Registry } from "prom-client";
 import { createPool, createService, requiredEnv, runService } from "@shop/service-kit";
 import { Promoter } from "./promoter.ts";
 import { defaultLimits } from "./promotion-gate.ts";
 import { cellMetrics, cellStates, dispatchPromotion, syntheticCheckout } from "./promoter-sources.ts";
+import { SyntheticProber } from "./synthetic-prober.ts";
 
 // The promoter (Phase 4): soaks each release in its wave, checks the gate, and dispatches the
-// promote workflow for the next wave, or halts. One replica; its state is in the registry.
+// promote workflow for the next wave, or halts; and (Phase 5) buys from every cell's synthetic
+// shop every 30 s. One replica; its state is in the registry.
 const config = {
   opsPort: Number(process.env.OPS_PORT ?? 8103),
   databaseUrl: requiredEnv("DATABASE_URL"),
@@ -13,6 +15,8 @@ const config = {
   tickMs: Number(process.env.PROMOTER_TICK_MS ?? 15_000),
   soakSeconds: Number(process.env.SOAK_SECONDS ?? 300),
   redispatchAfterSeconds: Number(process.env.REDISPATCH_AFTER_SECONDS ?? 600),
+  /** Every cell's synthetic shop is bought from this often, soak or not (Phase 5). */
+  syntheticIntervalMs: Number(process.env.SYNTHETIC_INTERVAL_MS ?? 30_000),
   argo: {
     apiUrl: process.env.KUBERNETES_API_URL ?? "https://kubernetes.default.svc",
     namespace: process.env.ARGOCD_NAMESPACE ?? "argocd",
@@ -51,6 +55,12 @@ const checks = new Counter({
   labelNames: ["wave", "cell", "check", "outcome"] as const,
   registers: [registry],
 });
+const tickSeconds = new Histogram({
+  name: "promoter_tick_seconds",
+  help: "How long one promoter tick took: Argo CD, Prometheus, and the registry, read on a busy node",
+  buckets: [0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120],
+  registers: [registry],
+});
 const ticks = new Counter({
   name: "promoter_ticks_total",
   help: "Promoter ticks, by outcome (a failed tick is retried on the next)",
@@ -73,6 +83,7 @@ const promoter = new Promoter({
 let running = true;
 async function loop(): Promise<void> {
   while (running) {
+    const endTick = tickSeconds.startTimer();
     try {
       const report = await promoter.tick();
       halted.reset();
@@ -87,10 +98,20 @@ async function loop(): Promise<void> {
       ticks.inc({ outcome: "failed" });
       ops.log.warn({ err }, "promoter tick failed; retrying");
     }
+    endTick();
     await new Promise((resolve) => setTimeout(resolve, config.tickMs));
   }
 }
 void loop();
+
+const prober = new SyntheticProber(db, (handle) => syntheticCheckout(config.edge, handle), registry);
+async function probe(): Promise<void> {
+  while (running) {
+    await prober.round().catch((err: unknown) => ops.log.warn({ err }, "synthetic round failed; retrying"));
+    await new Promise((resolve) => setTimeout(resolve, config.syntheticIntervalMs));
+  }
+}
+void probe();
 
 await runService(ops, db, config.opsPort, async () => {
   running = false;
