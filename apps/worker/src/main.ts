@@ -68,7 +68,7 @@ async function every(intervalMs: number, taskName: string, step: () => Promise<v
 }
 
 void every(config.dispatchIntervalMs, "outbox dispatch", async () => {
-  await dispatchOutbox(db, queue, config.settleRetry);
+  await dispatchOutbox(db, queue, config.settleRetry, config.dispatchPerTenant);
 });
 void every(config.reconcileIntervalMs, "reconciliation", async () => {
   const requeued = await reconcileStalePending(db, config.reconcileStaleAfterMs);

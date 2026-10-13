@@ -1,4 +1,5 @@
 import { requiredEnv as required } from "@shop/service-kit";
+import { planLimits } from "@shop/tenancy";
 
 export const config = {
   opsPort: Number(process.env.OPS_PORT ?? 4003),
@@ -10,6 +11,12 @@ export const config = {
   concurrency: Number(process.env.WORKER_CONCURRENCY ?? 5),
   slowPaymentDelayMs: Number(process.env.SLOW_PAYMENT_DELAY_MS ?? 3_000),
   dispatchIntervalMs: Number(process.env.DISPATCH_INTERVAL_MS ?? 250),
+  /**
+   * A tenant's Orders in the queue or being settled at a time (fair dispatch, Phase 5). The worker
+   * has no tenant context, so it applies the starter plan's to every shop: placement never mixes
+   * plans in a cell (pooled cells hold starter shops, a dedicated cell one plus shop alone).
+   */
+  dispatchPerTenant: Number(process.env.DISPATCH_PER_TENANT ?? planLimits.starter.admittedOrders),
   /** Quick retries per settle job before it is removed and left to reconciliation. */
   settleRetry: {
     attempts: Number(process.env.SETTLE_ATTEMPTS ?? 10),
