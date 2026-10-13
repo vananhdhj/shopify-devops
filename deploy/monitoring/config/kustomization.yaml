@@ -4,7 +4,19 @@ namespace: monitoring
 resources:
   - alert-catcher.yaml
   - traefik-podmonitor.yaml
+  - slo-rules.yaml
 configMapGenerator:
   - name: alert-catcher
     files:
       - alert_catcher.py
+  # Phase 5's dashboards: fleet, cell (the Phase 0 overview, by cell), tenant, and control plane,
+  # picked up by Grafana's dashboard sidecar (label grafana_dashboard=1).
+  - name: shop-dashboards
+    files:
+      - dashboards/fleet.json
+      - dashboards/cell.json
+      - dashboards/tenant.json
+      - dashboards/control-plane.json
+    options:
+      labels:
+        grafana_dashboard: "1"

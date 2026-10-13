@@ -1,0 +1,58 @@
+# Phase 5: a Checkout availability objective for plus shops (99% over 30 days) and its
+# multi-window burn-rate alerts. A bad Checkout is one that failed on the platform's side (outcome
+# `error` or `unavailable`); refusals, including `busy` from the shop's own cap, are answers, not
+# failures. The cells' series carry only the tenant id: `tenant_info` from the control plane says
+# which shops are plus (deduplicated with `max by`, since two control-plane pods can both export
+# it during a rollout). Tested in CI with promtool (tests/prometheus/slo-test.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tenant-slo
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: tenant-slo
+      rules:
+        - record: tenant:checkout_errors:ratio_rate5m
+          expr: |
+            sum by (tenant_id) (rate(checkout_duration_seconds_count{outcome=~"error|unavailable"}[5m]))
+            / sum by (tenant_id) (rate(checkout_duration_seconds_count[5m]))
+        - record: tenant:checkout_errors:ratio_rate30m
+          expr: |
+            sum by (tenant_id) (rate(checkout_duration_seconds_count{outcome=~"error|unavailable"}[30m]))
+            / sum by (tenant_id) (rate(checkout_duration_seconds_count[30m]))
+        - record: tenant:checkout_errors:ratio_rate1h
+          expr: |
+            sum by (tenant_id) (rate(checkout_duration_seconds_count{outcome=~"error|unavailable"}[1h]))
+            / sum by (tenant_id) (rate(checkout_duration_seconds_count[1h]))
+        - record: tenant:checkout_errors:ratio_rate6h
+          expr: |
+            sum by (tenant_id) (rate(checkout_duration_seconds_count{outcome=~"error|unavailable"}[6h]))
+            / sum by (tenant_id) (rate(checkout_duration_seconds_count[6h]))
+        # 14.4x the budget's rate spends 2% of 30 days' budget in an hour: page.
+        - alert: PlusTenantCheckoutBudgetBurnFast
+          expr: |
+            (
+              tenant:checkout_errors:ratio_rate1h > (14.4 * 0.01)
+              and tenant:checkout_errors:ratio_rate5m > (14.4 * 0.01)
+            )
+            * on (tenant_id) group_left (tenant) max by (tenant_id, tenant) (tenant_info{plan="plus", internal="false"})
+          for: 2m
+          labels:
+            severity: page
+          annotations:
+            summary: "{{ $labels.tenant }} (plus): Checkout failing fast enough to spend its 30-day error budget in about two days"
+        # 6x over six hours spends 5% of the budget: a ticket, not a page.
+        - alert: PlusTenantCheckoutBudgetBurnSlow
+          expr: |
+            (
+              tenant:checkout_errors:ratio_rate6h > (6 * 0.01)
+              and tenant:checkout_errors:ratio_rate30m > (6 * 0.01)
+            )
+            * on (tenant_id) group_left (tenant) max by (tenant_id, tenant) (tenant_info{plan="plus", internal="false"})
+          for: 15m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "{{ $labels.tenant }} (plus): Checkout failing steadily, spending its 30-day error budget about five times too fast"
