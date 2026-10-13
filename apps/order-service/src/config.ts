@@ -10,8 +10,5 @@ export const config = {
   platformCellToken: required("PLATFORM_CELL_TOKEN"),
   environment: process.env.APP_ENV ?? "dev",
   // The bad-release drill's fault: when "true", every Checkout fails with 500.
-  // DRILL (Phase 4, ticket 07), reverted by the drill: a release that passes CI (Compose) but fails
-  // wherever it is deployed, since only a Kubernetes pod has KUBERNETES_SERVICE_HOST. Waves must
-  // stop it at the canary.
-  checkoutFault: process.env.FAULT_CHECKOUT_ERRORS === "true" || process.env.KUBERNETES_SERVICE_HOST !== undefined,
+  checkoutFault: process.env.FAULT_CHECKOUT_ERRORS === "true",
 };
