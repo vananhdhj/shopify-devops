@@ -1,6 +1,6 @@
 # Spec: Phase 4 — wave delivery
 
-**Status:** ready-for-agent (decisions 1–5 approved by the author: 1–4 on 2026-10-12, 5 on 2026-10-13; tickets under `issues/`)
+**Status:** resolved (2026-10-13: tickets 01–07 resolved; PRs #35–#38 and #40–#46 merged and deployed to the lab cluster (#39, Argo CD's probes, applied by helm and awaiting merge); the bad-release drill halted at wave 0 with 0 tenants exposed)
 
 Background: the blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`) puts Phase 4 after the cells: "Wave delivery: canary cell, promotion job with gates, expand/contract migrations, mixed-version CI job". Its exit gate: "A bad release halts at wave 0 with the exposed-tenant count recorded; Git revert restores the canary." Phases 1–3 are resolved, and ADRs 0001–0020 are binding.
 

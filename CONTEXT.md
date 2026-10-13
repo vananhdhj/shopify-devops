@@ -38,8 +38,32 @@ _Avoid_: Scheduling, assignment, allocation
 The one entry point for every shop: it finds the tenant a request's address names and that tenant's cell, and passes the request to that cell with a tenant context only that cell accepts.
 _Avoid_: Ingress, gateway, load balancer, (cell) router
 
+**Release**:
+One set of image versions of the shop system, built from one merge, that moves through the cells together.
+_Avoid_: Deploy, version (alone), build
+
+**Wave**:
+A group of cells that receives a release together, in a fixed order: the canary first, then the pooled cells, then the dedicated cells. The control plane and the edge go with the first wave.
+_Avoid_: Stage, ring, tier, environment
+
+**Soak**:
+The time a release runs in a wave, under watch, before it may go on to the next.
+_Avoid_: Bake, burn-in, wait
+
+**Gate**:
+The checks a soaking release must keep passing in every cell of its wave (healthy, few server errors, no stuck Orders, no alerts, a synthetic shop's Checkout completing) before it is promoted; a release that fails them is halted where it is.
+_Avoid_: Approval, quality gate, check (alone)
+
+**Promotion**:
+Moving a release that passed its gate on to the next wave; a halted release is never promoted, only replaced by the next release.
+_Avoid_: Deploy, rollout, push
+
+**Synthetic shop**:
+The one internal shop in each cell that the platform buys from to check a release there; it counts toward no cell's capacity and has no Merchant.
+_Avoid_: Test shop, canary shop, dummy tenant
+
 **Fleet view**:
-The platform operator's picture of every cell at once: its role, how full it is, whether it is ready, and which version it runs.
+The platform operator's picture of every cell at once: its role and wave, how full it is, whether it is ready, which release it runs, and the latest promotions.
 _Avoid_: Dashboard, status page, inventory
 
 **Platform operator**:
