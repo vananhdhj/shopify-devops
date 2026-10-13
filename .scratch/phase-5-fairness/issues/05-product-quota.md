@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (deployed)
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `409 product_quota` from the catalog API (count under the tenant's RLS scope, in the insert's transaction)
 - [ ] Admin: "N of M products", the request quota, the refusal message on the add form
@@ -29,3 +29,5 @@ Runs, all with the cluster stopped:
 - The first two hung. Colima's Docker stopped answering while the host had about 130 MB free, and the promoter test's synchronous `compose up --build` blocked vitest past its own timeout. Colima was restarted (the author agreed); the host then had 3.7 GB free.
 - The third ran in 900 s with 38 of 40 files passing. Two failures: a test mistake (React splits the page's text with `<!-- -->`, so the match now strips them), and `cells.test.ts`'s synthetic shop check not recorded within 15 s on the slow host.
 - Rerun, both files passed (15 tests).
+
+Resolved 2026-10-14 with PR #53 (`6d3e947`). The release went through the waves (canary 14:30, wave 2 at 15:54), after the promote guard refused one mixed release (Phase 5 evidence). The quota and the admin line were verified in Compose; on the cluster the catalog API and storefront run the release in every cell, but no shop was filled to its quota there.

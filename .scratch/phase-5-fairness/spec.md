@@ -1,6 +1,6 @@
 # Spec: Phase 5: fair sharing and observability
 
-**Status:** ready-for-agent (decisions 1–3 approved by the author on 2026-10-13; the values under Implementation Decisions are this spec's proposal; tickets under `issues/`)
+**Status:** resolved (2026-10-14: tickets 01–08 resolved; PRs #48–#56 and the ticket 08 PR merged and deployed to the lab cluster; the noisy-neighbour experiment met its bound)
 
 Background: the blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`) puts Phase 5 after wave delivery: "Fair sharing and observability: router rate limits, checkout and queue fairness, tenant dimension, synthetic tenants, dashboards and alerts". Its exit gate: "Noisy-neighbour experiment meets its bound; tenant and fleet dashboards show real traffic." The bound, from its experiments table: one tenant at 10× its rate quota receives `429`s, not `5xx`; the other tenants in its cell stay within 20% of their baseline checkout p95. Phases 1–4 are resolved, and ADRs 0001–0024 are binding.
 
