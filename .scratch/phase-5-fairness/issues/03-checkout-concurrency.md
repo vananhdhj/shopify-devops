@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (deployed)
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Per-tenant semaphore in the order service, released on every path (success, refusal, error)
 - [ ] Storefront: the busy page, `429`, `Retry-After`
@@ -23,3 +23,5 @@ Tests:
 - In Compose: a fresh starter shop's 24 concurrent Checkouts each answer 202 or 429 (some 429, at least 3 accepted, the 429s with `checkout_busy` and `Retry-After: 1`). Harbor's Checkout in the same moment is accepted, and refused Carts then check out one by one (every slot was given back).
 
 `make test` with the cluster stopped: 38 files, 209 tests passed (262 s).
+
+Resolved 2026-10-13 with PR #51 (`33bb703`, digests `7291b88`). The release went through the waves 06:29 to 06:42. Through the ingress, a fresh starter shop (`cap-5ac0c5`) with 8 Carts sent 8 concurrent Checkouts: 4 × 303 (accepted; a slot freed during the burst, so 4 rather than 3) and 4 × 429 with the "Checkout is busy" page. None failed.
