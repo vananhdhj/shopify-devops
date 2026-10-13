@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (deployed)
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Token bucket (pure, unit-tested): continuous refill, burst, `Retry-After` in whole seconds
 - [ ] `429` text body, `retry-after` header, `router_rate_limited_total{cell,tenant}`
@@ -24,3 +24,5 @@ Tests:
 - In Compose: a fresh starter shop sent 60 concurrent requests gets 429s for at least the excess over its burst, each with `Retry-After` and the body, and never a 5xx. Meadow keeps 200, the shop is served again after the wait, and the counter is labelled with the shop.
 
 `make test` with the cluster stopped: 36 files passed. `lifecycle.test.ts` timed out once (30 s) in a run that took 736 s against the usual 380, on a starved host. Run alone with the rate-limit file it passed (11 tests), and the edge's counter showed only the rate-limit test's shop limited.
+
+Resolved 2026-10-13 with PR #50 (`c9bb3e0`, digests `f83d9ff`). The edge rolled with wave 0 (05:43); the release, every image (Compose changed), went through the waves in 13 minutes. Through the ingress, a fresh starter shop (`rl-6995a2`) sent 60 concurrent requests answered 34 × 200 (its burst of 30 plus refill) and 26 × 429, with no 5xx. Harbor answered 200 meanwhile, and the shop was served again 2 s later.

@@ -11,4 +11,6 @@ export const config = {
   environment: process.env.APP_ENV ?? "dev",
   // The bad-release drill's fault: when "true", every Checkout fails with 500.
   checkoutFault: process.env.FAULT_CHECKOUT_ERRORS === "true",
+  /** Shop handles without a Checkout cap: none in the cluster; the Compose test stack's seeded shops. */
+  checkoutLimitExempt: new Set((process.env.CHECKOUT_LIMIT_EXEMPT ?? "").split(",").filter(Boolean)),
 };

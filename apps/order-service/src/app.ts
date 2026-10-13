@@ -1,12 +1,14 @@
 import type { Pool } from "pg";
 import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
 import { createService, isUuid, requireSecretHeader, tenantOf, withTenant, withoutTenant } from "@shop/service-kit";
-import { tenantContextHeader } from "@shop/tenancy";
+import { planLimits, tenantContextHeader } from "@shop/tenancy";
+import { Counter } from "prom-client";
 import { fulfillOrder, listOrders } from "./admin.ts";
 import { orderMetrics } from "./metrics.ts";
 import { CatalogUnavailableError } from "./catalog-client.ts";
 import { acceptCheckout } from "./checkout.ts";
 import { isValidOrderToken, orderTokenFor } from "./order-tokens.ts";
+import { InFlight } from "./in-flight.ts";
 import { findOrder } from "./orders.ts";
 
 export interface AppDeps {
@@ -22,6 +24,11 @@ export interface AppDeps {
   tenantContextSecret: string;
   /** Fails every Checkout with 500, standing in for a bad release in the rollback drill. */
   checkoutFault?: boolean;
+  /**
+   * Shop handles without a Checkout cap: none in the cluster. The Compose test stack exempts the
+   * seeded shops, whose contention tests send 100 concurrent Checkouts.
+   */
+  checkoutLimitExempt?: ReadonlySet<string>;
 }
 
 const statusChangeBody = {
@@ -48,12 +55,20 @@ const refusalStatus: Record<CheckoutRefusal, number> = {
 };
 
 export function buildApp(deps: AppDeps) {
+  const registry = orderMetrics(deps.db);
   const app = createService({
     name: "order-service",
     environment: deps.environment,
     db: deps.db,
-    registry: orderMetrics(deps.db),
+    registry,
     tenantContextSecret: deps.tenantContextSecret,
+  });
+  const inFlight = new InFlight();
+  const busy = new Counter({
+    name: "checkouts_busy_total",
+    help: "Checkouts refused with 429 because the shop already had its plan's Checkouts in flight, by tenant",
+    labelNames: ["tenant"] as const,
+    registers: [registry],
   });
 
   app.post<{ Body: CheckoutRequest }>("/checkout", { schema: { body: checkoutBody } }, async (req, reply) => {
@@ -62,6 +77,17 @@ export function buildApp(deps: AppDeps) {
 
     if (deps.checkoutFault) throw new Error("checkout fault injected (FAULT_CHECKOUT_ERRORS)");
     if (!isUuid(req.body.cartToken)) return refuse("cart_not_found");
+    // The shop's cap on Checkouts in flight (Phase 5): past it, the buyer retries in a moment while
+    // the cell's database connections stay free for every other shop.
+    const shop = tenantOf(req);
+    const capped = !deps.checkoutLimitExempt?.has(shop.handle);
+    if (capped && !inFlight.tryTake(shop.id, planLimits[shop.plan].checkoutsInFlight)) {
+      busy.inc({ tenant: shop.handle });
+      return reply
+        .code(429)
+        .header("retry-after", "1")
+        .send({ error: "checkout_busy", message: "this shop has as many checkouts in progress as its plan allows; try again in a moment" });
+    }
     try {
       const request = { ...req.body, cartToken: req.body.cartToken.toLowerCase() };
       const tenant = { id: tenantOf(req).id, context: String(req.headers[tenantContextHeader]) };
@@ -78,6 +104,8 @@ export function buildApp(deps: AppDeps) {
       if (!(err instanceof CatalogUnavailableError)) throw err;
       req.log.warn({ err }, "catalog unavailable during checkout");
       return reply.code(503).send({ error: "dependency_unavailable", message: "try again shortly" });
+    } finally {
+      if (capped) inFlight.release(shop.id);
     }
   });
 

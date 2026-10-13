@@ -12,5 +12,6 @@ const app = buildApp({
   tenantContextSecret: config.tenantContextSecret,
   platformCellToken: config.platformCellToken,
   checkoutFault: config.checkoutFault,
+  checkoutLimitExempt: config.checkoutLimitExempt,
 });
 await runService(app, db, config.port);

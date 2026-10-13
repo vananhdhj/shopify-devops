@@ -1,4 +1,4 @@
-import type { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import type { PaymentScenario } from "@shop/contracts";
 import { cartCookie } from "@/lib/cart-cookie";
 import { submitCheckout } from "@/lib/orders";
@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
       return seeOtherClearingCart("/cart");
     case "dependency_unavailable":
       return seeOtherClearingCart("/checkout?error=unavailable");
+    case "checkout_busy":
+      // The shop has its plan's Checkouts in flight (Phase 5): the Cart is kept; the buyer retries.
+      return checkoutBusy();
     case "checkout_key_reused":
     case "invalid_request":
       return seeOtherClearingCart("/checkout?error=retry");
@@ -39,6 +42,16 @@ export async function POST(request: NextRequest) {
       throw new Error(`unhandled checkout error ${String(unhandled)}`);
     }
   }
+}
+
+/** 429 with Retry-After: never an error page for a shop that is merely busy. */
+function checkoutBusy(): NextResponse {
+  const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Checkout is busy</title></head>
+<body><main><h1>Checkout is busy</h1>
+<p>This shop has many checkouts in progress. Your cart is kept: try again in a moment.</p>
+<p><a href="/checkout">Back to checkout</a></p></main></body></html>`;
+  return new NextResponse(page, { status: 429, headers: { "content-type": "text/html; charset=utf-8", "retry-after": "1" } });
 }
 
 function seeOtherClearingCart(location: string, { clearCart = false } = {}): NextResponse {
