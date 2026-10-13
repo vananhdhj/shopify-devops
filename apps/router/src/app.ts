@@ -2,7 +2,7 @@ import replyFrom, { type FastifyReplyFromHooks } from "@fastify/reply-from";
 import Fastify from "fastify";
 import { Counter, type Registry } from "prom-client";
 import { loggingOptions, observeRequests } from "@shop/service-kit";
-import { signTenantContext, tenantContextHeader } from "@shop/tenancy";
+import { limitClassOf, signTenantContext, tenantContextHeader } from "@shop/tenancy";
 import type { RouteSource } from "./routes.ts";
 import type { UpstreamFor } from "./upstreams.ts";
 
@@ -132,7 +132,7 @@ export function buildApp(deps: AppDeps) {
           host: req.headers.host,
           // One id follows the request through the storefront and the APIs' logs.
           "x-request-id": req.id,
-          [tenantContextHeader]: signTenantContext(tenant, upstream.tenantContextSecret),
+          [tenantContextHeader]: signTenantContext({ ...tenant, plan: limitClassOf(tenant) }, upstream.tenantContextSecret),
         };
       },
     });

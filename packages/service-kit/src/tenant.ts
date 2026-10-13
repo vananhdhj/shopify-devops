@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type pg from "pg";
-import { tenantContextHeader, verifyTenantContext, type Tenant } from "@shop/tenancy";
+import { tenantContextHeader, type TenantContext, verifyTenantContext } from "@shop/tenancy";
 import { withTransaction } from "./transactions.ts";
 
 declare module "fastify" {
@@ -13,7 +13,7 @@ declare module "fastify" {
 /** Route options for a route outside any tenant. Every other route requires a tenant context. */
 export const withoutTenant = { config: { tenantContext: false } } as const;
 
-const tenants = new WeakMap<FastifyRequest, Tenant>();
+const tenants = new WeakMap<FastifyRequest, TenantContext>();
 
 /**
  * Refuses every request that lacks a valid signed tenant context (401 `tenant_context_required`),
@@ -32,8 +32,11 @@ export function requireTenantContext(app: FastifyInstance, secret: string): void
   });
 }
 
-/** The tenant this request was verified for. Throws on a route that requires no tenant context. */
-export function tenantOf(req: FastifyRequest): Tenant {
+/**
+ * The tenant this request was verified for, with the limits it is held to. Throws on a route that
+ * requires no tenant context.
+ */
+export function tenantOf(req: FastifyRequest): TenantContext {
   const tenant = tenants.get(req);
   if (!tenant) throw new Error(`no tenant context on ${req.routeOptions.url}`);
   return tenant;

@@ -8,12 +8,20 @@ export interface Tenant {
 }
 
 /**
- * The tenant a request is for, as the router states it: the shop plus its credential version,
- * which changes whenever the shop's Merchant credential changes, so a Merchant session can be bound
- * to it without the cell ever holding the credential. Not a secret.
+ * Which plan limits apply to a shop: its plan (`starter`, `plus`), or `internal` for a cell's
+ * synthetic shop (Phase 5). See `planLimits`.
+ */
+export type LimitClass = "starter" | "plus" | "internal";
+const limitClasses: readonly string[] = ["starter", "plus", "internal"];
+
+/**
+ * The tenant a request is for, as the router states it: the shop, its credential version, which
+ * changes whenever the shop's Merchant credential changes, so a Merchant session can be bound to it
+ * without the cell ever holding the credential, and the limits it is held to. Not a secret.
  */
 export interface TenantContext extends Tenant {
   credentialVersion: number;
+  plan: LimitClass;
 }
 
 /**
@@ -33,6 +41,8 @@ interface Payload {
   name: string;
   /** Credential version. */
   cv: number;
+  /** Limit class (Phase 5). Absent in contexts signed by an edge of an earlier release: `starter`. */
+  p?: LimitClass;
   /** Issued-at, Unix seconds. */
   iat: number;
 }
@@ -48,6 +58,7 @@ export function signTenantContext(tenant: TenantContext, secret: string, now = D
     handle: tenant.handle,
     name: tenant.name,
     cv: tenant.credentialVersion,
+    p: tenant.plan,
     iat: Math.floor(now / 1000),
   };
   const payload = Buffer.from(JSON.stringify(body)).toString("base64url");
@@ -74,19 +85,21 @@ export function verifyTenantContext(
   } catch {
     return undefined;
   }
-  const { id, handle, name, cv, iat } = body;
+  const { id, handle, name, cv, iat, p } = body;
   if (
     typeof id !== "string" ||
     typeof handle !== "string" ||
     typeof name !== "string" ||
     typeof cv !== "number" ||
-    typeof iat !== "number"
+    typeof iat !== "number" ||
+    (p !== undefined && !limitClasses.includes(p))
   ) {
     return undefined;
   }
   const age = Math.floor(now / 1000) - iat;
   if (age > maxAgeSeconds || age < -maxSkewSeconds) return undefined;
-  return { id, handle, name, credentialVersion: cv };
+  return { id, handle, name, credentialVersion: cv, plan: p ?? "starter" };
 }
 
+export { limitClassOf, type PlanLimits, planLimits } from "./plans.ts";
 export { CellCredentials, type CellCredentialKey, cellIdPattern } from "./cell-credentials.ts";

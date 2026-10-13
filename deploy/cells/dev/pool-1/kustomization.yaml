@@ -19,7 +19,7 @@ configMapGenerator:
       # This cell in its control plane's cell directory (registered by the register-cell hook).
       - CELL_ID=pool-1
       - CELL_ROLE=pooled
-      - CELL_CAPACITY=100
+      - CELL_CAPACITY=20 # the lab cap (Phase 5): bounds the tenant label on metrics
       # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.
       - PLATFORM_API_URL=http://platform-api.platform-dev:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100

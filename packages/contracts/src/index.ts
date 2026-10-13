@@ -148,6 +148,10 @@ export interface TenantRoute {
   credentialVersion: number;
   /** The cell holding the shop's data; null until provisioning places it. */
   cell: string | null;
+  /** What the shop pays for; the edge signs it into the tenant context for per-plan limits (Phase 5). */
+  plan: Plan;
+  /** A cell's synthetic shop: held to the `internal` limits, never rate limited. */
+  internal: boolean;
 }
 
 /** A registered cell as the edge needs it: where to send its shops' requests. */
