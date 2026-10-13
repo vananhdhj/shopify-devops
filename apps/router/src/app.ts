@@ -1,8 +1,9 @@
 import replyFrom, { type FastifyReplyFromHooks } from "@fastify/reply-from";
-import Fastify from "fastify";
+import Fastify, { type FastifyServerOptions } from "fastify";
 import { Counter, type Registry } from "prom-client";
 import { loggingOptions, observeRequests } from "@shop/service-kit";
-import { limitClassOf, signTenantContext, tenantContextHeader } from "@shop/tenancy";
+import { limitClassOf, planLimits, signTenantContext, tenantContextHeader } from "@shop/tenancy";
+import { type Limit, RateLimiter } from "./rate-limit.ts";
 import type { RouteSource } from "./routes.ts";
 import type { UpstreamFor } from "./upstreams.ts";
 
@@ -16,6 +17,12 @@ export interface AppDeps {
   platformPublicUrl: string;
   /** Where request durations are recorded; served by the private operational listener. */
   registry: Registry;
+  /**
+   * Shop handles never rate limited, and `platform` for the platform's own address: empty in the
+   * cluster. The Compose test stack exempts the seeded shops and the signup pages, which its suites
+   * drive far harder than any buyer; every other shop gets its plan's limits there too.
+   */
+  rateLimitExempt: ReadonlySet<string>;
 }
 
 /** Answered for every host that names no shop, identical whatever the host, so it reveals nothing. */
@@ -24,6 +31,7 @@ const beingSetUp = "This shop is being set up. Try again in a few seconds.\n";
 const unavailable = "This shop is temporarily unavailable.\n";
 const starting = "The platform is starting. Try again in a few seconds.\n";
 const upstreamDown = "This service is temporarily unavailable. Try again in a few seconds.\n";
+const slowDown = (seconds: number) => `Too many requests to this shop. Try again in ${seconds} s.\n`;
 
 /**
  * The shop handle a Host header names: the single label in front of the base domain
@@ -53,7 +61,10 @@ export function isPlatformHost(host: string | undefined, baseDomain: string): bo
  * bare base domain goes to the control plane's signup pages, without any tenant context.
  */
 export function buildApp(deps: AppDeps) {
-  const app = Fastify(loggingOptions("router", deps.environment));
+  // One proxy (Traefik) in front of the edge in the cluster: the address it adds to
+  // X-Forwarded-For is the client's, which the platform domain's rate limit is keyed by.
+  const options: FastifyServerOptions = { ...loggingOptions("router", deps.environment), trustProxy: (_address, hop) => hop < 1 };
+  const app = Fastify(options);
   observeRequests(app, deps.registry);
   const proxied = new Counter({
     name: "router_proxied_requests_total",
@@ -61,6 +72,17 @@ export function buildApp(deps: AppDeps) {
     labelNames: ["cell"] as const,
     registers: [deps.registry],
   });
+  const rateLimited = new Counter({
+    name: "router_rate_limited_total",
+    help: "Requests refused with 429 for going over the shop's rate quota (by tenant), or a client's at the platform's address",
+    labelNames: ["cell", "tenant"] as const,
+    registers: [deps.registry],
+  });
+  const limiter = new RateLimiter();
+  setInterval(() => limiter.sweep(), 30_000).unref();
+  const unlimited: Limit = { rate: Number.POSITIVE_INFINITY, burst: Number.POSITIVE_INFINITY };
+  const limitFor = (exemptAs: string, limit: { requestsPerSecond: number; burst: number }): Limit =>
+    deps.rateLimitExempt.has(exemptAs) ? unlimited : { rate: limit.requestsPerSecond, burst: limit.burst };
   const unroutable = new Counter({
     name: "router_unroutable_requests_total",
     help: "Requests for an active shop whose cell this router cannot use, by reason",
@@ -89,6 +111,12 @@ export function buildApp(deps: AppDeps) {
   };
   app.all("/*", async (req, reply) => {
     if (isPlatformHost(req.headers.host, deps.baseDomain)) {
+      // The signup pages name no shop: each client address gets a starter shop's rate.
+      const decision = limiter.take(`client:${req.ip}`, limitFor("platform", planLimits.starter));
+      if (!decision.allowed) {
+        rateLimited.inc({ cell: "", tenant: "" });
+        return reply.code(429).header("retry-after", String(decision.retryAfterSeconds)).type(text).send(slowDown(decision.retryAfterSeconds));
+      }
       return reply.from(`${deps.platformPublicUrl}${req.url}`, {
         onError,
         rewriteRequestHeaders: (_original, headers) => {
@@ -110,6 +138,13 @@ export function buildApp(deps: AppDeps) {
       default:
         // Unknown, being deleted, or deleted: indistinguishable from an address that never named a shop.
         return reply.code(404).type(text).send(noShop);
+    }
+
+    // The shop's rate quota (Phase 5): over it, the request never reaches the cell.
+    const decision = limiter.take(`tenant:${tenant.id}`, limitFor(tenant.handle, planLimits[limitClassOf(tenant)]));
+    if (!decision.allowed) {
+      rateLimited.inc({ cell: tenant.cell ?? "", tenant: tenant.handle });
+      return reply.code(429).header("retry-after", String(decision.retryAfterSeconds)).type(text).send(slowDown(decision.retryAfterSeconds));
     }
 
     const upstream = deps.upstreamFor(tenant);

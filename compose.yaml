@@ -210,6 +210,10 @@ services:
       PLATFORM_ROUTER_TOKEN: ${PLATFORM_ROUTER_TOKEN:?run make secrets}
       # The bare base domain serves the control plane's signup pages.
       PLATFORM_PUBLIC_URL: http://platform-api:8100
+      # The test suites drive the seeded shops and the signup pages far harder than buyers would:
+      # exempt from rate limits here only; every other shop gets its plan's limits. The cluster
+      # exempts nothing.
+      RATE_LIMIT_EXEMPT: harbor,meadow,platform
       APP_ENV: dev
     volumes:
       - ./.secrets/mounts/edge:/run/cell-credentials:ro
