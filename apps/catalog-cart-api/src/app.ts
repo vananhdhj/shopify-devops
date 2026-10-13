@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import type { InventoryEffectRequest, InventoryEffectResult, NewProduct, ProductList } from "@shop/contracts";
+import type { AdminUsage, InventoryEffectRequest, InventoryEffectResult, NewProduct, ProductList } from "@shop/contracts";
+import { planLimits } from "@shop/tenancy";
 import {
   createService,
   isUuid,
@@ -12,7 +13,7 @@ import {
 } from "@shop/service-kit";
 import { createCart, getCart, setCartItemQuantity, type Missing } from "./carts.ts";
 import { applyInventoryEffect } from "./inventory.ts";
-import { addProduct, findProduct, listProducts } from "./products.ts";
+import { addProduct, countProducts, findProduct, listProducts } from "./products.ts";
 
 function notFound(reply: FastifyReply, missing: Missing) {
   return reply.code(404).send({ error: `${missing}_not_found`, message: `${missing} not found` });
@@ -69,6 +70,11 @@ export interface AppDeps {
   platformCellToken: string;
   /** Verifies the tenant context every business request carries (from the router, via the storefront). */
   tenantContextSecret: string;
+  /**
+   * Shop handles without a product quota: none in the cluster. The Compose test stack exempts the
+   * seeded shops, whose catalogs grow with every test run on a volume that outlives the stack.
+   */
+  productQuotaExempt?: ReadonlySet<string>;
 }
 
 export function buildApp(deps: AppDeps) {
@@ -136,13 +142,40 @@ export function buildApp(deps: AppDeps) {
     },
   );
 
+  // The plan's product quota (Phase 5), counted and enforced in the insert's own transaction under
+  // a lock per shop, so two concurrent adds cannot both take the last place.
   app.post<{ Body: NewProduct }>(
     "/admin/products",
     { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken), schema: { body: newProductBody } },
     async (req, reply) => {
-      const product = await asTenant(req, (db) => addProduct(db, req.body));
+      const shop = tenantOf(req);
+      const limit = deps.productQuotaExempt?.has(shop.handle) ? Number.POSITIVE_INFINITY : planLimits[shop.plan].products;
+      const product = await asTenant(req, async (db) => {
+        await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`products:${shop.id}`]);
+        return (await countProducts(db)) >= limit ? undefined : addProduct(db, req.body);
+      });
+      if (!product) {
+        req.log.info({ limit }, "product refused: quota reached");
+        return reply.code(409).send({ error: "product_quota", message: `this shop's plan allows ${limit} products` });
+      }
       req.log.info({ productId: product.id }, "product added");
       return reply.code(201).send(product);
+    },
+  );
+
+  app.get(
+    "/admin/usage",
+    { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken) },
+    async (req): Promise<AdminUsage> => {
+      const shop = tenantOf(req);
+      const limits = planLimits[shop.plan];
+      return {
+        plan: shop.plan,
+        products: await asTenant(req, countProducts),
+        productLimit: limits.products,
+        requestsPerSecond: limits.requestsPerSecond,
+        burst: limits.burst,
+      };
     },
   );
 

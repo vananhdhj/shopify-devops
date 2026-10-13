@@ -1,16 +1,27 @@
 import Link from "next/link";
+import { Usage } from "@/app/admin/usage";
 import { Notice } from "@/app/notice";
+import { usage } from "@/lib/admin-api";
 import { requireMerchant } from "@/lib/merchant";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewProduct({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireMerchant();
-  const { error } = await searchParams;
+  const [{ error }, current] = await Promise.all([searchParams, usage()]);
   return (
     <>
       <h1>Add product</h1>
-      <Notice code={error} messages={{ invalid: "Check the name, price, and stock." }} />
+      <Usage usage={current} />
+      <Notice
+        code={error}
+        messages={{
+          invalid: "Check the name, price, and stock.",
+          quota: current
+            ? `Your plan allows ${current.productLimit} products, and this shop has ${current.products}.`
+            : "This shop has as many products as its plan allows.",
+        }}
+      />
       <form action="/admin/products" method="post" className="stacked-form">
         <label>
           Name

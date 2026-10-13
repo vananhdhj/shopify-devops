@@ -21,5 +21,6 @@ export async function POST(request: NextRequest) {
     priceMinor: Number(priceMinor),
     stock: Number(stock),
   });
-  return seeOther(added ? "/admin?notice=product-added" : "/admin/products/new?error=invalid");
+  if (added === "added") return seeOther("/admin?notice=product-added");
+  return seeOther(`/admin/products/new?error=${added}`);
 }

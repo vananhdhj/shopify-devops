@@ -23,6 +23,12 @@ function toProduct(row: ProductRow): Product {
   };
 }
 
+/** Products in the catalog of the tenant the transaction is scoped to (row-level security). */
+export async function countProducts(db: Queryable): Promise<number> {
+  const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM catalog.products");
+  return rows[0]!.n;
+}
+
 export async function listProducts(db: Queryable): Promise<Product[]> {
   const { rows } = await db.query<ProductRow>(
     `SELECT ${columns} FROM catalog.products ORDER BY name`,

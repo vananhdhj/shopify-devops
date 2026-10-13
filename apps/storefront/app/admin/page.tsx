@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { OrderStatus } from "@shop/contracts";
+import { Usage } from "@/app/admin/usage";
 import { Notice } from "@/app/notice";
-import { listOrders } from "@/lib/admin-api";
+import { listOrders, usage } from "@/lib/admin-api";
 import { requireMerchant } from "@/lib/merchant";
 import { formatPrice } from "@/lib/money";
 
@@ -23,7 +24,7 @@ const notices = {
 
 export default async function MerchantOrders({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
   await requireMerchant();
-  const [{ notice }, { orders, truncated }] = await Promise.all([searchParams, listOrders()]);
+  const [{ notice }, { orders, truncated }, current] = await Promise.all([searchParams, listOrders(), usage()]);
 
   return (
     <>
@@ -35,6 +36,7 @@ export default async function MerchantOrders({ searchParams }: { searchParams: P
         </form>
       </div>
       <Notice code={notice} messages={notices} />
+      <Usage usage={current} />
       {truncated ? <p className="hint">Showing Confirmed orders first, then the newest; older orders are not listed.</p> : null}
       <table className="cart">
         <thead>
