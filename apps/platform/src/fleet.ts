@@ -4,7 +4,7 @@ import type { Queryable } from "@shop/service-kit";
 /** What a cell API's readiness endpoint said: `unreachable` when nothing answered in time. */
 export type Readiness = "ready" | "not_ready" | "unreachable";
 
-const statuses = ["PROVISIONING", "ACTIVE", "SUSPENDED", "DELETING", "DELETED"] as const;
+const statuses = ["PROVISIONING", "ACTIVE", "SUSPENDED", "MOVING", "RESTORING", "DELETING", "DELETED"] as const;
 
 export interface CellView {
   id: string;

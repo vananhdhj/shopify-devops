@@ -14,10 +14,11 @@ declare module "fastify" {
 export const withoutTenant = { config: { tenantContext: false } } as const;
 
 const tenants = new WeakMap<FastifyRequest, TenantContext>();
+const readMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Refuses every request that lacks a valid signed tenant context (401 `tenant_context_required`),
- * except on routes marked `withoutTenant`. The default is refusal, so a new route cannot forget
+ * except on routes marked `withoutTenant`, and every write for a read-only one (503 `shop_updating`). The default is refusal, so a new route cannot forget
  * the check. Request log lines then carry the tenant id.
  */
 export function requireTenantContext(app: FastifyInstance, secret: string): void {
@@ -29,6 +30,14 @@ export function requireTenantContext(app: FastifyInstance, secret: string): void
     }
     tenants.set(req, tenant);
     reply.log = req.log = req.log.child({ tenantId: tenant.id });
+    // A shop frozen for a move or a restore (Phase 6) is read, never written: its rows are being
+    // copied or replaced. Internal routes (the worker's settlement) carry no tenant context.
+    if (tenant.readOnly && !readMethods.has(req.method)) {
+      return reply
+        .code(503)
+        .header("retry-after", "5")
+        .send({ error: "shop_updating", message: "this shop is updating; try again in a moment" });
+    }
   });
 }
 

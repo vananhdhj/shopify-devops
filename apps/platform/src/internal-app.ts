@@ -112,7 +112,8 @@ export function buildInternalApp(deps: InternalAppDeps) {
         req.log.warn({ tenantId: req.body.tenantId }, "sign-in check refused: not the storefront of the shop's cell");
         return reply.code(401).send({ error: "unauthorized", message: "x-platform-token of the shop's cell required" });
       }
-      const ok = credential.status === "ACTIVE" && (await isPassword(req.body.password, credential.hash));
+      // A shop frozen for a move or a restore (Phase 6) can still be signed in to: its admin reads.
+      const ok = signInStatuses.has(credential.status) && (await isPassword(req.body.password, credential.hash));
       req.log.info({ tenantId: req.body.tenantId, ok }, "merchant sign-in checked");
       return ok ? { ok: true, credentialVersion: credential.credentialVersion } : { ok: false };
     },
@@ -151,3 +152,5 @@ export function buildInternalApp(deps: InternalAppDeps) {
 
   return app;
 }
+
+const signInStatuses: ReadonlySet<string> = new Set(["ACTIVE", "MOVING", "RESTORING"]);

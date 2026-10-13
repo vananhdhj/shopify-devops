@@ -22,6 +22,11 @@ const limitClasses: readonly string[] = ["starter", "plus", "internal"];
 export interface TenantContext extends Tenant {
   credentialVersion: number;
   plan: LimitClass;
+  /**
+   * The shop is frozen for a move or a restore (Phase 6): it is served, but its writes are refused.
+   * Absent when signing: false.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -43,6 +48,8 @@ interface Payload {
   cv: number;
   /** Limit class (Phase 5). Absent in contexts signed by an edge of an earlier release: `starter`. */
   p?: LimitClass;
+  /** Read-only (Phase 6), only when true. Units of an earlier release ignore it. */
+  ro?: true;
   /** Issued-at, Unix seconds. */
   iat: number;
 }
@@ -59,6 +66,7 @@ export function signTenantContext(tenant: TenantContext, secret: string, now = D
     name: tenant.name,
     cv: tenant.credentialVersion,
     p: tenant.plan,
+    ...(tenant.readOnly ? { ro: true as const } : {}),
     iat: Math.floor(now / 1000),
   };
   const payload = Buffer.from(JSON.stringify(body)).toString("base64url");
@@ -85,20 +93,21 @@ export function verifyTenantContext(
   } catch {
     return undefined;
   }
-  const { id, handle, name, cv, iat, p } = body;
+  const { id, handle, name, cv, iat, p, ro } = body;
   if (
     typeof id !== "string" ||
     typeof handle !== "string" ||
     typeof name !== "string" ||
     typeof cv !== "number" ||
     typeof iat !== "number" ||
-    (p !== undefined && !limitClasses.includes(p))
+    (p !== undefined && !limitClasses.includes(p)) ||
+    (ro !== undefined && ro !== true)
   ) {
     return undefined;
   }
   const age = Math.floor(now / 1000) - iat;
   if (age > maxAgeSeconds || age < -maxSkewSeconds) return undefined;
-  return { id, handle, name, credentialVersion: cv, plan: p ?? "starter" };
+  return { id, handle, name, credentialVersion: cv, plan: p ?? "starter", readOnly: ro === true };
 }
 
 export { limitClassOf, type PlanLimits, planLimits } from "./plans.ts";

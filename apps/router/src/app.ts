@@ -151,6 +151,9 @@ export function buildApp(deps: AppDeps) {
     const tenant = handle === undefined ? undefined : deps.routes.lookup(handle);
     switch (tenant?.status) {
       case "ACTIVE":
+      // Frozen for a move or a restore (Phase 6): served, but read-only (the context says so).
+      case "MOVING":
+      case "RESTORING":
         break;
       case "PROVISIONING":
         return reply.code(503).header("retry-after", "5").type(text).send(beingSetUp);
@@ -189,7 +192,10 @@ export function buildApp(deps: AppDeps) {
           host: req.headers.host,
           // One id follows the request through the storefront and the APIs' logs.
           "x-request-id": req.id,
-          [tenantContextHeader]: signTenantContext({ ...tenant, plan: limitClassOf(tenant) }, upstream.tenantContextSecret),
+          [tenantContextHeader]: signTenantContext(
+            { ...tenant, plan: limitClassOf(tenant), readOnly: tenant.status !== "ACTIVE" },
+            upstream.tenantContextSecret,
+          ),
         };
       },
     });
