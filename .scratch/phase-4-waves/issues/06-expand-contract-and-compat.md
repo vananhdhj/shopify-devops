@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] `scripts/migration-lint.sh` over migrations new in the PR (both databases): `DROP`, `RENAME`, `ALTER … TYPE`, `SET NOT NULL`, `ADD COLUMN … NOT NULL` without `DEFAULT` refused unless the file has `-- contract: <reason and the release after which it is safe>`; tested against fixtures
 - [ ] `compat` job (in `ci-ok`): the PR's db-migrations, platform, and router images built; the cell service images pinned on `main` for wave 1 pulled from GHCR; a Compose override runs them together; a compatibility subset of the integration suite (signup to active, browse, checkout to Confirmed, Merchant sign-in, deletion)
@@ -28,3 +28,5 @@ Proven locally, not committed. A migration renaming `catalog.products.name` to `
 The local database was put back by hand: the column renamed back and its migration row removed.
 
 Verified: lint, typecheck, `make compat` passing with dedicated-1's (wave 2) images from GHCR, and `make test` with the k3d cluster stopped (35 files, 197 tests passed).
+
+Resolved 2026-10-13 with PR #44 (`4202765`). The `compat` job's first CI run failed: the test package's workspace dependencies were never built, and locally a stale build had hidden it. `make compat` now builds them first, and the job passed, on #44 itself and on every pull request since (#45, #46).
