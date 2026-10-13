@@ -240,6 +240,13 @@ The bad-release drill is written up step by step in
 - One cell, so placement is trivial and a cell outage stops every shop; more cells, placement by
   plan, and tenant moves come in later phases of the blueprint. A deleted shop's data is not
   exported first, and its handle is never reused.
+- **Per-shop restore uses scheduled exports, for now (Phase 6, decision 3).** The control plane
+  exports every shop's rows every 15 minutes (keeping 8), and a restore re-imports one of those
+  exports, so changes made after the last export are lost by a restore. **To change later:**
+  point-in-time recovery of each cell's PostgreSQL (a base backup plus WAL archiving, replayed into
+  an isolated scratch database, from which one shop is exported and re-imported). It restores to
+  any moment, but needs archiving, disk, and memory the 16 GB laptop cannot spare; revisit when the
+  lab has room (the cloud run, Phase 8).
 - No signup verification, password reset, or attempt limiting; a Merchant session cannot be
   revoked alone (bumping the shop's credential version signs all its sessions out).
 - Per-shop limits (request rate at the edge, Checkouts in flight, products, Orders admitted into the
