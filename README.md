@@ -142,6 +142,11 @@ kubectl --context k3d-shop -n argocd port-forward svc/argocd-server 8081:80
 kubectl --context k3d-shop -n monitoring port-forward svc/monitoring-grafana 8082:80   # admin / GRAFANA_ADMIN_PASSWORD
 ```
 
+Grafana's dashboards (in Git, `deploy/monitoring/config/dashboards`): **Fleet** (every cell's shops,
+traffic, errors, synthetic Checkout, and the waves), **Cell** (one cell's services, Orders, queue,
+and pods), **Tenant** (one shop's requests, limits hit, Checkout latency and outcomes, and plan), and
+**Control plane** (lifecycle work and the promoter).
+
 ### Drills
 
 ```sh
@@ -237,9 +242,9 @@ The bad-release drill is written up step by step in
   exported first, and its handle is never reused.
 - No signup verification, password reset, or attempt limiting; a Merchant session cannot be
   revoked alone (bumping the shop's credential version signs all its sessions out).
-- Metrics have no tenant dimension yet: dashboards and alerts are per cell, and the oldest-Pending
-  gauge spans every shop. Per-shop rate limits and queue fairness are not in place either, so one
-  busy shop can slow the others.
+- Per-shop limits (request rate at the edge, Checkouts in flight, products, Orders admitted into the
+  settlement queue) are held in each process's memory: exact with one replica of each unit, and
+  each replica allows the full limit once there are several.
 - `make smoke` and the drills run only from the laptop, because GitHub-hosted runners cannot reach
   the cluster.
 - Argo CD polls Git (no webhook): about a minute passes between a merge and the start of its sync.

@@ -155,6 +155,11 @@ jobs:
           # A release reaches wave 0 and is promoted one wave at a time, so a gap would strand every later wave.
           jq -se '[.[].wave] | unique | . == [range(0; length)]' deploy/cells/dev/*/cell.json >/dev/null ||
             { echo "::error::the dev cells' waves must be 0, 1, 2… with no gap"; exit 1; }
+      - name: The tenant SLO rules parse and pass their promtool tests
+        run: |
+          yq '.spec' deploy/monitoring/config/slo-rules.yaml > tests/prometheus/slo-rules.rules.yaml
+          docker run --rm -v "$PWD/tests/prometheus:/rules" -w /rules --entrypoint promtool quay.io/prometheus/prometheus:v3.15.0-distroless check rules slo-rules.rules.yaml
+          docker run --rm -v "$PWD/tests/prometheus:/rules" -w /rules --entrypoint promtool quay.io/prometheus/prometheus:v3.15.0-distroless test rules slo-test.yaml
       - name: Every workload image is pinned by digest
         run: |
           unpinned="$(grep -hE '^\s+image:' rendered/*.yaml | grep -v '@sha256:' || true)"

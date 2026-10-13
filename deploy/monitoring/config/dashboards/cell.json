@@ -1,8 +1,9 @@
 {
-  "uid": "shop-overview",
-  "title": "Shop overview",
+  "uid": "cell",
+  "title": "Cell",
   "tags": [
-    "shop"
+    "shop",
+    "phase-5"
   ],
   "timezone": "browser",
   "refresh": "30s",
@@ -86,7 +87,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(orders_oldest_pending_age_seconds{namespace=\"$namespace\"})",
+          "expr": "max(orders_oldest_pending_age_seconds{cell=\"$cell\"})",
           "legendFormat": "Oldest Pending order"
         }
       ]
@@ -147,7 +148,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(orders_queue_depth{namespace=\"$namespace\"})",
+          "expr": "sum(orders_queue_depth{cell=\"$cell\"})",
           "legendFormat": "Queue depth"
         }
       ]
@@ -204,7 +205,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(orders_settled_total{namespace=\"$namespace\",outcome=\"confirmed\"}[15m]))",
+          "expr": "sum(increase(orders_settled_total{cell=\"$cell\",outcome=\"confirmed\"}[15m]))",
           "legendFormat": "Orders confirmed (15 min)"
         }
       ]
@@ -269,7 +270,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(http_request_duration_seconds_count{namespace=\"$namespace\",status_code=~\"5..\",route!~\"/health/.*|/metrics\"}[5m])) / sum(rate(http_request_duration_seconds_count{namespace=\"$namespace\",route!~\"/health/.*|/metrics\"}[5m]))",
+          "expr": "sum(rate(http_request_duration_seconds_count{cell=\"$cell\",status_code=~\"5..\",route!~\"/health/.*|/metrics\"}[5m])) / sum(rate(http_request_duration_seconds_count{cell=\"$cell\",route!~\"/health/.*|/metrics\"}[5m]))",
           "legendFormat": "API 5xx ratio (5 min)"
         }
       ]
@@ -397,7 +398,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (container) (rate(http_request_duration_seconds_count{namespace=\"$namespace\",route!~\"/health/.*|/metrics\"}[1m]))",
+          "expr": "sum by (container) (rate(http_request_duration_seconds_count{cell=\"$cell\",route!~\"/health/.*|/metrics\"}[1m]))",
           "legendFormat": "{{container}}"
         }
       ]
@@ -528,7 +529,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (container) (rate(http_request_duration_seconds_count{namespace=\"$namespace\",status_code=~\"5..\",route!~\"/health/.*|/metrics\"}[2m])) / sum by (container) (rate(http_request_duration_seconds_count{namespace=\"$namespace\",route!~\"/health/.*|/metrics\"}[2m]))",
+          "expr": "sum by (container) (rate(http_request_duration_seconds_count{cell=\"$cell\",status_code=~\"5..\",route!~\"/health/.*|/metrics\"}[2m])) / sum by (container) (rate(http_request_duration_seconds_count{cell=\"$cell\",route!~\"/health/.*|/metrics\"}[2m]))",
           "legendFormat": "{{container}}"
         }
       ]
@@ -643,7 +644,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (container, le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\",route!~\"/health/.*|/metrics\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (container, le) (rate(http_request_duration_seconds_bucket{cell=\"$cell\",route!~\"/health/.*|/metrics\"}[5m])))",
           "legendFormat": "{{container}}"
         }
       ]
@@ -652,7 +653,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "Storefront at the edge, by status class",
-      "description": "Requests reaching the storefront through Traefik, grouped by HTTP status class.",
+      "description": "Every request the edge answered for this cell's shops, by status class (Phase 5).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -758,8 +759,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (code) (label_replace(rate(traefik_service_requests_total{service=~\"$namespace-storefront.*\"}[1m]), \"code\", \"${1}xx\", \"code\", \"(.)..\"))",
-          "legendFormat": "{{code}}"
+          "expr": "sum by (code_class) (rate(router_requests_total{cell=\"$cell\"}[1m]))",
+          "legendFormat": "{{code_class}}"
         }
       ]
     },
@@ -871,7 +872,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (outcome) (rate(orders_settled_total{namespace=\"$namespace\"}[5m])) * 60",
+          "expr": "sum by (outcome) (rate(orders_settled_total{cell=\"$cell\"}[5m])) * 60",
           "legendFormat": "{{outcome}}"
         }
       ]
@@ -956,7 +957,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(worker_job_failures_total{namespace=\"$namespace\"}[5m])) * 60",
+          "expr": "sum(rate(worker_job_failures_total{cell=\"$cell\"}[5m])) * 60",
           "legendFormat": "failed attempts"
         },
         {
@@ -965,7 +966,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(worker_jobs_exhausted_total{namespace=\"$namespace\"}[5m])) * 60",
+          "expr": "sum(rate(worker_jobs_exhausted_total{cell=\"$cell\"}[5m])) * 60",
           "legendFormat": "exhausted jobs"
         }
       ]
@@ -1284,20 +1285,38 @@
         "current": {}
       },
       {
-        "name": "namespace",
+        "name": "cell",
         "type": "query",
-        "label": "Environment",
+        "label": "Cell",
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(http_request_duration_seconds_count, namespace)",
-          "refId": "ns"
+          "query": "label_values(up{cell!=\"\"}, cell)",
+          "refId": "cell"
         },
         "refresh": 2,
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "namespace",
+        "type": "query",
+        "label": "Namespace",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(up{cell=\"$cell\"}, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "hide": 2,
         "current": {}
       }
     ]
-  }
+  },
+  "description": "One cell: its Orders, its services' rate, errors, and latency, its queue, and its pods (the Phase 0 shop overview, by cell)."
 }

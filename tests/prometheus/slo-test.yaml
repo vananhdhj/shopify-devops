@@ -1,0 +1,49 @@
+# promtool unit tests for deploy/monitoring/config/slo-rules.yaml (CI extracts its rule groups to
+# slo-rules.rules.yaml beside this file). A plus shop and a starter shop fail a third of their
+# Checkouts: only the plus shop pages (the 70 m case lists exactly one alert), not the starter shop,
+# and not a plus shop that never fails.
+rule_files:
+  - slo-rules.rules.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'checkout_duration_seconds_count{tenant_id="p1",outcome="accepted",pod="order-service-a"}'
+        values: '0+60x100'
+      - series: 'checkout_duration_seconds_count{tenant_id="p1",outcome="error",pod="order-service-a"}'
+        values: '0+30x100'
+      - series: 'checkout_duration_seconds_count{tenant_id="s1",outcome="accepted",pod="order-service-b"}'
+        values: '0+60x100'
+      - series: 'checkout_duration_seconds_count{tenant_id="s1",outcome="error",pod="order-service-b"}'
+        values: '0+30x100'
+      - series: 'checkout_duration_seconds_count{tenant_id="p2",outcome="accepted",pod="order-service-c"}'
+        values: '0+60x100'
+      # Two control-plane pods exporting the same shop (a rollout): the join must still work.
+      - series: 'tenant_info{tenant_id="p1",tenant="plus-one",plan="plus",cell="dedicated-1",internal="false",pod="platform-api-a"}'
+        values: '1x100'
+      - series: 'tenant_info{tenant_id="p1",tenant="plus-one",plan="plus",cell="dedicated-1",internal="false",pod="platform-api-b"}'
+        values: '1x100'
+      - series: 'tenant_info{tenant_id="s1",tenant="starter-one",plan="starter",cell="pool-1",internal="false",pod="platform-api-a"}'
+        values: '1x100'
+      - series: 'tenant_info{tenant_id="p2",tenant="plus-two",plan="plus",cell="dedicated-2",internal="false",pod="platform-api-a"}'
+        values: '1x100'
+    promql_expr_test:
+      - expr: tenant:checkout_errors:ratio_rate1h{tenant_id="p1"}
+        eval_time: 70m
+        exp_samples:
+          - labels: 'tenant:checkout_errors:ratio_rate1h{tenant_id="p1"}'
+            value: 0.3333333333333333
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: PlusTenantCheckoutBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              tenant_id: p1
+              tenant: plus-one
+            exp_annotations:
+              summary: "plus-one (plus): Checkout failing fast enough to spend its 30-day error budget in about two days"
+      # Still pending inside its 2 minutes of `for`: no page yet.
+      - eval_time: 1m
+        alertname: PlusTenantCheckoutBudgetBurnFast
+        exp_alerts: []
