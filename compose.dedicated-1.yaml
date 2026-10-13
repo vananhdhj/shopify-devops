@@ -108,6 +108,8 @@ services:
       TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
       PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
       APP_ENV: dev
+    ports:
+      - "127.0.0.1:4021:4001" # for tests (the move's endpoints); never on an ingress
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4001/health/ready"]
       interval: 2s
@@ -130,6 +132,8 @@ services:
       TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
       PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
       APP_ENV: dev
+    ports:
+      - "127.0.0.1:4022:4002" # for tests (the move's endpoints); never on an ingress
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4002/health/ready"]
       interval: 2s
