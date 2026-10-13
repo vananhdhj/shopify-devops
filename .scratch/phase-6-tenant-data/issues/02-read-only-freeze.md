@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [x] Migration: the transition trigger allows `ACTIVE ↔ MOVING` and `ACTIVE ↔ RESTORING`; routing serves both
 - [x] `ro` in the tenant context (absent: false); the edge sets it for `MOVING`/`RESTORING`
@@ -28,3 +28,5 @@ Tests:
 - `freeze.test.ts` (Compose): Meadow set `MOVING` with an Order still Pending (slow payment). The Order settles while frozen. The home page, a product, the Cart, and the Checkout form answer 200. Cart adds, Checkout, and a Merchant's product add answer the 503 updating page with `Retry-After` and leave the Cart as it was. The Merchant can sign in and read the admin. The APIs answer `shop_updating` to a read-only context's writes and 200 to its reads. Harbor's Cart adds go through. Every way out of `MOVING` but `ACTIVE` is refused. Once unfrozen, Meadow takes writes again.
 
 `make test CELLS=2` with the cluster stopped: 44 files, 234 tests passed (321 s).
+
+Resolved 2026-10-14 with PR #60 (`4bd0c23`). The release, every image, went through the waves with no human step: canary soaked from 22:34, pool-1 from 22:41 (302 s, 20 synthetic Checkouts), dedicated-1 reached at 22:48 UTC. On the cluster, through the ingress: `nn-quiet-1-86d161` (pool-1) set `MOVING` in the registry answered its home page 200 and a Cart add 503 with "This shop is updating, try again in a moment", then 303 again once set back to `ACTIVE`.

@@ -1,26 +1,9 @@
 import type { Pool } from "pg";
 import { withTransaction } from "@shop/service-kit";
 import type { CellCredentials } from "@shop/tenancy";
+import { CellData, total } from "./cell-data.ts";
 import { endpointsOf } from "./cells.ts";
 import { type LifecycleEvent, complete, recordEvent } from "./lifecycle.ts";
-
-/** Rows a purge removed and rows of the shop left afterwards, per table. */
-export interface PurgeReport {
-  deleted: Record<string, number>;
-  remaining: Record<string, number>;
-}
-
-async function purge(baseUrl: string, cellToken: string, tenantId: string): Promise<PurgeReport> {
-  const res = await fetch(`${baseUrl}/internal/tenants/${tenantId}/purge`, {
-    method: "POST",
-    headers: { "x-platform-token": cellToken },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`purge at ${baseUrl} answered ${res.status}`);
-  return (await res.json()) as PurgeReport;
-}
-
-const total = (counts: Record<string, number>) => Object.values(counts).reduce((sum, n) => sum + n, 0);
 
 export type DeletionOutcome = "deleted" | "verify_later" | "nothing_to_do";
 
@@ -57,10 +40,7 @@ export async function deleteShop(
   const cellToken = credentials.get(cell.id, "platform-cell-token");
   if (!cellToken) throw new Error(`no platform-cell-token for cell ${cell.id}`);
 
-  const orders = await purge(cell.ordersUrl, cellToken, event.tenantId);
-  const catalog = await purge(cell.catalogUrl, cellToken, event.tenantId);
-  const deleted = { ...orders.deleted, ...catalog.deleted };
-  const remaining = { ...orders.remaining, ...catalog.remaining };
+  const { deleted, remaining } = await new CellData(cell, cellToken, 10_000).purgeAll(event.tenantId);
 
   const passes = await db.query<{ n: number }>(
     "SELECT count(*)::int AS n FROM platform.tenant_events WHERE tenant_id = $1 AND step = 'purged'",

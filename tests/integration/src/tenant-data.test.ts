@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { cellQuery } from "./db.ts";
-import { catalogApiUrl, orderServiceUrl, waitFor } from "./http.ts";
+import { type Checksums, type Rows, checksumsOf, empty, exportOf, importInto, internal, purge } from "./cell-data.ts";
+import { waitFor } from "./http.ts";
 import { cellSecret } from "./secrets.ts";
 import { seedProducts } from "./seed.ts";
 import { checkoutOf, settled } from "./shopping.ts";
@@ -15,53 +16,8 @@ import { tenants } from "./tenants.ts";
 const twoCells = secondCellRunning();
 if (!twoCells) console.warn("tenant data tests skipped: the second cell is not running (make dev-up CELLS=2)");
 
-/** Each cell's catalog API and order service, as published on loopback by Compose. */
-const cells = {
-  "pool-1": { catalog: catalogApiUrl, orders: orderServiceUrl },
-  "dedicated-1": { catalog: "http://127.0.0.1:4021", orders: "http://127.0.0.1:4022" },
-} as const;
-type Cell = keyof typeof cells;
-type Service = "catalog" | "orders";
-type Checksums = Record<string, { rows: number; md5: string }>;
-type Rows = Record<string, Record<string, unknown>[]>;
-
-function internal(cell: Cell, service: Service, path: string, init: { method?: string; body?: unknown; token?: string | null } = {}) {
-  const token = init.token === undefined ? cellSecret(cell, "PLATFORM_CELL_TOKEN") : init.token;
-  return fetch(`${cells[cell][service]}/internal/tenants/${path}`, {
-    method: init.method ?? "GET",
-    headers: {
-      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
-      ...(token === null ? {} : { "x-platform-token": token }),
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
-}
-
-async function exportOf(cell: Cell, service: Service, tenantId: string): Promise<{ rows: Rows; checksums: Checksums }> {
-  const res = await internal(cell, service, `${tenantId}/export`, { method: "POST" });
-  expect(res.status).toBe(200);
-  return (await res.json()) as { rows: Rows; checksums: Checksums };
-}
-
-async function checksumsOf(cell: Cell, service: Service, tenantId: string): Promise<Checksums> {
-  const res = await internal(cell, service, `${tenantId}/checksums`);
-  expect(res.status).toBe(200);
-  return ((await res.json()) as { checksums: Checksums }).checksums;
-}
-
-const importInto = (cell: Cell, service: Service, tenantId: string, rows: Rows) =>
-  internal(cell, service, `${tenantId}/import`, { method: "POST", body: { rows } });
-
-async function purge(cell: Cell, tenantId: string): Promise<void> {
-  for (const service of ["catalog", "orders"] as const) {
-    expect((await internal(cell, service, `${tenantId}/purge`, { method: "POST" })).status).toBe(200);
-  }
-}
-
 /** The same rows, each table's array reversed, so an import sees them in another order. */
 const reversed = (rows: Rows): Rows => Object.fromEntries(Object.entries(rows).map(([table, list]) => [table, [...list].reverse()]));
-
-const empty = (checksums: Checksums) => Object.values(checksums).every((table) => table.rows === 0);
 
 describe.skipIf(!twoCells)("tenant export, import, and checksums", () => {
   beforeAll(async () => {
