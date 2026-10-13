@@ -24,7 +24,7 @@ images:
   - name: ghcr.io/vananhdhj/shopify-devops/catalog-cart-api
     digest: sha256:db478614e2bc86f5345ebc4edcb1e253e66bfdd6dec0d0d835e92eadb0ccbf83
   - name: ghcr.io/vananhdhj/shopify-devops/order-service
-    digest: sha256:2fba0af2f00638447120fe643e3186c037f6733b14c23620324e7b4a315369f9
+    digest: sha256:7d7c05f4c29b9afbb7072461ad7fc396996dbb2b23041c5331b0173ac8c12607
   - name: ghcr.io/vananhdhj/shopify-devops/worker
     digest: sha256:8cd86896459d71387984e4619f1f484ccdba327ff14f5e2d16a44847ab882eb3
   - name: ghcr.io/vananhdhj/shopify-devops/storefront
