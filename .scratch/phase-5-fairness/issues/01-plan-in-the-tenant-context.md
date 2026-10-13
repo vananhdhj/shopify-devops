@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Routing table entries carry `plan` (and `internal`); the tenant context gains an optional `plan`, absent meaning `starter`, so units on the previous release keep verifying contexts
 - [ ] `@shop/tenancy` (or contracts) exports the plan limits table (requests, burst, Checkouts in flight, products, admitted Orders) for `starter`, `plus`, `internal`
@@ -25,3 +25,7 @@ Implementation notes (2026-10-13):
 Tests: `tenant-context.test.ts` (pure): every class round-trips, an old-format context reads as starter, an unknown class is refused, the route mapping, plus above starter on every limit, synthetic shops never rate limited. `registry.test.ts`: the routing table carries `internal: false` for the seeded shops and `internal: true` for `synthetic-pool-1`. `make test` with the cluster stopped: 36 files, 203 tests passed.
 
 Rollout: every image rebuilds (a shared package changed), so a release through the waves. The merge commit's only manifest change is pool-1's capacity, which the previous image's registration hook already sends.
+
+Resolved 2026-10-13 with PR #49 (`6ac168d`, digests `e103cd5`). The release went through the waves on its own: canary soaked 03:46 to 03:51, pool-1 to 04:24, dedicated-1 at 04:27. pool-1 re-registered at capacity 20 (it holds 4 shops).
+- pool-1's soak lasted 1,943 s for 9 gate ticks: the promoter's calls to the Kubernetes API slowed with the host (a `kubectl exec` took minutes). The gate is only slower then, not wrong. A tick-duration metric comes with ticket 06.
+- One more short-lived superseded soak in the canary (promotion 11), as in Phase 4.
