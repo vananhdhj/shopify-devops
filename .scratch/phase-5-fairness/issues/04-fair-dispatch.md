@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (for K by plan)
 
-**Status:** in review
+**Status:** resolved
 
 - [ ] Migration (expand-only): a new claim function bounding each tenant's dispatched-and-Pending Orders to K and interleaving tenants; the old function stays for the previous worker
 - [ ] The worker uses the new function (the held-back count moves to ticket 06, where metrics carry the shop's handle; the worker knows only tenant ids)
@@ -25,3 +25,5 @@ Test (Compose, `fair-dispatch.test.ts`):
 - That Order is Confirmed in under 15 s while more than 20 of the burst are still Pending, and the burst never has more than 10 Orders dispatched and Pending. Then all 50 settle.
 
 `make test` with the cluster stopped: 38 files passed (208 tests; the branch was cut before #51, whose tests run in CI after the rebase).
+
+Resolved 2026-10-13 with PR #52 (`f31d8ca`). Its release waited out a Colima restart (the cluster was down from 07:30), then went through the waves: canary 13:53 to 14:04, pool-1 to 14:12, then dedicated-1. The new claim function is in every cell's schema. Fairness on the cluster is measured by the noisy-neighbour experiment (ticket 08).

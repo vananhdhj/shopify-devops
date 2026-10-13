@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { api, catalogApiUrl, orderServiceUrl } from "./http.ts";
 import { seedProducts } from "./seed.ts";
+import { checkoutOf } from "./shopping.ts";
+import { tenants } from "./tenants.ts";
 
 describe("catalog-cart API metrics", () => {
   it("records request durations by route template, never by raw id", async () => {
@@ -17,9 +19,11 @@ describe("catalog-cart API metrics", () => {
     expect(body).not.toContain(productId);
   });
 
-  it("reports the age of the oldest Pending order from the order service, which outlives a stopped worker", async () => {
+  it("reports the age of each shop's oldest Pending order from the order service, which outlives a stopped worker", async () => {
+    // A slow payment keeps the Order Pending for 3 s.
+    await checkoutOf({ [seedProducts.notebookSet]: 1 }, "slow");
     const body = await (await api(`${orderServiceUrl}/metrics`)).text();
-    expect(body).toMatch(/^orders_oldest_pending_age_seconds [\d.e+-]+$/m);
+    expect(body).toMatch(new RegExp(`^orders_oldest_pending_age_seconds\\{tenant_id="${tenants.harbor.id}"\\} [\\d.e+-]+$`, "m"));
   });
 
   it("serves the storefront's process metrics on its private metrics port", async () => {

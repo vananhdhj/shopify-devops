@@ -39,7 +39,7 @@ const worker = new Worker<SettleOrderJob>(
   async (job) => {
     const { tenantId, orderId } = job.data;
     const settlement = await settleOrder(settleDeps, tenantId, orderId);
-    recordSettlement(metrics, settlement);
+    recordSettlement(metrics, tenantId, settlement);
     ops.log.info({ tenantId, orderId, settlement, attempt: job.attemptsMade + 1 }, "order settled");
     return settlement;
   },

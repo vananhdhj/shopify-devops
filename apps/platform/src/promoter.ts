@@ -69,6 +69,12 @@ async function setState(db: Pool, row: PromotionRow, state: PromotionRow["state"
 export class Promoter {
   /** Synthetic Checkouts in flight or finished since the last tick, per cell. */
   private synthetic = new Map<string, { done: boolean; passed: boolean }>();
+  /**
+   * How many ticks in a row each wave has shown the same candidate release. A soak starts on the
+   * second: Argo CD reports a cell Synced and Healthy a moment before its image list catches up,
+   * and for that moment the cell seems to run a mix of two releases (Phase 4 and 5 records).
+   */
+  private seen = new Map<number, { key: string; ticks: number }>();
 
   constructor(private deps: PromoterDeps) {}
 
@@ -79,14 +85,20 @@ export class Promoter {
 
     const report: TickReport = [];
     const synthetics = await this.syntheticShops();
-    for (const candidate of candidates(cells)) {
+    const current = candidates(cells);
+    for (const wave of [...this.seen.keys()]) if (!current.some((candidate) => candidate.wave === wave)) this.seen.delete(wave);
+    for (const candidate of current) {
       const key = releaseKey(candidate.release);
+      const seen = this.seen.get(candidate.wave);
+      const ticks = seen?.key === key ? seen.ticks + 1 : 1;
+      this.seen.set(candidate.wave, { key, ticks });
       const { rows } = await db.query<PromotionRow>(
         "SELECT * FROM platform.promotions WHERE release_key = $1 AND wave = $2",
         [key, candidate.wave],
       );
       let row = rows[0];
       if (!row) {
+        if (ticks < 2) continue;
         row = await this.startSoak(candidate, key);
       }
       if (row.state === "soaking") {

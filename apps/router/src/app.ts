@@ -1,6 +1,6 @@
 import replyFrom, { type FastifyReplyFromHooks } from "@fastify/reply-from";
 import Fastify, { type FastifyServerOptions } from "fastify";
-import { Counter, type Registry } from "prom-client";
+import { Counter, Histogram, type Registry } from "prom-client";
 import { loggingOptions, observeRequests } from "@shop/service-kit";
 import { limitClassOf, planLimits, signTenantContext, tenantContextHeader } from "@shop/tenancy";
 import { type Limit, RateLimiter } from "./rate-limit.ts";
@@ -75,8 +75,29 @@ export function buildApp(deps: AppDeps) {
   const rateLimited = new Counter({
     name: "router_rate_limited_total",
     help: "Requests refused with 429 for going over the shop's rate quota (by tenant), or a client's at the platform's address",
-    labelNames: ["cell", "tenant"] as const,
+    labelNames: ["cell", "tenant_id"] as const,
     registers: [deps.registry],
+  });
+  // Phase 5's tenant dimension: every request through the edge, by the cell and the shop it was
+  // for (both empty for the platform's own address and for a host naming no shop).
+  const requests = new Counter({
+    name: "router_requests_total",
+    help: "Requests answered by the edge, by cell, tenant, and status class (2xx, 4xx, 5xx...)",
+    labelNames: ["cell", "tenant_id", "code_class"] as const,
+    registers: [deps.registry],
+  });
+  const requestDuration = new Histogram({
+    name: "router_request_duration_seconds",
+    help: "Time the edge took to answer, upstream included, by cell and tenant",
+    labelNames: ["cell", "tenant_id"] as const,
+    buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    registers: [deps.registry],
+  });
+  const shopOf = new WeakMap<object, { cell: string; tenantId: string }>();
+  app.addHook("onResponse", async (req, reply) => {
+    const shop = shopOf.get(req) ?? { cell: "", tenantId: "" };
+    requests.inc({ cell: shop.cell, tenant_id: shop.tenantId, code_class: `${Math.floor(reply.statusCode / 100)}xx` });
+    requestDuration.observe({ cell: shop.cell, tenant_id: shop.tenantId }, reply.elapsedTime / 1000);
   });
   const limiter = new RateLimiter();
   setInterval(() => limiter.sweep(), 30_000).unref();
@@ -114,7 +135,7 @@ export function buildApp(deps: AppDeps) {
       // The signup pages name no shop: each client address gets a starter shop's rate.
       const decision = limiter.take(`client:${req.ip}`, limitFor("platform", planLimits.starter));
       if (!decision.allowed) {
-        rateLimited.inc({ cell: "", tenant: "" });
+        rateLimited.inc({ cell: "", tenant_id: "" });
         return reply.code(429).header("retry-after", String(decision.retryAfterSeconds)).type(text).send(slowDown(decision.retryAfterSeconds));
       }
       return reply.from(`${deps.platformPublicUrl}${req.url}`, {
@@ -140,10 +161,11 @@ export function buildApp(deps: AppDeps) {
         return reply.code(404).type(text).send(noShop);
     }
 
+    shopOf.set(req, { cell: tenant.cell ?? "", tenantId: tenant.id });
     // The shop's rate quota (Phase 5): over it, the request never reaches the cell.
     const decision = limiter.take(`tenant:${tenant.id}`, limitFor(tenant.handle, planLimits[limitClassOf(tenant)]));
     if (!decision.allowed) {
-      rateLimited.inc({ cell: tenant.cell ?? "", tenant: tenant.handle });
+      rateLimited.inc({ cell: tenant.cell ?? "", tenant_id: tenant.id });
       return reply.code(429).header("retry-after", String(decision.retryAfterSeconds)).type(text).send(slowDown(decision.retryAfterSeconds));
     }
 

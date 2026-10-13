@@ -395,6 +395,7 @@ services:
       RELEASE_IMAGE_PREFIX: ghcr.io/test/
       PROMOTER_TICK_MS: "500"
       SOAK_SECONDS: "4"
+      SYNTHETIC_INTERVAL_MS: "2000"
       REDISPATCH_AFTER_SECONDS: "3600"
       APP_ENV: dev
     extra_hosts:
