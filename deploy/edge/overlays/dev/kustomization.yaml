@@ -25,4 +25,4 @@ patches:
         value: shop.localhost
 images:
   - name: ghcr.io/vananhdhj/shopify-devops/router
-    digest: sha256:5df822c2a7716a7834d9128184e2def332b24972061cf699f75224104656a0d6
+    digest: sha256:ce4450080945751217a93b4a3f40a788f126cfb994b7f2a932cad6d20c4cd76d
