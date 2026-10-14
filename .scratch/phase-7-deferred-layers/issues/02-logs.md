@@ -48,3 +48,8 @@ Amended 2026-10-15 (fix PR "logs from the node's files"):
 - Stream labels stay namespace, cell, app, and `instance` (pod and container).
 - Positions live in an emptyDir, so a replaced Alloy pod reads the node's current files again; Loki drops the exact duplicates it still holds.
 
+Measured after the fix PR (#72) deployed (2026-10-14, 20:07 UTC):
+- Alloy opened no log streams any more, one file tail per container instead. The API server's top requests no longer include pod log CONNECTs or GETs; k3s used 0.37 cores; the VM's 1-minute load fell from about 38 to 2.7; metrics-server was ready again.
+- A tagged request's lines from the edge, the storefront, and the catalog API all arrived from the node's files. Two labels came with them: `stream` (stdout or stderr, from the CRI format) and Loki's `detected_level`, both bounded.
+- Tempo, at 512 MiB, had not restarted (310 MiB, then 108 MiB). Alloy used 162–176 MiB of its 192 MiB.
+
