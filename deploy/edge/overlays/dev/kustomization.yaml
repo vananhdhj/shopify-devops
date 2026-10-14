@@ -11,6 +11,8 @@ configMapGenerator:
     literals:
       - APP_ENV=dev
       - TENANT_BASE_DOMAIN=shop.localhost
+      # Traces (Phase 7): OTLP to Alloy; every request starts its trace here.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.svc:4318
       # The control plane: the routing table (with the cell directory) and the signup pages.
       - PLATFORM_API_URL=http://platform-api.platform-dev:8101
       - PLATFORM_PUBLIC_URL=http://platform-api.platform-dev:8100

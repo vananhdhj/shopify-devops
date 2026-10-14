@@ -102,6 +102,8 @@ services:
       context: .
       dockerfile: apps/catalog-cart-api/Dockerfile
     environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_RESOURCE_ATTRIBUTES: cell=dedicated-1
       DATABASE_URL: postgres://catalog_app:${DEDICATED_1_DB_CATALOG_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
       INTERNAL_INVENTORY_TOKEN: ${DEDICATED_1_INTERNAL_INVENTORY_TOKEN:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}
@@ -125,6 +127,8 @@ services:
       context: .
       dockerfile: apps/order-service/Dockerfile
     environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_RESOURCE_ATTRIBUTES: cell=dedicated-1
       DATABASE_URL: postgres://order_app:${DEDICATED_1_DB_ORDER_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
       CATALOG_API_URL: http://dedicated-1-catalog-cart-api:4001
       ORDER_TOKEN_SECRET: ${DEDICATED_1_ORDER_TOKEN_SECRET:?run make secrets}
@@ -152,6 +156,8 @@ services:
       context: .
       dockerfile: apps/worker/Dockerfile
     environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_RESOURCE_ATTRIBUTES: cell=dedicated-1
       DATABASE_URL: postgres://order_app:${DEDICATED_1_DB_ORDER_PASSWORD}@dedicated-1-postgres:5432/shop?sslmode=disable
       REDIS_URL: redis://:${DEDICATED_1_REDIS_PASSWORD}@dedicated-1-redis:6379
       CATALOG_API_URL: http://dedicated-1-catalog-cart-api:4001
@@ -181,6 +187,8 @@ services:
       context: .
       dockerfile: apps/storefront/Dockerfile
     environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_RESOURCE_ATTRIBUTES: cell=dedicated-1
       CATALOG_API_URL: http://dedicated-1-catalog-cart-api:4001
       ORDER_SERVICE_URL: http://dedicated-1-order-service:4002
       ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}

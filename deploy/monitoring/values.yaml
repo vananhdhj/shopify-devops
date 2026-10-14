@@ -75,6 +75,8 @@ grafana:
       searchNamespace: ALL # the shop's dashboards live with the shop, in Git
   # Logs (Phase 7): Loki, fed by Alloy. Stream labels are namespace, cell, and app; a shop's lines
   # are found with `| json | tenantId = "…"`.
+  # Traces (Phase 7): Tempo, fed by Alloy. A log line's traceId opens its trace, and a span opens
+  # its unit's log lines of that trace.
   additionalDataSources:
     - name: Loki
       uid: loki
@@ -83,6 +85,28 @@ grafana:
       url: http://loki.monitoring.svc:3100
       jsonData:
         maxLines: 1000
+        derivedFields:
+          - name: traceId
+            matcherRegex: '"traceId":"([0-9a-f]{32})"'
+            datasourceUid: tempo
+            url: "$${__value.raw}"
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      access: proxy
+      url: http://tempo.monitoring.svc:3200
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-5m"
+          spanEndTimeShift: "5m"
+          filterByTraceID: false
+          customQuery: true
+          query: '{namespace=~".+"} |= "$${__trace.traceId}"'
+        nodeGraph:
+          enabled: true
+        search:
+          hide: false
   resources:
     requests: { cpu: 25m, memory: 128Mi }
     limits: { memory: 384Mi }

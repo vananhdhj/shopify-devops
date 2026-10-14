@@ -20,6 +20,8 @@ export function compose(...args: string[]): string {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    // A unit's logs over a full suite pass Node's default 1 MB (Phase 7 added the trace ids).
+    maxBuffer: 64 * 1024 * 1024,
   });
 }
 

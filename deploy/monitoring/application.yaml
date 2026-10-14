@@ -1,6 +1,6 @@
 # The monitoring stack, deployed by Argo CD like everything else: the pinned kube-prometheus-stack
 # chart with this repo's values; Loki and Alloy for logs (Phase 7), single-binary and lean; plus
-# the lab's own pieces in deploy/monitoring/config.
+# the lab's own pieces in deploy/monitoring/config, Tempo for traces among them.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

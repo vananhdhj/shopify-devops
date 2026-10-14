@@ -1,7 +1,8 @@
-import { createPool, runService } from "@shop/service-kit";
+import { createPool, runService, startTracing } from "@shop/service-kit";
 import { buildApp } from "./app.ts";
 import { config } from "./config.ts";
 
+startTracing("catalog-cart-api", config.environment);
 const db = createPool(config.databaseUrl);
 const app = buildApp({
   db,

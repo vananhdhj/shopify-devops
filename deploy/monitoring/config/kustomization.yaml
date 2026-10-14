@@ -5,6 +5,7 @@ resources:
   - alert-catcher.yaml
   - traefik-podmonitor.yaml
   - slo-rules.yaml
+  - tempo.yaml
 configMapGenerator:
   - name: alert-catcher
     files:

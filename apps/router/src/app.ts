@@ -1,7 +1,7 @@
 import replyFrom, { type FastifyReplyFromHooks } from "@fastify/reply-from";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import { Counter, Histogram, type Registry } from "prom-client";
-import { loggingOptions, observeRequests } from "@shop/service-kit";
+import { annotateSpan, loggingOptions, observeRequests, traceHeaders, traceRequests } from "@shop/service-kit";
 import { limitClassOf, planLimits, signTenantContext, tenantContextHeader } from "@shop/tenancy";
 import { type Limit, RateLimiter } from "./rate-limit.ts";
 import type { RouteSource } from "./routes.ts";
@@ -65,6 +65,8 @@ export function buildApp(deps: AppDeps) {
   // X-Forwarded-For is the client's, which the platform domain's rate limit is keyed by.
   const options: FastifyServerOptions = { ...loggingOptions("router", deps.environment), trustProxy: (_address, hop) => hop < 1 };
   const app = Fastify(options);
+  // Every request starts a trace here (Phase 7): a client's own traceparent is not believed.
+  traceRequests(app, { trustCaller: false });
   observeRequests(app, deps.registry);
   const proxied = new Counter({
     name: "router_proxied_requests_total",
@@ -141,8 +143,8 @@ export function buildApp(deps: AppDeps) {
       return reply.from(`${deps.platformPublicUrl}${req.url}`, {
         onError,
         rewriteRequestHeaders: (_original, headers) => {
-          const { [tenantContextHeader]: _fromClient, ...rest } = headers;
-          return { ...rest, host: req.headers.host, "x-request-id": req.id };
+          const { [tenantContextHeader]: _fromClient, traceparent: _trace, tracestate: _state, ...rest } = headers;
+          return { ...rest, ...traceHeaders(), host: req.headers.host, "x-request-id": req.id };
         },
       });
     }
@@ -165,6 +167,7 @@ export function buildApp(deps: AppDeps) {
     }
 
     shopOf.set(req, { cell: tenant.cell ?? "", tenantId: tenant.id });
+    annotateSpan({ "tenant.id": tenant.id, cell: tenant.cell ?? "" });
     // The shop's rate quota (Phase 5): over it, the request never reaches the cell.
     const decision = limiter.take(`tenant:${tenant.id}`, limitFor(tenant.handle, planLimits[limitClassOf(tenant)]));
     if (!decision.allowed) {
@@ -185,9 +188,11 @@ export function buildApp(deps: AppDeps) {
     return reply.from(`${upstream.storefrontUrl}${req.url}`, {
       onError,
       rewriteRequestHeaders: (_original, headers) => {
-        const { [tenantContextHeader]: _fromClient, ...rest } = headers;
+        const { [tenantContextHeader]: _fromClient, traceparent: _trace, tracestate: _state, ...rest } = headers;
         return {
           ...rest,
+          // The edge's own trace, continued by the storefront and the APIs.
+          ...traceHeaders(),
           // The storefront compares a form post's Origin with Host, so Host must be the shop's.
           host: req.headers.host,
           // One id follows the request through the storefront and the APIs' logs.

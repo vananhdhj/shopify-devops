@@ -6,6 +6,8 @@ export interface SettleOrderJob {
   /** The Order's tenant: every query the job runs is scoped to it. */
   tenantId: string;
   orderId: string;
+  /** The Checkout's W3C trace context (Phase 7), so the settlement continues its trace. */
+  traceparent?: string;
 }
 
 /** The slice of a BullMQ queue the dispatcher uses. */
