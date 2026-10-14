@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review
+**Status:** resolved
 
 - [x] `policy/` rules: no privileged containers, root users, privilege escalation, or host namespaces; memory limits and CPU and memory requests on every container; images only from the project's registry (and the pinned upstream registries), never `:latest`; no plain `Secret` in Git except SealedSecrets (from ticket 04 on)
 - [x] CI job: every Application's rendered output (cells, platform, edge, monitoring config, Argo CD) through Conftest; fixed images and exceptions, if any, listed with an owner and an expiry
@@ -29,3 +29,5 @@ Implementation notes (2026-10-14):
 - Not checked: what Argo CD installs from upstream charts (kube-prometheus-stack, Argo CD itself), which the repository does not render. The admission controller that would also check those is deferred (decision 4).
 
 `make policy`: 1,727 checks passed; the 12 failing fixtures each denied by their rule.
+
+Resolved 2026-10-14 with PR #66 (`69eb261`). CI's `manifests` job ran the policies on the pull request (1,727 checks; 12 fixtures each denied by their rule). The release rebuilt every image (the workflow changed, which also carried #64's platform change, whose own release never ran) and went through the waves with no human step: pool-1 14:10, dedicated-1 14:18 UTC. Ticket 02 extended the policies to the Loki and Alloy charts (1,892 checks, 13 fixtures). Ticket 07's demo is a pull request that the policies block.
