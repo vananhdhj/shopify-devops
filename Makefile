@@ -48,7 +48,7 @@ test: install dev-up
 ## point at, not their own definitions: re-run this after changing deploy/argocd/*.yaml or
 ## deploy/monitoring/application.yaml (a new chart source, a new Application).
 argocd-apps:
-	kubectl --context $(CONTEXT) apply -f deploy/argocd/platform-dev.yaml -f deploy/argocd/edge-dev.yaml -f deploy/argocd/cells-dev.yaml -f deploy/monitoring/application.yaml
+	kubectl --context $(CONTEXT) apply -f deploy/argocd/sealed-secrets.yaml -f deploy/argocd/platform-dev.yaml -f deploy/argocd/edge-dev.yaml -f deploy/argocd/cells-dev.yaml -f deploy/monitoring/application.yaml
 
 ## Manifest policies (Phase 7): every rendered manifest through Conftest, then the policy's fixtures
 policy:

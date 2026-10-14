@@ -77,8 +77,8 @@ deny contains msg if {
 # --- Images ----------------------------------------------------------------------------------
 
 # The project's own images (any repository under its namespace), the Docker official images the
-# cells and monitoring use, and the images of the logging and tracing charts this repository configures
-# (Phase 7). An image is a repository followed by its tag (`:`) or digest (`@`).
+# cells and monitoring use, and the images of the upstream charts and manifests this repository
+# configures (Phase 7). An image is a repository followed by its tag (`:`) or digest (`@`).
 project_namespace := "ghcr.io/vananhdhj/shopify-devops/"
 
 allowed_repositories := {
@@ -87,6 +87,7 @@ allowed_repositories := {
 	"python",
 	"docker.io/grafana/loki",
 	"docker.io/grafana/alloy",
+	"docker.io/bitnami/sealed-secrets-controller",
 	"docker.io/grafana/tempo",
 	"quay.io/prometheus-operator/prometheus-config-reloader",
 }
