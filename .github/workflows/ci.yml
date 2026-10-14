@@ -133,7 +133,7 @@ jobs:
         run: |
           scripts/render-manifests.sh rendered
           ./kubeconform -strict -summary -kubernetes-version 1.35.0 -schema-location default -schema-location "$CRD_SCHEMAS" \
-            rendered/*.yaml deploy/argocd/cells-dev.yaml deploy/argocd/platform-dev.yaml deploy/argocd/edge-dev.yaml \
+            rendered/*.yaml deploy/argocd/cells-dev.yaml deploy/argocd/platform-dev.yaml deploy/argocd/edge-dev.yaml deploy/argocd/sealed-secrets.yaml \
             deploy/monitoring/application.yaml
       - name: Install Conftest (checksum-verified)
         env:

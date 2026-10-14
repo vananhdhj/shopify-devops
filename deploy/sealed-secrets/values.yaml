@@ -1,0 +1,11 @@
+# The Sealed Secrets controller (Phase 7, ticket 04): decrypts the SealedSecrets that live in Git
+# into the Secrets the units read. Its private key never leaves the cluster except as the backup
+# `make seal-key-backup` writes to .secrets/ (never Git). Chart version pinned in
+# deploy/argocd/sealed-secrets.yaml.
+fullnameOverride: sealed-secrets-controller
+image:
+  # Pinned by digest (the manifest policies): 0.40.0, multi-arch.
+  tag: 0.40.0@sha256:b1ff382e9300dc9e74991f3177b18cafc06ce43b5c21349c86adbdd1d1c177d3
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 96Mi }

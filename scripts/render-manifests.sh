@@ -18,9 +18,13 @@ for overlay in dev staging; do
 done
 kubectl kustomize deploy/monitoring/config >"$out/monitoring.yaml"
 
-# The chart version the monitoring Application pins for <chart>.
-version_of() { awk -v chart="$1" '$1 == "chart:" && $2 == chart { getline; print $2 }' deploy/monitoring/application.yaml; }
+# The chart version an Application pins: version_of <application file> <chart>.
+version_of() { awk -v chart="$2" '$1 == "chart:" && $2 == chart { getline; print $2 }' "$1"; }
 for chart in loki alloy; do
-  helm template "$chart" "$chart" --repo https://grafana.github.io/helm-charts --version "$(version_of "$chart")" \
+  helm template "$chart" "$chart" --repo https://grafana.github.io/helm-charts --version "$(version_of deploy/monitoring/application.yaml "$chart")" \
     --namespace monitoring --values "deploy/monitoring/${chart}-values.yaml" >"$out/${chart}.yaml"
 done
+# The Sealed Secrets controller (Phase 7).
+helm template sealed-secrets sealed-secrets --repo https://bitnami.github.io/sealed-secrets \
+  --version "$(version_of deploy/argocd/sealed-secrets.yaml sealed-secrets)" \
+  --namespace kube-system --values deploy/sealed-secrets/values.yaml >"$out/sealed-secrets.yaml"
