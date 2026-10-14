@@ -3,6 +3,7 @@ import { createPool, createService, requiredEnv, runService } from "@shop/servic
 import { CellCredentials } from "@shop/tenancy";
 import { type DeletionOutcome, deleteShop } from "./deletion.ts";
 import { claimDue, type LifecycleEvent, retryLater } from "./lifecycle.ts";
+import { type MoveOutcome, moveShop } from "./move.ts";
 import { type ProvisionOutcome, provision } from "./provision.ts";
 
 const config = {
@@ -16,6 +17,12 @@ const config = {
   cellCredentialsDir: requiredEnv("CELL_CREDENTIALS_DIR"),
   /** Between a deletion's first purge and its verifying second one; longer than any settle job. */
   deleteGraceMs: Number(process.env.DELETE_GRACE_MS ?? 15_000),
+  /** A tenant move (Phase 6): see MoveConfig. */
+  move: {
+    freezeGraceMs: Number(process.env.MOVE_FREEZE_GRACE_MS ?? 5_000),
+    drainTimeoutMs: Number(process.env.MOVE_DRAIN_TIMEOUT_MS ?? 60_000),
+    drainPollMs: Number(process.env.MOVE_DRAIN_POLL_MS ?? 500),
+  },
 };
 
 const db = createPool(config.databaseUrl);
@@ -35,7 +42,7 @@ const failures = new Counter({
 });
 const duration = new Histogram({
   name: "platform_lifecycle_seconds",
-  help: "Time from a lifecycle request (signup, deletion) to its completion, by action",
+  help: "Time from a lifecycle request (signup, deletion, move) to its completion, by action",
   labelNames: ["action"] as const,
   buckets: [0.5, 1, 2, 3, 5, 10, 20, 30, 60, 120],
   registers: [registry],
@@ -44,12 +51,14 @@ const duration = new Histogram({
 // Private operational listener: health and metrics only.
 const ops = createService({ name: "platform-worker", environment: config.environment, db, registry });
 
-function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome> {
+function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome | MoveOutcome> {
   switch (event.action) {
     case "provision":
       return provision(db, config.router, credentials, event);
     case "delete":
       return deleteShop(db, credentials, event, config.deleteGraceMs);
+    case "move":
+      return moveShop(db, credentials, event, config.move);
   }
 }
 
@@ -60,9 +69,10 @@ async function loop(): Promise<void> {
       for (const event of await claimDue(db)) {
         try {
           const outcome = await run(event);
-          // A deletion's first pass ("verify_later") has neither finished nor failed.
+          // A deletion's first pass ("verify_later") and a move waiting ("later") have neither
+          // finished nor failed. An undone move has finished: the shop is back where it was.
           if (outcome === "retry") failures.inc({ action: event.action });
-          if (outcome === "active" || outcome === "deleted" || outcome === "nothing_to_do") {
+          if (["active", "deleted", "moved", "undone", "nothing_to_do"].includes(outcome)) {
             completed.inc({ action: event.action });
             duration.observe({ action: event.action }, (Date.now() - event.createdAt.getTime()) / 1000);
           }

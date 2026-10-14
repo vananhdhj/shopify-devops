@@ -6,6 +6,7 @@ import { type CellCredentials, cellIdPattern } from "@shop/tenancy";
 import { cellRoutes, register } from "./cells.ts";
 import { fleetView } from "./fleet.ts";
 import { act, listPromotions, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
+import { requestMove } from "./move.ts";
 import { isPassword } from "./passwords.ts";
 import { merchantCredential, routingTable } from "./registry.ts";
 
@@ -131,6 +132,23 @@ export function buildInternalApp(deps: InternalAppDeps) {
   app.get<{ Params: { handle: string } }>("/operator/tenants/:handle/events", operatorOnly, async (req) => ({
     events: await tenantEvents(deps.db, req.params.handle),
   }));
+
+  // A tenant move (Phase 6): the shop is frozen at once and moved by the lifecycle worker; its
+  // events show each step. 409 names why a move is refused.
+  app.post<{ Params: { handle: string }; Body: { cell: string } }>(
+    "/operator/tenants/:handle/move",
+    {
+      ...operatorOnly,
+      schema: { body: { type: "object", required: ["cell"], properties: { cell: { type: "string", minLength: 1, maxLength: 63 } } } },
+    },
+    async (req, reply) => {
+      const result = await requestMove(deps.db, req.params.handle, req.body.cell);
+      if (result.outcome === "not_found") return reply.code(404).send({ error: "tenant_not_found", message: "no such shop" });
+      if (result.outcome === "refused") return reply.code(409).send({ error: result.reason, message: result.message });
+      req.log.info({ tenantId: result.tenantId, from: result.from, to: result.to, planAfter: result.planAfter }, "tenant move requested");
+      return reply.code(202).send({ handle: req.params.handle, status: "MOVING", from: result.from, to: result.to, planAfter: result.planAfter });
+    },
+  );
 
   app.post<{ Params: { handle: string; action: string } }>(
     "/operator/tenants/:handle/:action",

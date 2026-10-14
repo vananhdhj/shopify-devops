@@ -5,6 +5,7 @@
 #   tenant.sh list
 #   tenant.sh events <handle>
 #   tenant.sh suspend|reinstate|delete <handle>
+#   tenant.sh move <handle> <cell>      freezes the shop, then follows the move's steps to the end
 set -euo pipefail
 
 url="${PLATFORM_URL:-http://127.0.0.1:8101}"
@@ -23,6 +24,28 @@ case "$action" in
   suspend | reinstate | delete)
     [ -n "$handle" ] || { echo "usage: tenant.sh $action <handle>" >&2; exit 2; }
     call -X POST "$url/operator/tenants/$handle/$action" | jq -r '"\(.handle): \(.status)"' ;;
+  move)
+    cell="${3:-}"
+    [ -n "$handle" ] && [ -n "$cell" ] || { echo "usage: tenant.sh move <handle> <cell>" >&2; exit 2; }
+    # Events from before this move are not its steps.
+    seen="$(call "$url/operator/tenants/$handle/events" | jq '.events | length')"
+    answer="$(curl -sS --max-time 10 -H "x-operator-token: $token" -H 'content-type: application/json' \
+      --data "{\"cell\":\"$cell\"}" -w '\n%{http_code}' "$url/operator/tenants/$handle/move")"
+    code="$(tail -n1 <<<"$answer")"
+    [ "$code" = 202 ] || { echo "move refused ($code): $(sed '$d' <<<"$answer")" >&2; exit 1; }
+    sed '$d' <<<"$answer" | jq -r '"\(.handle): MOVING, \(.from) -> \(.to), plan after the move: \(.planAfter)"'
+    for _ in $(seq 1 360); do
+      steps="$(call "$url/operator/tenants/$handle/events" | jq -c --argjson seen "$seen" '.events[$seen:][]')"
+      if grep -q '"step":"move_\(source_purged\|undone\)"' <<<"$steps"; then
+        jq -r '"\(.at) \(.step) \(.toStatus // "-") \(.detail | del(.checksums) | tostring)"' <<<"$steps"
+        jq -r 'select(.step == "move_verified") | .detail.checksums | to_entries[] | "  \(.key): \(.value.rows) rows, md5 \(.value.md5)"' <<<"$steps"
+        grep -q '"step":"move_source_purged"' <<<"$steps" || { echo "the move was undone; the shop is ACTIVE where it was" >&2; exit 1; }
+        echo "moved: $(jq -r 'select(.step == "move_switched") | "frozen \(.detail.frozenMs) ms; now in \(.detail.to)"' <<<"$steps")"
+        exit 0
+      fi
+      sleep 0.5
+    done
+    echo "the move has not finished after 3 minutes; see tenant.sh events $handle" >&2; exit 1 ;;
   *)
-    echo "unknown action '$action' (list, events, suspend, reinstate, delete)" >&2; exit 2 ;;
+    echo "unknown action '$action' (list, events, suspend, reinstate, delete, move)" >&2; exit 2 ;;
 esac

@@ -47,14 +47,26 @@ export async function place(client: Queryable, tenantId: string, role: CellRole)
     [role],
   );
   if (rows.length === 0) return undefined;
-  const counts = await client.query<{ cell: string; n: number }>(
-    "SELECT cell, count(*)::int AS n FROM platform.tenants WHERE cell = ANY($1) AND status <> 'DELETED' AND NOT internal GROUP BY cell",
-    [rows.map((row) => row.id)],
-  );
-  const shops = new Map(counts.rows.map((row) => [row.cell, row.n]));
+  const shops = await shopsIn(client, rows.map((row) => row.id));
   const cell = choose(rows.map((row) => ({ id: row.id, capacity: row.capacity, shops: shops.get(row.id) ?? 0 })));
   if (cell) await client.query("UPDATE platform.tenants SET cell = $2 WHERE id = $1 AND cell IS NULL", [tenantId, cell]);
   return cell;
+}
+
+/**
+ * Shops each cell holds against its capacity: those placed in it and not deleted, its synthetic
+ * shop aside, plus those moving into it (Phase 6), so a signup cannot take a cell a move will fill.
+ */
+export async function shopsIn(client: Queryable, cells: string[]): Promise<Map<string, number>> {
+  const { rows } = await client.query<{ cell: string; n: number }>(
+    `SELECT cell, count(*)::int AS n FROM (
+       SELECT cell FROM platform.tenants WHERE cell = ANY($1) AND status <> 'DELETED' AND NOT internal
+       UNION ALL
+       SELECT target_cell FROM platform.tenant_moves WHERE target_cell = ANY($1) AND finished_at IS NULL
+     ) AS taken GROUP BY cell`,
+    [cells],
+  );
+  return new Map(rows.map((row) => [row.cell, row.n]));
 }
 
 export type RegistrationResult = { outcome: "registered"; created: boolean } | { outcome: "refused"; reason: string };

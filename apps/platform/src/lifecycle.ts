@@ -5,7 +5,7 @@ import type { Queryable } from "@shop/service-kit";
 export interface LifecycleEvent {
   eventId: string;
   tenantId: string;
-  action: "provision" | "delete";
+  action: "provision" | "delete" | "move";
   attempts: number;
   createdAt: Date;
 }
@@ -23,7 +23,7 @@ export async function claimDue(db: Pool, batch = 10): Promise<LifecycleEvent[]> 
   const { rows } = await db.query<{
     event_id: string;
     tenant_id: string;
-    action: "provision" | "delete";
+    action: "provision" | "delete" | "move";
     attempts: number;
     created_at: Date;
   }>(
