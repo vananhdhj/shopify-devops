@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-requests
+spec:
+  selector: { matchLabels: { app: no-requests } }
+  template:
+    metadata: { labels: { app: no-requests } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      containers:
+        - name: app
+          image: ghcr.io/vananhdhj/shopify-devops/router@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          resources: { limits: { memory: 64Mi } }

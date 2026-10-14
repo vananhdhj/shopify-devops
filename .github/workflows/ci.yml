@@ -131,19 +131,22 @@ jobs:
           # community CRD schema catalog instead of being skipped.
           CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
         run: |
-          mkdir -p rendered
-          for cell in deploy/cells/dev/*/ deploy/cells/staging/*/; do
-            env="$(basename "$(dirname "$cell")")"
-            kubectl kustomize "$cell" >"rendered/cell-${env}-$(basename "$cell").yaml"
-          done
-          for overlay in dev staging; do
-            kubectl kustomize "deploy/platform/overlays/${overlay}" >"rendered/platform-${overlay}.yaml"
-            kubectl kustomize "deploy/edge/overlays/${overlay}" >"rendered/edge-${overlay}.yaml"
-          done
-          kubectl kustomize deploy/monitoring/config >rendered/monitoring.yaml
+          scripts/render-manifests.sh rendered
           ./kubeconform -strict -summary -kubernetes-version 1.35.0 -schema-location default -schema-location "$CRD_SCHEMAS" \
             rendered/*.yaml deploy/argocd/cells-dev.yaml deploy/argocd/platform-dev.yaml deploy/argocd/edge-dev.yaml \
             deploy/monitoring/application.yaml
+      - name: Install Conftest (checksum-verified)
+        env:
+          VERSION: "0.71.1"
+        run: |
+          base="https://github.com/open-policy-agent/conftest/releases/download/v${VERSION}"
+          curl -fsSLO "${base}/conftest_${VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSLO "${base}/checksums.txt"
+          grep " conftest_${VERSION}_Linux_x86_64.tar.gz$" checksums.txt | sha256sum --check
+          tar -xzf "conftest_${VERSION}_Linux_x86_64.tar.gz" conftest
+          sudo mv conftest /usr/local/bin/
+      - name: Manifest policies (no privilege or root, resource bounds, approved and pinned images, no plain Secrets)
+        run: scripts/policy.sh rendered
       - name: Every dev cell names itself, its namespace, and its wave; the waves run 0, 1, 2… without a gap
         run: |
           for file in deploy/cells/dev/*/cell.json; do
