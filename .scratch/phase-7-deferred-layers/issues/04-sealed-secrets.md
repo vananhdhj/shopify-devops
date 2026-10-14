@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** in review (the restore is rehearsed once the switch is deployed)
+**Status:** resolved
 
 - [x] The controller (pinned chart, its own Argo CD Application or bootstrap), memory-limited
 - [x] `make secrets` writes `deploy/**/sealed-*.yaml` with `kubeseal` against the controller's certificate, for every Secret `cluster-secrets.sh` writes today (cells, platform, edge, `cell-credentials`, the promoter's token)
@@ -44,3 +44,12 @@ Implementation notes, second PR (2026-10-15):
 - The policy's `no-plain-secrets` holds (SealedSecrets are their own kind). kubeconform validates SealedSecrets against the CRD catalog: 195 resources valid. `make policy`: 2,352 checks.
 - README: the security model and the deploy notes describe sealed Secrets and the key backup.
 - Gitleaks flagged the ciphertext (46 × `generic-api-key`). `.gitleaks.toml` keeps the default rules and allows one shape only: both a `sealed-*.yaml` file under `deploy/` and a line that is one key's kubeseal ciphertext (`Ag…`, 300+ base64 characters; 4096-bit RSA gives 680+). A live-looking API key planted in a sealed file was still caught.
+
+Resolved 2026-10-15 with PRs #71 and #73 (`1563546`).
+- **The switch.** At #73's merge, Argo CD synced the nine SealedSecrets to the three cells, the edge, the control plane, and monitoring. By 21:17 UTC every one reported `Synced=True`, and all nine Secrets are owned by their SealedSecrets. The values were unchanged (`seal-secrets.py --verify`: all nine equal), so no pod restarted or read anything new.
+- **The restore, rehearsed on the lab cluster** (`edge-dev/edge-secrets`'s value hash checked at each step; the Secrets stayed in place throughout):
+  1. The backup held `sealed-secrets-keyvszbn`, the cluster's one key: 9 of 9 synced.
+  2. The key was deleted and the controller restarted. It generated a new key (`sealed-secrets-keyzbsvl`), and a resync of `edge-secrets` answered `Synced=False: no key could decrypt secret (PLATFORM_ROUTER_TOKEN)`. The Secret kept its value.
+  3. `make seal-key-restore`, the new key deleted, the controller restarted, every SealedSecret resynced: 9 of 9 synced within 6 s. Only the original key remains, and its certificate is still the committed `cert.pem`.
+- Found at the merge: `monitoring` showed OutOfSync on Tempo's StatefulSet, whose volume claim template left `volumeMode` to the API server's default. It is now spelled out.
+

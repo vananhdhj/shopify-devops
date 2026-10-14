@@ -117,6 +117,8 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        # The API server's default, spelled out: without it Argo CD sees a difference forever.
+        volumeMode: Filesystem
         resources:
           requests:
             storage: 2Gi
