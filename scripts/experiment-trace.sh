@@ -20,7 +20,7 @@ product="$(kubectl -n "$namespace" exec postgres-0 -- psql -U postgres -d shop -
 
 # 1. A Checkout through the ingress, as a buyer's browser would.
 jar="$(mktemp)"
-trap 'rm -f "$jar"; kill "${forward:-}" 2>/dev/null || true' EXIT
+trap 'rm -f "$jar" "${forward_log:-}"; kill "${forward:-}" 2>/dev/null || true' EXIT
 shop() { local path="$1"; shift; curl -sS --max-time 10 -c "$jar" -b "$jar" "$@" "http://$handle.$domain$path"; }
 shop /cart/items -o /dev/null --data "productId=$product&action=add"
 key="$(shop /checkout | grep -o 'name="checkoutKey" value="[^"]*"' | sed 's/.*value="//; s/"$//')"
@@ -29,14 +29,18 @@ order="$(shop /orders -o /dev/null -w '%{redirect_url}' --data "checkoutKey=$key
 echo "$(date -u +%H:%M:%S) Checkout of $handle ($cell): Order $order"
 
 # 2. Its trace in Tempo, by the Order id.
-kubectl -n monitoring port-forward svc/tempo 13200:3200 >/dev/null 2>&1 &
+# A busy API server can take a while to open the forward (Phase 7 evidence): wait for it.
+forward_log="$(mktemp)"
+kubectl -n monitoring port-forward svc/tempo 13200:3200 >"$forward_log" 2>&1 &
 forward=$!
-sleep 3
+for _ in $(seq 1 60); do grep -q "Forwarding from" "$forward_log" && break; sleep 1; done
+grep -q "Forwarding from" "$forward_log" || fail "no port-forward to Tempo: $(cat "$forward_log")"
 query="$(jq -rn --arg o "$order" '"{ span.order.id = \"\($o)\" }" | @uri')"
 trace=""
 for _ in $(seq 1 60); do
-  trace="$(curl -s "http://127.0.0.1:13200/api/search?q=$query&start=$(($(date +%s) - 900))&end=$(($(date +%s) + 60))" | jq -r '.traces[0].traceID // empty')"
-  if [ -n "$trace" ] && curl -s "http://127.0.0.1:13200/api/v2/traces/$trace" | jq -e '[.trace.resourceSpans[].scopeSpans[].spans[].name] | index("settle order")' >/dev/null; then
+  # A query that fails (Tempo still starting, the forward dropping) is retried, never fatal.
+  trace="$(curl -s --max-time 10 "http://127.0.0.1:13200/api/search?q=$query&start=$(($(date +%s) - 900))&end=$(($(date +%s) + 60))" | jq -r '.traces[0].traceID // empty' 2>/dev/null || true)"
+  if [ -n "$trace" ] && curl -s --max-time 10 "http://127.0.0.1:13200/api/v2/traces/$trace" | jq -e '[.trace.resourceSpans[].scopeSpans[].spans[].name] | index("settle order")' >/dev/null 2>&1; then
     break
   fi
   sleep 2
