@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -43,6 +43,10 @@ test: install dev-up
 	@scripts/warn-cluster-running.sh $(CLUSTER)
 	pnpm typecheck
 	pnpm test:integration
+
+## Manifest policies (Phase 7): every rendered manifest through Conftest, then the policy's fixtures
+policy:
+	@scripts/policy.sh
 
 ## Mixed-version check (ADR-0021): the previous release's cell images (the last wave's pins) with
 ## this tree's migrations, control plane, and edge, then a shop's whole life through the edge

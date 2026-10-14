@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tag-only
+spec:
+  selector: { matchLabels: { app: tag-only } }
+  template:
+    metadata: { labels: { app: tag-only } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      containers:
+        - name: app
+          image: ghcr.io/vananhdhj/shopify-devops/router:v1
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 64Mi } }

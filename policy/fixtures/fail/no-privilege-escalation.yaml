@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: escalation
+spec:
+  selector: { matchLabels: { app: escalation } }
+  template:
+    metadata: { labels: { app: escalation } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      containers:
+        - name: app
+          image: ghcr.io/vananhdhj/shopify-devops/router@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          securityContext: { readOnlyRootFilesystem: true }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 64Mi } }

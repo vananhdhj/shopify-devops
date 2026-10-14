@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+          initContainers:
+            - name: prepare
+              image: ghcr.io/vananhdhj/shopify-devops/router@sha256:1111111111111111111111111111111111111111111111111111111111111111
+              securityContext: { allowPrivilegeEscalation: false, runAsUser: 0 }
+              resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 64Mi } }
+          containers:
+            - name: run
+              image: ghcr.io/vananhdhj/shopify-devops/router@sha256:1111111111111111111111111111111111111111111111111111111111111111
+              securityContext: { allowPrivilegeEscalation: false }
+              resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 64Mi } }
