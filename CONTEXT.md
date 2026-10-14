@@ -108,11 +108,27 @@ _Avoid_: Live shop, enabled tenant
 
 **Suspended shop**:
 A tenant the platform operator has paused: nobody reaches it, its data is untouched, and its Pending orders still settle; it can be reinstated.
-_Avoid_: Disabled, blocked, frozen
+_Avoid_: Disabled, blocked (and frozen, which is a write freeze)
 
 **Deleted shop**:
 A tenant whose data has been removed from its cell and verified gone; only its record in the registry remains, and its handle is never reused.
 _Avoid_: Removed, closed, archived
+
+**Write freeze**:
+A short time in which a shop can be browsed but not changed: buyers cannot add to a Cart or check out, and the Merchant cannot edit the catalog, while its data is being moved or restored. Its Pending orders still settle.
+_Avoid_: Maintenance mode, downtime, suspension
+
+**Tenant move**:
+Moving one tenant, with all its data, from one cell to another under a write freeze; it ends served from the new cell with nothing of it left in the old one, or, if anything fails first, back where it was. A starter shop moved into a dedicated cell becomes plus.
+_Avoid_: Migration (that is a schema change), rebalancing, transfer
+
+**Tenant export**:
+A copy of one tenant's data at one moment, taken by the platform on a schedule or on the operator's request, with a fingerprint of each kind of data so a copy can be checked.
+_Avoid_: Backup (that is a whole database), dump, snapshot
+
+**Restore point**:
+A tenant export a shop can be restored to. Restoring puts the shop back exactly as it was at that export, and everything it changed since is lost; other shops are never touched.
+_Avoid_: Backup, checkpoint, rollback
 
 ### People
 

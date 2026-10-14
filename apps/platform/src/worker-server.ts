@@ -65,7 +65,7 @@ const duration = new Histogram({
 
 const exportsTaken = new Counter({
   name: "platform_exports_total",
-  help: "Per-tenant exports written to the export volume, by kind of request",
+  help: "Per-tenant exports written to the export volume",
   labelNames: ["outcome"] as const,
   registers: [registry],
 });

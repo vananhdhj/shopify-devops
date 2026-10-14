@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02
 
-**Status:** in review
+**Status:** resolved
 
 - [x] PVC `tenant-exports` in `platform-dev`, mounted by the platform worker only; Compose: a named volume
 - [x] Export loop: `/exports/<tenant>/<timestamp>.json` with rows and checksums; keeps 8 per shop; `platform_exports_total`, last export age per shop
@@ -61,3 +61,5 @@ Tests (`restore.test.ts`, Compose):
 In the runs, a restore froze its shop 5.0 to 5.3 s, of which 5 s is the grace. A round of the Compose stack's 395 shops took 106 s.
 
 `make test CELLS=2` with the cluster stopped: 46 files, 242 tests passed (382 s). Earlier runs failed on test-timing problems found and fixed above, and one signup test timed out with the host's load at 9.9; run alone it passed.
+
+Resolved 2026-10-14 with PR #62 (`900ae81`). Through the waves: pool-1 04:34; dedicated-1 07:23 UTC, late because the laptop slept from 04:31. On the cluster the worker has exported every ACTIVE shop every 15 minutes to the PVC `tenant-exports` (83 exports of 12 shops, 39 MB at 12:50, 8 per shop). Ticket 05's restore experiment ran the restore there.
