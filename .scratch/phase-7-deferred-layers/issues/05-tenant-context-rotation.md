@@ -30,3 +30,10 @@ Implementation notes, first PR (2026-10-15): what the drill needs in every wave 
   - waits for the merge, and for the cluster's Secrets to equal the local values (`seal-secrets.py --verify`);
   - meanwhile probes the cell's shop through the ingress twice a second, and fails the step on any answer that is not 200.
 - Tests: `tenant-context.test.ts`, pure. A context signed with the current or the next secret is accepted while both are set; the next one alone is refused before, the old one alone after; another cell's secret and an empty list are refused. The Compose suite runs with an unset next secret: `make test CELLS=2` with the cluster stopped, 48 files, 250 tests passed.
+
+The drill on dedicated-1, step by step (2026-10-14/15):
+- **expand** (PR #77, the cell's re-sealed `shop-secrets` with a next secret): merged 22:27 UTC. The cluster's Secret held the step at about 22:44 (13 keys, equal to the local values), and the catalog API, order service, and storefront were restarted on it by 22:46.
+  - The probe failed the step: 130 of 459 requests. All the failures it showed were timeouts (no answer within 5 s), not refusals. The VM's load was at 34 because the new autoscalers had tripled pool-1's storefront and catalog API (ticket 06), which also slowed the controller's apply.
+  - The first probe reported a timeout as `000` and deleted its log on exit. It now records `timeout` apart from refusals and keeps each step's log in `.local/`.
+  - An expand only adds an accepted key, so nothing in it can refuse a request; switch and contract are the steps that can.
+

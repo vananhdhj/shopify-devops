@@ -24,3 +24,12 @@ Implementation notes (2026-10-15):
   - samples every 10 s the two units' ready replicas and CPU, and the VM's load and available memory, until both are back at one replica;
   - prints when each scaled out and back in, and the answers by status.
 - A server-side dry-run of pool-1 against the lab cluster passes (the two HPAs created, the two Deployments changed). `make policy` passes.
+
+Found after the merge (2026-10-14, fixed in a follow-up PR):
+- **The first targets scaled out with no load and could not scale back in.** The HPAs targeted 70% of the 50m CPU each pod requests. An idle storefront pod uses about 29m and an idle catalog API pod about 17m (synthetic Checkouts, probes, scrapes), so startup bursts after #76's rollout took both to 3 replicas within ten minutes.
+  - They stayed there: with 3 pods the storefront averaged 58% of its request, and going to 2 needs under 47%, but each pod's idle cost does not shrink with more pods.
+  - The four extra pods, with Argo CD and Colima's guest agent busy on the churn, put the VM's load back at 34 and slowed every request during the rotation drill's first step.
+- **The fix**:
+  - targets as an average CPU per pod, several times an idle pod's: storefront 150m, catalog API 80m;
+  - a scale-up behaviour: a 60 s stabilisation, then at most one pod a minute, so a startup burst cannot snowball.
+

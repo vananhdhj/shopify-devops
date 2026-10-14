@@ -9,8 +9,9 @@
 # Each step changes .secrets/, re-seals (`make secrets`), commits only the changed sealed files from
 # a separate worktree (the working tree is never touched), opens a pull request, waits for it to be
 # merged and for the controller to apply it, then restarts what reads the secret. Meanwhile a probe
-# asks the cell's shop for its home page through the ingress twice a second and reports every
-# answer that is not 200.
+# asks the cell's shop for its home page through the ingress twice a second; a refusal (any answer
+# but 200) fails the step, and so do timeouts (no answer within 5 s: a slow host, not the rotation),
+# reported apart. Each step's probe log is kept in .local/rotation-<cell>-<step>.log.
 #   rotate-tenant-context.sh <cell> expand|switch|contract
 set -euo pipefail
 
@@ -75,10 +76,16 @@ echo "$(stamp) waiting for $url to be merged"
 # 3. The probe, from here to the end of the step.
 handle="$(kubectl -n platform-dev exec platform-db-0 -- psql -U postgres -d platform -Atc \
   "SELECT handle FROM platform.tenants WHERE cell = '$cell' AND status = 'ACTIVE' ORDER BY internal, created_at LIMIT 1")"
-probe_log="$(mktemp)"
-(while true; do echo "$(date -u +%H:%M:%S) $(curl -s -o /dev/null --max-time 5 -w '%{http_code}' "http://$handle.$domain/" || echo 000)" >>"$probe_log"; sleep 0.5; done) &
+probe_log=".local/rotation-$cell-$step.log"
+: >"$probe_log"
+# One line per request: the time, and the status, or "timeout" when no answer came within 5 s.
+(while true; do
+  code="$(curl -s -o /dev/null --max-time 5 -w '%{http_code}' "http://$handle.$domain/" 2>/dev/null)" || code=timeout
+  echo "$(date -u +%H:%M:%S) $code" >>"$probe_log"
+  sleep 0.5
+done) &
 probe=$!
-trap 'kill "$probe" 2>/dev/null || true; rm -f "$probe_log"' EXIT
+trap 'kill "$probe" 2>/dev/null || true' EXIT
 
 until [ "$(gh pr view "$url" --json state --jq .state)" = MERGED ]; do
   [ "$(gh pr view "$url" --json state --jq .state)" = CLOSED ] && fail "$url was closed; .secrets/ holds the step: undo it by hand"
@@ -88,13 +95,13 @@ echo "$(stamp) merged; waiting for the controller to apply it"
 
 # 4. Applied: the cluster's Secrets equal the local values (by hash), then what reads them.
 for _ in $(seq 1 120); do
-  python3 scripts/seal-secrets.py --verify >"$probe_log.verify" 2>&1 || true
-  if ! grep -E "^($namespace/shop-secrets|edge-dev/cell-credentials):" "$probe_log.verify" | grep -q DIFFERENT; then break; fi
+  python3 scripts/seal-secrets.py --verify >".local/rotation-verify.log" 2>&1 || true
+  if ! grep -E "^($namespace/shop-secrets|edge-dev/cell-credentials):" .local/rotation-verify.log | grep -q DIFFERENT; then break; fi
   sleep 10
 done
-grep -E "^($namespace/shop-secrets|edge-dev/cell-credentials):" "$probe_log.verify"
-grep -E "^($namespace/shop-secrets|edge-dev/cell-credentials):" "$probe_log.verify" | grep -q DIFFERENT && fail "the cluster has not applied the step"
-rm -f "$probe_log.verify"
+grep -E "^($namespace/shop-secrets|edge-dev/cell-credentials):" .local/rotation-verify.log
+grep -E "^($namespace/shop-secrets|edge-dev/cell-credentials):" .local/rotation-verify.log | grep -q DIFFERENT && fail "the cluster has not applied the step"
+echo "$(stamp) the cluster's Secrets hold the step"
 
 case "$step" in
   expand | contract)
@@ -115,7 +122,9 @@ esac
 sleep 10
 kill "$probe" 2>/dev/null || true
 total="$(wc -l <"$probe_log" | tr -d ' ')"
-bad="$(awk '$2 != 200' "$probe_log" | wc -l | tr -d ' ')"
-echo "$(stamp) probe of $handle: $total answers, $bad not 200"
-[ "$bad" = 0 ] || { awk '$2 != 200' "$probe_log" | sed -n 1,10p; fail "requests were refused during $step"; }
+refused="$(awk '$2 != 200 && $2 != "timeout"' "$probe_log" | wc -l | tr -d ' ')"
+timeouts="$(awk '$2 == "timeout"' "$probe_log" | wc -l | tr -d ' ')"
+echo "$(stamp) probe of $handle: $total requests, $refused refused, $timeouts timed out (log: $probe_log)"
+[ "$refused" = 0 ] || { awk '$2 != 200 && $2 != "timeout"' "$probe_log" | sed -n 1,10p; fail "requests were refused during $step"; }
+[ "$timeouts" = 0 ] || fail "requests timed out during $step: the host was slow (see $probe_log); the rotation itself refused none"
 echo "rotation: $cell $step done$([ "$step" = contract ] && echo "; the rotation is complete")"

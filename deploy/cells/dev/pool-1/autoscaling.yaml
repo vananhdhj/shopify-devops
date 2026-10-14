@@ -1,8 +1,12 @@
 # Autoscaling in the pooled cell (Phase 7, decision 3): only the units that keep no per-tenant
 # state in memory. The storefront renders pages; the catalog API counts its product quota in the
 # database. The edge and the order service hold per-shop limits in memory (ADR-0026), so N
-# replicas would allow N times the limit; they stay at one. From 1 to 3 replicas at 70% of the CPU
-# requested, and down again only after 5 quiet minutes. The Deployments leave `replicas` to these
+# replicas would allow N times the limit; they stay at one. From 1 to 3 replicas, on an average CPU
+# per pod several times what an idle pod uses (storefront about 29m, catalog API about 17m): a
+# target relative to their 50m requests (70%, the first version) sat at their idle cost, scaled
+# both to 3 on startup bursts with no load, and could never scale back in, since each pod's idle
+# cost does not shrink with more pods (Phase 7 evidence). Up by one pod a minute after a minute's
+# load, down only after 5 quiet minutes. The Deployments leave `replicas` to these
 # (the patch in kustomization.yaml), so Argo CD and the autoscaler never fight over it.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -14,8 +18,12 @@ spec:
   maxReplicas: 3
   metrics:
     - type: Resource
-      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+      resource: { name: cpu, target: { type: AverageValue, averageValue: 150m } }
   behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 60 }
     scaleDown:
       stabilizationWindowSeconds: 300
 ---
@@ -29,7 +37,11 @@ spec:
   maxReplicas: 3
   metrics:
     - type: Resource
-      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+      resource: { name: cpu, target: { type: AverageValue, averageValue: 80m } }
   behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 60 }
     scaleDown:
       stabilizationWindowSeconds: 300
