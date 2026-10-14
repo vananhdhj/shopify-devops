@@ -257,6 +257,14 @@ The bad-release drill is written up step by step in
   an isolated scratch database, from which one shop is exported and re-imported). It restores to
   any moment, but needs archiving, disk, and memory the 16 GB laptop cannot spare; revisit when the
   lab has room (the cloud run, Phase 8).
+- **Logs and traces are kept 24 h, on the lab's one node, for now (Phase 7, decision 1).** Alloy,
+  Loki, and Tempo run single-binary with about 0.8 GB between them, which the 8 GB VM can spare.
+  **To change later:** longer retention and object storage off the node, and Loki and Tempo in
+  their scalable modes, in the cloud run (Phase 8).
+- **Manifest policies are checked in CI, not enforced in the cluster, for now (Phase 7,
+  decision 4).** Conftest blocks a pull request with a bad manifest, but nothing stops one applied
+  by hand. **To change later:** an admission controller (Kyverno or Gatekeeper) when the cluster
+  is shared or has the memory to spare.
 - No signup verification, password reset, or attempt limiting; a Merchant session cannot be
   revoked alone (bumping the shop's credential version signs all its sessions out).
 - Per-shop limits (request rate at the edge, Checkouts in flight, products, Orders admitted into the
