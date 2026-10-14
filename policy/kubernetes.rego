@@ -76,12 +76,18 @@ deny contains msg if {
 
 # --- Images ----------------------------------------------------------------------------------
 
-# The project's own images, and the Docker official images the cells and monitoring use.
+# The project's own images (any repository under its namespace), the Docker official images the
+# cells and monitoring use, and the images of the logging charts this repository configures
+# (Phase 7). An image is a repository followed by its tag (`:`) or digest (`@`).
+project_namespace := "ghcr.io/vananhdhj/shopify-devops/"
+
 allowed_repositories := {
-	"ghcr.io/vananhdhj/shopify-devops/",
-	"postgres:",
-	"redis:",
-	"python:",
+	"postgres",
+	"redis",
+	"python",
+	"docker.io/grafana/loki",
+	"docker.io/grafana/alloy",
+	"quay.io/prometheus-operator/prometheus-config-reloader",
 }
 
 deny contains msg if {
@@ -90,9 +96,12 @@ deny contains msg if {
 	msg := sprintf("approved-registries: %s container %s uses %s, from no approved repository", [name(x.obj), x.c.name, x.c.image])
 }
 
+allowed_image(image) if startswith(image, project_namespace)
+
 allowed_image(image) if {
-	some prefix in allowed_repositories
-	startswith(image, prefix)
+	some repository in allowed_repositories
+	some separator in [":", "@"]
+	startswith(image, concat("", [repository, separator]))
 }
 
 deny contains msg if {

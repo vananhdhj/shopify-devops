@@ -1,0 +1,89 @@
+# Grafana Alloy for the laptop lab (Phase 7, decision 1): one agent per node that reads every pod's
+# log lines through the Kubernetes API (no host paths) and pushes them to Loki. Ticket 03 adds its
+# OTLP receiver for traces. Chart version pinned in application.yaml.
+# Pinned by digest (the manifest policies, ticket 01): v1.20.1, multi-arch.
+image:
+  tag: v1.20.1
+  digest: sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
+
+controller:
+  type: daemonset
+  # Alloy's own state (positions of the logs it has read), with a read-only root filesystem.
+  volumes:
+    extra:
+      - name: alloy-data
+        emptyDir: {}
+
+alloy:
+  # Read through the API, so no /var/log mount and no root.
+  mounts:
+    varlog: false
+    extra:
+      - name: alloy-data
+        mountPath: /tmp/alloy
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 473
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: { drop: ["ALL"] }
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { memory: 192Mi }
+  extraEnv:
+    - name: NODE_NAME
+      valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+    - name: GOMEMLIMIT
+      value: 150MiB
+  storagePath: /tmp/alloy
+  configMap:
+    content: |
+      // Pods on this node, so each node's agent reads only its own.
+      discovery.kubernetes "pods" {
+        role = "pod"
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("NODE_NAME")
+        }
+      }
+
+      // Stream labels stay bounded: namespace, cell (the pod label of Phase 5), and app.
+      // tenant_id, requestId, and traceId stay inside the JSON line (LogQL `| json`).
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_shop_example_cell"]
+          target_label  = "cell"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name", "__meta_kubernetes_pod_label_app"]
+          separator     = ""
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.lab.receiver]
+      }
+
+      loki.write "lab" {
+        endpoint {
+          url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+        }
+      }
+
+configReloader:
+  resources:
+    requests: { cpu: 5m, memory: 16Mi }
+    limits: { memory: 32Mi }
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 473
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: { drop: ["ALL"] }

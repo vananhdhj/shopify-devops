@@ -73,6 +73,16 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL # the shop's dashboards live with the shop, in Git
+  # Logs (Phase 7): Loki, fed by Alloy. Stream labels are namespace, cell, and app; a shop's lines
+  # are found with `| json | tenantId = "…"`.
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc:3100
+      jsonData:
+        maxLines: 1000
   resources:
     requests: { cpu: 25m, memory: 128Mi }
     limits: { memory: 384Mi }
