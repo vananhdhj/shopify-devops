@@ -38,6 +38,22 @@
         "refresh": 2,
         "hide": 0,
         "current": {}
+      },
+      {
+        "name": "tenant_id",
+        "type": "query",
+        "label": "Shop id",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(tenant_info{tenant=\"$tenant\"}, tenant_id)",
+          "refId": "tenant_id"
+        },
+        "refresh": 2,
+        "hide": 2,
+        "current": {}
       }
     ]
   },
@@ -368,6 +384,38 @@
       "options": {
         "showHeader": true
       }
+    },
+    {
+      "id": 12,
+      "type": "logs",
+      "title": "Warnings and errors (logs, last 24 h at most)",
+      "description": "The shop's warning and error lines from every unit and cell, by its tenant id (the APIs) or handle (the edge and the storefront). Loki keeps 24 h.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=~\"shop-dev|cell-.+|edge-dev|platform-dev\"} | json | tenantId = \"$tenant_id\" or tenant = \"$tenant\" | severity =~ \"warn|error\""
+        }
+      ]
     }
   ]
 }

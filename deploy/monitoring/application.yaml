@@ -1,5 +1,6 @@
 # The monitoring stack, deployed by Argo CD like everything else: the pinned kube-prometheus-stack
-# chart with this repo's values, plus the lab's own pieces in deploy/monitoring/config.
+# chart with this repo's values; Loki and Alloy for logs (Phase 7), single-binary and lean; plus
+# the lab's own pieces in deploy/monitoring/config.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,6 +16,20 @@ spec:
         releaseName: monitoring
         valueFiles:
           - $values/deploy/monitoring/values.yaml
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 7.3.0
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/deploy/monitoring/loki-values.yaml
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.13.1
+      helm:
+        releaseName: alloy
+        valueFiles:
+          - $values/deploy/monitoring/alloy-values.yaml
     - repoURL: https://github.com/vananhdhj/shopify-devops.git
       targetRevision: main
       ref: values
