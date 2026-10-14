@@ -73,19 +73,28 @@ export function signTenantContext(tenant: TenantContext, secret: string, now = D
   return `${payload}.${signature(payload, secret)}`;
 }
 
+/**
+ * The secrets a cell accepts a context signed with: its current one, and during a rotation
+ * (Phase 7) the next one as well, so the edge can switch to the next with no request refused.
+ */
+export type TenantContextSecrets = string | readonly string[];
+
 /** The tenant a context names, or undefined when it is missing, malformed, tampered with, or expired. */
 export function verifyTenantContext(
   value: string | string[] | null | undefined,
-  secret: string,
+  secrets: TenantContextSecrets,
   now = Date.now(),
 ): TenantContext | undefined {
   if (typeof value !== "string") return undefined;
   const [payload, given, extra] = value.split(".");
   if (!payload || !given || extra !== undefined) return undefined;
 
-  const expected = Buffer.from(signature(payload, secret));
   const presented = Buffer.from(given);
-  if (presented.length !== expected.length || !timingSafeEqual(presented, expected)) return undefined;
+  const signedWith = (secret: string) => {
+    const expected = Buffer.from(signature(payload, secret));
+    return presented.length === expected.length && timingSafeEqual(presented, expected);
+  };
+  if (!(typeof secrets === "string" ? [secrets] : secrets).some(signedWith)) return undefined;
 
   let body: Partial<Payload>;
   try {

@@ -8,7 +8,9 @@ import { requiredEnv } from "./env";
  * refused requests without a valid one, so a page or handler always has a tenant.
  */
 export function tenantFrom(requestHeaders: Headers): TenantContext {
-  const tenant = verifyTenantContext(requestHeaders.get(tenantContextHeader), requiredEnv("TENANT_CONTEXT_SECRET"));
+  // The cell's current secret, and during a rotation (Phase 7) the next one as well.
+  const secrets = [requiredEnv("TENANT_CONTEXT_SECRET"), process.env.TENANT_CONTEXT_SECRET_NEXT].filter((s): s is string => !!s);
+  const tenant = verifyTenantContext(requestHeaders.get(tenantContextHeader), secrets);
   if (!tenant) throw new Error("request reached the storefront without a valid tenant context");
   return tenant;
 }

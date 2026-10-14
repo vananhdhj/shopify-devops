@@ -39,6 +39,18 @@ describe("the plan in the tenant context", () => {
     expect(verifyTenantContext(`${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`, secret)).toBeUndefined();
   });
 
+  it("accepts a context signed with either of a rotating cell's two secrets, and only those (Phase 7)", () => {
+    const [current, next, other] = ["current-secret", "next-secret", "another-cells-secret"];
+    const by = (secret: string) => signTenantContext({ ...shop, plan: "starter" }, secret);
+    expect(verifyTenantContext(by(current), [current, next])).toMatchObject({ id: shop.id });
+    expect(verifyTenantContext(by(next), [current, next])).toMatchObject({ id: shop.id });
+    // Before the rotation, and after it.
+    expect(verifyTenantContext(by(next), [current])).toBeUndefined();
+    expect(verifyTenantContext(by(current), [next])).toBeUndefined();
+    expect(verifyTenantContext(by(other), [current, next])).toBeUndefined();
+    expect(verifyTenantContext(by(current), [])).toBeUndefined();
+  });
+
   it("maps a route to its class: internal first, then plus, otherwise starter", () => {
     expect(limitClassOf({ plan: "plus", internal: true })).toBe("internal");
     expect(limitClassOf({ plan: "plus", internal: false })).toBe("plus");

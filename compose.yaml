@@ -101,6 +101,7 @@ services:
       INTERNAL_INVENTORY_TOKEN: ${INTERNAL_INVENTORY_TOKEN:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET_NEXT: ${TENANT_CONTEXT_SECRET_NEXT:-} # only during a rotation (Phase 7)
       PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
       # The seeded shops' catalogs grow with every test run (the volume outlives the stack): no
       # product quota for them here only.
@@ -129,6 +130,7 @@ services:
       ORDER_TOKEN_SECRET: ${ORDER_TOKEN_SECRET:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET_NEXT: ${TENANT_CONTEXT_SECRET_NEXT:-} # only during a rotation (Phase 7)
       PLATFORM_CELL_TOKEN: ${PLATFORM_CELL_TOKEN:?run make secrets}
       # The seeded shops' contention tests send 100 concurrent Checkouts: no cap for them here only.
       CHECKOUT_LIMIT_EXEMPT: harbor,meadow
@@ -192,6 +194,7 @@ services:
       PLATFORM_API_URL: http://platform-api:8101
       PLATFORM_STOREFRONT_TOKEN: ${PLATFORM_STOREFRONT_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET_NEXT: ${TENANT_CONTEXT_SECRET_NEXT:-} # only during a rotation (Phase 7)
       APP_ENV: dev
     ports:
       - "127.0.0.1:3000:3000"

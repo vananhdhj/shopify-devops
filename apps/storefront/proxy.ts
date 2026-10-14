@@ -4,10 +4,11 @@ import { tenantContextHeader, verifyTenantContext } from "@shop/tenancy";
 
 const environment = process.env.APP_ENV ?? "dev";
 
-function tenantContextSecret(): string {
+/** The cell's current secret, and during a rotation (Phase 7) the next one as well. */
+function tenantContextSecret(): string[] {
   const secret = process.env.TENANT_CONTEXT_SECRET;
   if (!secret) throw new Error("missing required environment variable TENANT_CONTEXT_SECRET");
-  return secret;
+  return [secret, process.env.TENANT_CONTEXT_SECRET_NEXT].filter((s): s is string => !!s);
 }
 
 /**

@@ -107,7 +107,11 @@ chmod 755 .secrets/mounts .secrets/mounts/platform .secrets/mounts/edge
 for cell in "${cells[@]}"; do
   printf '%s' "$(cell_value "$cell" PLATFORM_CELL_TOKEN)" >".secrets/mounts/platform/$cell.platform-cell-token"
   printf '%s' "$(cell_value "$cell" PLATFORM_STOREFRONT_TOKEN)" >".secrets/mounts/platform/$cell.storefront-token"
-  printf '%s' "$(cell_value "$cell" TENANT_CONTEXT_SECRET)" >".secrets/mounts/edge/$cell.tenant-context-secret"
+  # The edge signs with the cell's current secret, or with its next one once a rotation (Phase 7,
+  # scripts/rotate-tenant-context.sh) has reached its switch step.
+  signing=TENANT_CONTEXT_SECRET
+  [ "$(cat ".secrets/rotations/$cell.tenant-context" 2>/dev/null)" = switched ] && signing=TENANT_CONTEXT_SECRET_NEXT
+  printf '%s' "$(cell_value "$cell" "$signing")" >".secrets/mounts/edge/$cell.tenant-context-secret"
 done
 chmod 644 .secrets/mounts/platform/* .secrets/mounts/edge/*
 

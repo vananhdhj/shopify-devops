@@ -108,6 +108,7 @@ services:
       INTERNAL_INVENTORY_TOKEN: ${DEDICATED_1_INTERNAL_INVENTORY_TOKEN:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET_NEXT: ${DEDICATED_1_TENANT_CONTEXT_SECRET_NEXT:-} # only during a rotation (Phase 7)
       PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
@@ -134,6 +135,7 @@ services:
       ORDER_TOKEN_SECRET: ${DEDICATED_1_ORDER_TOKEN_SECRET:?run make secrets}
       ADMIN_SERVICE_TOKEN: ${DEDICATED_1_ADMIN_SERVICE_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET_NEXT: ${DEDICATED_1_TENANT_CONTEXT_SECRET_NEXT:-} # only during a rotation (Phase 7)
       PLATFORM_CELL_TOKEN: ${DEDICATED_1_PLATFORM_CELL_TOKEN:?run make secrets}
       APP_ENV: dev
     ports:
@@ -197,6 +199,7 @@ services:
       PLATFORM_API_URL: http://platform-api:8101
       PLATFORM_STOREFRONT_TOKEN: ${DEDICATED_1_PLATFORM_STOREFRONT_TOKEN:?run make secrets}
       TENANT_CONTEXT_SECRET: ${DEDICATED_1_TENANT_CONTEXT_SECRET:?run make secrets}
+      TENANT_CONTEXT_SECRET_NEXT: ${DEDICATED_1_TENANT_CONTEXT_SECRET_NEXT:-} # only during a rotation (Phase 7)
       APP_ENV: dev
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
