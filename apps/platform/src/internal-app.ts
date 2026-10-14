@@ -6,9 +6,11 @@ import { type CellCredentials, cellIdPattern } from "@shop/tenancy";
 import { cellRoutes, register } from "./cells.ts";
 import { fleetView } from "./fleet.ts";
 import { act, listPromotions, listTenants, type OperatorAction, tenantEvents } from "./operator.ts";
+import { listExports, requestExport } from "./exports.ts";
 import { requestMove } from "./move.ts";
 import { isPassword } from "./passwords.ts";
 import { merchantCredential, routingTable } from "./registry.ts";
+import { requestRestore } from "./restore.ts";
 
 export interface InternalAppDeps {
   db: Pool;
@@ -147,6 +149,44 @@ export function buildInternalApp(deps: InternalAppDeps) {
       if (result.outcome === "refused") return reply.code(409).send({ error: result.reason, message: result.message });
       req.log.info({ tenantId: result.tenantId, from: result.from, to: result.to, planAfter: result.planAfter }, "tenant move requested");
       return reply.code(202).send({ handle: req.params.handle, status: "MOVING", from: result.from, to: result.to, planAfter: result.planAfter });
+    },
+  );
+
+  // Per-tenant exports and restores (Phase 6). The exports live on the platform worker's volume;
+  // their records here say what each holds. A restore loses what the shop changed since its export.
+  app.get<{ Params: { handle: string } }>("/operator/tenants/:handle/exports", operatorOnly, async (req, reply) => {
+    const exports = await listExports(deps.db, req.params.handle);
+    if (!exports) return reply.code(404).send({ error: "tenant_not_found", message: "no such shop" });
+    return { exports };
+  });
+
+  app.post<{ Params: { handle: string } }>("/operator/tenants/:handle/exports", operatorOnly, async (req, reply) => {
+    const result = await requestExport(deps.db, req.params.handle);
+    if (result.outcome === "not_found") return reply.code(404).send({ error: "tenant_not_found", message: "no such shop" });
+    if (result.outcome === "not_active") return reply.code(409).send({ error: "not_allowed", message: `cannot export a shop that is ${result.status}` });
+    return reply.code(202).send({ handle: req.params.handle, export: "requested" });
+  });
+
+  app.post<{ Params: { handle: string }; Body: { export: string } }>(
+    "/operator/tenants/:handle/restore",
+    {
+      ...operatorOnly,
+      schema: { body: { type: "object", required: ["export"], properties: { export: { type: "string", pattern: uuidPatternSource } } } },
+    },
+    async (req, reply) => {
+      const result = await requestRestore(deps.db, req.params.handle, req.body.export);
+      if (result.outcome === "not_found") {
+        return reply.code(404).send({ error: `${result.what === "shop" ? "tenant" : "export"}_not_found`, message: `no such ${result.what}` });
+      }
+      if (result.outcome === "refused") return reply.code(409).send({ error: "not_allowed", message: result.message });
+      req.log.info({ tenantId: result.tenantId, export: req.body.export, takenAt: result.takenAt }, "tenant restore requested");
+      return reply.code(202).send({
+        handle: req.params.handle,
+        status: "RESTORING",
+        export: req.body.export,
+        takenAt: result.takenAt,
+        warning: `everything the shop changed since ${result.takenAt} is lost`,
+      });
     },
   );
 

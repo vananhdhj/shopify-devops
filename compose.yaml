@@ -362,9 +362,16 @@ services:
       # token; a short grace between purge passes in dev.
       CELL_CREDENTIALS_DIR: /run/cell-credentials
       DELETE_GRACE_MS: "3000"
+      # Per-tenant exports (Phase 6) to the worker's own volume. Daily here, not every 15 minutes:
+      # the suites leave hundreds of shops, whose rounds would load the cell under the tests. The
+      # scheduler looks every 2 s, so a new shop's first export is written at once.
+      EXPORTS_DIR: /exports
+      EXPORT_INTERVAL_MS: "86400000"
+      EXPORT_SCHEDULE_MS: "2000"
       APP_ENV: dev
     volumes:
       - ./.secrets/mounts/platform:/run/cell-credentials:ro
+      - tenantexports:/exports
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8102/health/ready"]
       interval: 2s
@@ -435,3 +442,4 @@ volumes:
   pgdata:
   redisdata:
   platformdata:
+  tenantexports:

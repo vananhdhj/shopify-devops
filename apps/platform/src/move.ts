@@ -1,8 +1,9 @@
 import type { Pool } from "pg";
-import { type Queryable, withTransaction } from "@shop/service-kit";
+import { withTransaction } from "@shop/service-kit";
 import type { CellCredentials } from "@shop/tenancy";
-import { CellData, type Checksums, differences, type TenantRows, total } from "./cell-data.ts";
-import { endpointsOf, shopsIn } from "./cells.ts";
+import { type CellData, type Checksums, differences, total } from "./cell-data.ts";
+import { shopsIn } from "./cells.ts";
+import { cellDataFor, drained, type FreezeConfig, later } from "./freeze.ts";
 import { type LifecycleEvent, complete, recordEvent } from "./lifecycle.ts";
 
 export type MoveRequest =
@@ -61,14 +62,8 @@ export async function requestMove(db: Pool, handle: string, target: string): Pro
   });
 }
 
-export interface MoveConfig {
-  /** From the freeze to the export: longer than an edge's routing refresh plus a write in flight. */
-  freezeGraceMs: number;
-  /** How long the shop's Pending Orders may take to settle before the move is undone. */
-  drainTimeoutMs: number;
-  /** Between two looks at the Pending Orders while draining. */
-  drainPollMs: number;
-}
+/** A move freezes and drains the shop like a restore does. */
+export type MoveConfig = FreezeConfig;
 
 export type MoveOutcome = "later" | "moved" | "undone" | "nothing_to_do";
 
@@ -105,13 +100,7 @@ export async function moveShop(db: Pool, credentials: CellCredentials, event: Li
     await complete(db, event.eventId);
     return "nothing_to_do";
   }
-  const cellData = async (id: string) => {
-    const cell = await endpointsOf(db, id);
-    if (!cell) throw new Error(`cell ${id} is not registered`);
-    const token = credentials.get(id, "platform-cell-token");
-    if (!token) throw new Error(`no platform-cell-token for cell ${id}`);
-    return new CellData(cell, token);
-  };
+  const cellData = (id: string) => cellDataFor(db, credentials, id);
 
   switch (move.step) {
     case "frozen":
@@ -136,15 +125,6 @@ export async function moveShop(db: Pool, credentials: CellCredentials, event: Li
   }
 }
 
-async function later(db: Queryable, event: LifecycleEvent, ms: number): Promise<void> {
-  await db.query("UPDATE platform.lifecycle_outbox SET not_before = now() + make_interval(secs => $2) WHERE event_id = $1", [
-    event.eventId,
-    Math.max(ms, 0) / 1000,
-  ]);
-}
-
-const pendingIn = (rows: TenantRows) => (rows["orders.orders"] ?? []).filter((order) => order.status === "PENDING").length;
-
 async function copy(
   db: Pool,
   event: LifecycleEvent,
@@ -153,21 +133,8 @@ async function copy(
   source: CellData,
   target: CellData,
 ): Promise<"later" | "verified"> {
-  const frozenMs = Date.now() - move.frozen_at.getTime();
-  if (frozenMs < config.freezeGraceMs) {
-    await later(db, event, config.freezeGraceMs - frozenMs);
-    return "later";
-  }
-  const orders = await source.export("orders", move.tenant_id);
-  const pending = pendingIn(orders.rows);
-  if (pending > 0) {
-    if (frozenMs < config.freezeGraceMs + config.drainTimeoutMs) {
-      await later(db, event, config.drainPollMs);
-      return "later";
-    }
-    throw new Error(`${pending} Pending Orders did not settle within ${config.drainTimeoutMs / 1000} s`);
-  }
-  await recordEvent(db, move.tenant_id, "move_drained", { frozenMs });
+  const orders = await drained(db, event, move.frozen_at, config, source, move.tenant_id, "move_drained");
+  if (orders === "later") return "later";
 
   const catalog = await source.export("catalog", move.tenant_id);
   const exported: Checksums = { ...catalog.checksums, ...orders.checksums };

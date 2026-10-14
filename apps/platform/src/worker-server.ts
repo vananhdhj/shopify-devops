@@ -1,9 +1,11 @@
-import { Counter, Histogram, Registry } from "prom-client";
+import { Counter, Gauge, Histogram, Registry } from "prom-client";
 import { createPool, createService, requiredEnv, runService } from "@shop/service-kit";
 import { CellCredentials } from "@shop/tenancy";
 import { type DeletionOutcome, deleteShop } from "./deletion.ts";
 import { claimDue, type LifecycleEvent, retryLater } from "./lifecycle.ts";
+import { type ExportOutcome, ExportStore, exportShop, forgetDeleted, scheduleExports } from "./exports.ts";
 import { type MoveOutcome, moveShop } from "./move.ts";
+import { type RestoreOutcome, restoreShop } from "./restore.ts";
 import { type ProvisionOutcome, provision } from "./provision.ts";
 
 const config = {
@@ -23,10 +25,23 @@ const config = {
     drainTimeoutMs: Number(process.env.MOVE_DRAIN_TIMEOUT_MS ?? 60_000),
     drainPollMs: Number(process.env.MOVE_DRAIN_POLL_MS ?? 500),
   },
+  /**
+   * Per-tenant exports (Phase 6, decision 3): the volume they are written to (none: no exports),
+   * how often each ACTIVE shop is exported, and how many of its exports are kept.
+   */
+  exports: {
+    dir: process.env.EXPORTS_DIR,
+    intervalMs: Number(process.env.EXPORT_INTERVAL_MS ?? 15 * 60_000),
+    keep: Number(process.env.EXPORT_KEEP ?? 8),
+    scheduleMs: Number(process.env.EXPORT_SCHEDULE_MS ?? 60_000),
+    /** Exports asked for per schedule tick, at most. */
+    batch: Number(process.env.EXPORT_BATCH ?? 20),
+  },
 };
 
 const db = createPool(config.databaseUrl);
 const credentials = new CellCredentials(config.cellCredentialsDir);
+const store = config.exports.dir ? new ExportStore(config.exports.dir) : undefined;
 const registry = new Registry();
 const completed = new Counter({
   name: "platform_lifecycle_completed_total",
@@ -48,10 +63,37 @@ const duration = new Histogram({
   registers: [registry],
 });
 
+const exportsTaken = new Counter({
+  name: "platform_exports_total",
+  help: "Per-tenant exports written to the export volume, by kind of request",
+  labelNames: ["outcome"] as const,
+  registers: [registry],
+});
+new Gauge({
+  name: "platform_export_age_seconds",
+  help: "Seconds since each ACTIVE shop's newest export (since its creation when it has none)",
+  labelNames: ["tenant_id"] as const,
+  registers: [registry],
+  async collect() {
+    const { rows } = await db.query<{ id: string; age: number }>(
+      `SELECT t.id, extract(epoch FROM now() - coalesce(max(e.taken_at), t.created_at))::float8 AS age
+         FROM platform.tenants t LEFT JOIN platform.tenant_exports e ON e.tenant_id = t.id
+        WHERE t.status = 'ACTIVE' AND NOT t.internal GROUP BY t.id`,
+    );
+    this.reset();
+    for (const row of rows) this.set({ tenant_id: row.id }, row.age);
+  },
+});
+
 // Private operational listener: health and metrics only.
 const ops = createService({ name: "platform-worker", environment: config.environment, db, registry });
 
-function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome | MoveOutcome> {
+function exportsVolume(): ExportStore {
+  if (!store) throw new Error("no export volume (EXPORTS_DIR)");
+  return store;
+}
+
+function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome | MoveOutcome | ExportOutcome | RestoreOutcome> {
   switch (event.action) {
     case "provision":
       return provision(db, config.router, credentials, event);
@@ -59,20 +101,25 @@ function run(event: LifecycleEvent): Promise<ProvisionOutcome | DeletionOutcome 
       return deleteShop(db, credentials, event, config.deleteGraceMs);
     case "move":
       return moveShop(db, credentials, event, config.move);
+    case "export":
+      return exportShop(db, credentials, exportsVolume(), event, config.exports.keep);
+    case "restore":
+      return restoreShop(db, credentials, exportsVolume(), event, config.move);
   }
 }
 
 let running = true;
-async function loop(): Promise<void> {
+async function loop(exports: boolean): Promise<void> {
   while (running) {
     try {
-      for (const event of await claimDue(db)) {
+      for (const event of await claimDue(db, exports ? 1 : 10, exports)) {
         try {
           const outcome = await run(event);
           // A deletion's first pass ("verify_later") and a move waiting ("later") have neither
           // finished nor failed. An undone move has finished: the shop is back where it was.
           if (outcome === "retry") failures.inc({ action: event.action });
-          if (["active", "deleted", "moved", "undone", "nothing_to_do"].includes(outcome)) {
+          if (outcome === "exported") exportsTaken.inc({ outcome });
+          if (["active", "deleted", "moved", "undone", "exported", "restored", "nothing_to_do"].includes(outcome)) {
             completed.inc({ action: event.action });
             duration.observe({ action: event.action }, (Date.now() - event.createdAt.getTime()) / 1000);
           }
@@ -89,7 +136,26 @@ async function loop(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
   }
 }
-void loop();
+void loop(false);
+// Exports one at a time, beside the other lifecycle work.
+void loop(true);
+
+// Every ACTIVE shop is exported every EXPORT_INTERVAL: the scheduler asks for the exports that
+// are due, and drops the exports of deleted shops.
+async function scheduleLoop(): Promise<void> {
+  while (running && store) {
+    try {
+      const asked = await scheduleExports(db, config.exports.intervalMs, config.exports.batch);
+      const forgotten = await forgetDeleted(db, store);
+      if (asked > 0 || forgotten > 0) ops.log.info({ asked, forgotten }, "exports scheduled");
+    } catch (err) {
+      ops.log.warn({ err }, "export scheduling failed; retrying");
+    }
+    await new Promise((resolve) => setTimeout(resolve, config.exports.scheduleMs));
+  }
+}
+if (!store) ops.log.warn("no EXPORTS_DIR: shops are not exported, and restores fail");
+void scheduleLoop();
 
 await runService(ops, db, config.opsPort, async () => {
   running = false;

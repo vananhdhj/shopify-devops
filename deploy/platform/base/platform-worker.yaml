@@ -1,11 +1,24 @@
-# Platform worker: lifecycle workflows (provisioning, deletion). It reaches the edge (to check a
-# new shop like a buyer would) and the APIs of the shop's cell, from the cell directory, with that
-# cell's own token (to purge a deleted shop).
+# Platform worker: lifecycle workflows (provisioning, deletion, moves, exports, restores). It
+# reaches the edge (to check a new shop like a buyer would) and the APIs of the shop's cell, from
+# the cell directory, with that cell's own token (to purge, move, export, or restore a shop).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: platform-worker
 automountServiceAccountToken: false
+---
+# Per-tenant exports (Phase 6, decision 3): every ACTIVE shop every 15 minutes, 8 kept per shop.
+# They hold customer data, so only this worker mounts the volume. ReadWriteOnce on the lab's one
+# node: during a rollout the new pod mounts it beside the old one, and files are written by rename.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tenant-exports
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -29,6 +42,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000 # node in the image; numeric so the kubelet can verify non-root
         runAsGroup: 1000
+        fsGroup: 1000 # the export volume
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -42,6 +56,8 @@ spec:
               value: "postgres://platform_app:$(DB_PASSWORD)@platform-db:5432/platform?sslmode=disable"
             - name: CELL_CREDENTIALS_DIR
               value: /run/cell-credentials
+            - name: EXPORTS_DIR
+              value: /exports
           envFrom:
             - configMapRef:
                 name: platform-env # the edge's address and the base domain, per environment
@@ -76,7 +92,12 @@ spec:
             - name: cell-credentials
               mountPath: /run/cell-credentials
               readOnly: true
+            - name: tenant-exports
+              mountPath: /exports
       volumes:
+        - name: tenant-exports
+          persistentVolumeClaim:
+            claimName: tenant-exports
         - name: tmp
           emptyDir: {}
         # One file per cell and key, from `make secrets`; a cell added later appears in place.
