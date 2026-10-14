@@ -258,7 +258,8 @@ The bad-release drill is written up step by step in
   any moment, but needs archiving, disk, and memory the 16 GB laptop cannot spare; revisit when the
   lab has room (the cloud run, Phase 8).
 - **Logs and traces are kept 24 h, on the lab's one node, for now (Phase 7, decision 1).** Alloy,
-  Loki, and Tempo run single-binary with about 0.8 GB between them, which the 8 GB VM can spare.
+  Loki, and Tempo run single-binary with about 1 GB between them, which the 8 GB VM can spare.
+  Alloy reads the node's log files as root (read-only), the manifest policies' one exception.
   **To change later:** longer retention and object storage off the node, and Loki and Tempo in
   their scalable modes, in the cloud run (Phase 8).
 - **Manifest policies are checked in CI, not enforced in the cluster, for now (Phase 7,

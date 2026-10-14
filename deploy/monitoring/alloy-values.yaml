@@ -1,5 +1,5 @@
 # Grafana Alloy for the laptop lab (Phase 7, decision 1): one agent per node that reads every pod's
-# log lines through the Kubernetes API (no host paths) and pushes them to Loki, and receives the
+# log files on the node and pushes their lines to Loki, and receives the
 # units' spans over OTLP/HTTP (port 4318) and sends them to Tempo. Chart version pinned in
 # application.yaml.
 # Pinned by digest (the manifest policies, ticket 01): v1.20.1, multi-arch.
@@ -16,15 +16,19 @@ controller:
         emptyDir: {}
 
 alloy:
-  # Read through the API, so no /var/log mount and no root.
+  # The node's pod log files (/var/log/pods, read-only). Reading them through the Kubernetes API
+  # instead reopened streams hundreds of times an hour, kept k3s at 200% CPU, and lost lines on
+  # reconnects (Phase 7 evidence). The files are root-owned 0640: the agent runs as root, with
+  # every capability dropped and a read-only root filesystem, the one exception to the non-root
+  # policy (policy/kubernetes.rego).
   mounts:
-    varlog: false
+    varlog: true
     extra:
       - name: alloy-data
         mountPath: /tmp/alloy
   securityContext:
-    runAsNonRoot: true
-    runAsUser: 473
+    runAsUser: 0
+    runAsNonRoot: false
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities: { drop: ["ALL"] }
@@ -45,7 +49,7 @@ alloy:
   storagePath: /tmp/alloy
   configMap:
     content: |
-      // Pods on this node, so each node's agent reads only its own.
+      // Pods on this node (one watch on the API), to label each file's lines.
       discovery.kubernetes "pods" {
         role = "pod"
         selectors {
@@ -54,8 +58,9 @@ alloy:
         }
       }
 
-      // Stream labels stay bounded: namespace, cell (the pod label of Phase 5), and app.
-      // tenant_id, requestId, and traceId stay inside the JSON line (LogQL `| json`).
+      // Stream labels: namespace, cell (the pod label of Phase 5), app, and instance (the pod and
+      // container, bounded by the pods of the retention). tenant_id, requestId, and traceId stay
+      // inside the JSON line (LogQL `| json`).
       discovery.relabel "pods" {
         targets = discovery.kubernetes.pods.targets
         rule {
@@ -66,8 +71,7 @@ alloy:
           source_labels = ["__meta_kubernetes_pod_label_shop_example_cell"]
           target_label  = "cell"
         }
-        // app: the pod's `app` label, replaced by `app.kubernetes.io/name` when it has one (a pod
-        // with both would otherwise get the two run together).
+        // app: the pod's `app` label, replaced by `app.kubernetes.io/name` when it has one.
         rule {
           source_labels = ["__meta_kubernetes_pod_label_app"]
           target_label  = "app"
@@ -77,10 +81,37 @@ alloy:
           regex         = "(.+)"
           target_label  = "app"
         }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_name", "__meta_kubernetes_pod_container_name"]
+          regex         = "(.+);(.+);(.+)"
+          replacement   = "$1/$2:$3"
+          target_label  = "instance"
+        }
+        // The container's log files: /var/log/pods/<namespace>_<pod>_<uid>/<container>/<n>.log.
+        rule {
+          source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+          separator     = "/"
+          replacement   = "/var/log/pods/*$1/*.log"
+          target_label  = "__path__"
+        }
       }
 
-      loki.source.kubernetes "pods" {
-        targets    = discovery.relabel.pods.output
+      local.file_match "pods" {
+        path_targets = discovery.relabel.pods.output
+      }
+
+      loki.source.file "pods" {
+        targets    = local.file_match.pods.targets
+        forward_to = [loki.process.pods.receiver]
+      }
+
+      // Each file line is the CRI's `<time> <stream> <flag> <line>`: keep the line and its time,
+      // and drop the per-file label.
+      loki.process "pods" {
+        stage.cri {}
+        stage.label_drop {
+          values = ["filename"]
+        }
         forward_to = [loki.write.lab.receiver]
       }
 

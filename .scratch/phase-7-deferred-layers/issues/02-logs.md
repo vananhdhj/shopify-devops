@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** resolved
+**Status:** resolved (amended 2026-10-15: logs read from the node's files)
 
 - [x] Alloy and Loki in `deploy/monitoring` (pinned charts or manifests), each with memory limits within decision 1's budget; Loki on a PVC, 24 h retention
 - [x] Stream labels `namespace`, `cell`, `app` only; `tenant_id`, `requestId`, `traceId` stay in the line (LogQL `| json`)
@@ -35,3 +35,16 @@ Resolved 2026-10-14 with PR #67 (`548ddb7`) and its fix PR. On the lab cluster:
 - **A pod deleted since.** The canary's only storefront pod (`storefront-6b698c96-g86nq`) was deleted at 14:47:26. Loki still held its 114 lines from the minutes before, the last 19 s before the kill; `kubectl logs` could no longer reach it.
 - Grafana: the Loki datasource is there, and the tenant panel's query returned 20 lines for the canary's shop.
 - Memory: Loki 95 MiB, Alloy 75 MiB. The VM's available memory went from 2,440 to 2,276 MiB.
+
+Amended 2026-10-15 (fix PR "logs from the node's files"):
+- **What happened.** An hour after ticket 03's rollout, the VM's load held near 38 with nothing deploying: k3s at 200% CPU, etcd failing readiness, metrics-server not ready (22 restarts), `crictl stats` timing out.
+  - The API server served about 1.4 pod log CONNECTs and 1.7 pod GETs a second, and Alloy opened 432 log streams in 10 minutes. Its API tailers kept dropping and reopening, and each reopen loaded the API server further. The same reconnects lost lines in ticket 03's first run.
+  - The pods themselves used under 1.5 cores in all (cadvisor, through Prometheus).
+- **The change** (approved by the author):
+  - Alloy reads `/var/log/pods` on the node (`loki.source.file`, the CRI format parsed, the `filename` label dropped), mounted read-only. One API watch remains, for the pods' labels.
+  - The files are root-owned 0640, so the agent runs as root with every capability dropped and a read-only root filesystem.
+  - The manifest policies list it as their one exception, with an owner, a reason, and an expiry (2027-01-15); an expired exception is a denial of its own.
+  - Fixtures: the excepted agent passes, and the same root container under another name is denied.
+- Stream labels stay namespace, cell, app, and `instance` (pod and container).
+- Positions live in an emptyDir, so a replaced Alloy pod reads the node's current files again; Loki drops the exact duplicates it still holds.
+

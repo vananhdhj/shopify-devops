@@ -36,6 +36,9 @@ Lessons that shape this phase:
 ## Decisions (approved 2026-10-14)
 
 1. **Logs and traces, lean.** One Alloy agent (logs and OTLP), Loki and Tempo each single-binary on local disk with 24 h retention, each about 256 MiB at most (around 0.8 GB in all). It fits the laptop; retention and scale change in the cloud run (Phase 8).
+   - **Amended 2026-10-15 (approved by the author):**
+     - Alloy reads the node's pod log files as root (read-only, every capability dropped), the one listed exception to the non-root policy. Reading them through the Kubernetes API reopened streams hundreds of times an hour, kept k3s at 200% CPU, and lost lines on reconnects.
+     - Tempo's limit is 512 MiB, after it was OOM-killed at 256. That makes about 1 GB in all.
    - Alternatives: traces only, with logs kept in `kubectl` (about 0.3 GB): rejected, logs are half the value of a trace id. Full retention of 7 days (about 1.5 GB): rejected, it would leave under 1 GB and invite Phase 5's memory stalls.
 2. **The rotation drill rotates one cell's tenant-context secret with no downtime.** The cell's units accept the current secret and a next one. Then the edge signs with the next. Then the next becomes the only one: an expand/contract for a secret.
    - Alternative: a database password with a restart. Simpler, but a restart window and less to learn; it stays possible later.

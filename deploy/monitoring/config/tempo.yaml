@@ -1,5 +1,5 @@
-# Tempo for the laptop lab (Phase 7, decision 1): one single-binary pod, local storage on a PVC,
-# 24 h retention. Spans arrive from Alloy only (OTLP over gRPC); Grafana queries port 3200. Plain
+# Tempo for the laptop lab (Phase 7, decision 1, with 512 Mi approved on 2026-10-15): one
+# single-binary pod, local storage on a PVC, 24 h retention. Spans arrive from Alloy only (OTLP over gRPC); Grafana queries port 3200. Plain
 # manifests rather than the single-binary chart, which Grafana has deprecated.
 apiVersion: v1
 kind: ConfigMap
@@ -84,7 +84,7 @@ spec:
           args: ["-config.file=/etc/tempo/tempo.yaml"]
           env:
             - name: GOMEMLIMIT
-              value: 200MiB
+              value: 420MiB
           ports:
             - name: http
               containerPort: 3200
@@ -100,8 +100,9 @@ spec:
             capabilities:
               drop: ["ALL"]
           resources:
-            requests: { cpu: 25m, memory: 96Mi }
-            limits: { memory: 256Mi }
+            # 256 Mi was its baseline: OOM-killed 8 times in its first two hours (Phase 7 evidence).
+            requests: { cpu: 25m, memory: 192Mi }
+            limits: { memory: 512Mi }
           volumeMounts:
             - name: config
               mountPath: /etc/tempo
