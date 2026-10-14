@@ -139,9 +139,11 @@ make smoke              # both shops, an unknown shop's 404, a Checkout, and a t
 open http://harbor.shop.localhost:8080 http://meadow.shop.localhost:8080
 ```
 
-Argo CD then deploys whatever `main` holds. **Before merging a change that reads a new secret
-key, run `make secrets` against the cluster**, or the new pods cannot start there (it warns when
-the cluster is unreachable). Admin tools and the operator's endpoints are reached only by
+Argo CD then deploys whatever `main` holds, Secrets included, sealed (Phase 7). **A change that
+reads a new secret key needs `make secrets` first, and its sealed files committed and deployed
+before the change**, or the new pods cannot start there. Back up the sealing key once
+(`make seal-key-backup`, into `.secrets/`): without it, a rebuilt cluster cannot decrypt Git's
+Secrets (`make secrets` restores it into a cluster that has none). Admin tools and the operator's endpoints are reached only by
 port-forward:
 
 ```sh
@@ -207,10 +209,13 @@ The bad-release drill is written up step by step in
 
 ## Security model
 
-- **Secrets never enter Git.** `make secrets` generates random values into `.secrets/`
-  (git-ignored): the platform's own keys in `dev.env`, and one file per cell
+- **Secret values enter Git only sealed (Phase 7).** `make secrets` generates random values into
+  `.secrets/` (git-ignored): the platform's own keys in `dev.env`, and one file per cell
   (`cells/<cell>.env`, the same key names in each), so a leaked cell secret opens one cell. It
-  copies them into Kubernetes Secrets; Argo CD Applications only reference Secrets by name. The
+  seals each namespace's Secret against the Sealed Secrets controller's public certificate
+  (`scripts/seal-secrets.py`) beside its Application's manifests; only the controller's private
+  key, in the cluster and in the backup under `.secrets/`, decrypts them. The manifest policies
+  refuse a plain `Secret` in Git. The
   control plane holds each cell's registration and storefront tokens as files
   (`cell-credentials`), and trusts a cell, or its storefront, for that cell and its shops only. Gitleaks runs as a pre-commit hook (`make hooks`) and in CI.
 - **Tenants.** A request's shop comes only from the router's signed tenant context; the storefront
@@ -285,8 +290,7 @@ The bad-release drill is written up step by step in
   is checked by eye.
 - Pending orders never expire and cannot be cancelled (ADR-0002); two simultaneous "add" clicks
   from one buyer can lose an increment.
-- Out of scope so far: Loki, OpenTelemetry, policy gates, image scanning, Sealed Secrets,
-  network policies, autoscaling, load tests, data-recovery drills, progressive delivery, cloud
+- Out of scope so far: image scanning, network policies, load tests, data-recovery drills, progressive delivery, cloud
   infrastructure, and commerce breadth such as accounts, shipping, tax, and real payments.
 
 ## Measured results

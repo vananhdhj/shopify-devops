@@ -6,6 +6,9 @@ resources:
   - traefik-podmonitor.yaml
   - slo-rules.yaml
   - tempo.yaml
+  # Secrets, sealed for Git (Phase 7): `make secrets` writes them; the controller decrypts them.
+  - sealed-grafana-admin.yaml
+  - sealed-alertmanager-discord.yaml
 configMapGenerator:
   - name: alert-catcher
     files:

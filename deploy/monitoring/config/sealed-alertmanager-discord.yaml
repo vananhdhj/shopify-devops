@@ -1,0 +1,17 @@
+# monitoring/alertmanager-discord, sealed by scripts/seal-secrets.py (`make secrets`) against
+# deploy/sealed-secrets/cert.pem; only the cluster's controller can decrypt it. Regenerated, never edited.
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: alertmanager-discord
+  namespace: monitoring
+  annotations:
+    shop.example/sealed-from: b7ac726776390e403128c97788b8af7fdfdc28da095c6319a1dded8eba5de1fb
+spec:
+  encryptedData:
+    url: AgCxEE1P71igUsHP/ptD0+M5kg+eeDbddAqy1flNb1lzNDz8YVT4avUSqjoPZDFBwlOTUZDABMbZhyL9GpjmHjSgk/Z/f0aDyk5leZK3cnJufN3rv9cxTloUP3cGCvVZw9ZHnZYXu8QB5y5wR2NV3CSZxhCd2yRnxQcJMw4BLCS4egUafTlwYBDxX56ovk7/hCR4hjM81ImpDeKyKbolOj4lsHjTz12Uc8G4JhIhkKrtGGmlhMQIQIvoPXQl4m/yLOBUeQJLCdU5fyAJHy0XSQioGHmHw64QXAm6URJ8Nr2/j/AQ7zZmSyZcINDRu48a6qyTWMrzyjdb332vKtSQnO7dNrRRAotGvK26X0YtRTorFAkAHIAIDMKGK2NbnVPhFv48i0DJmfTHlvn/Ia/9rNLNpGn1CnbyNn9S0v83tfNjhyh2bWwfWCH/Tigs5CMyarfgNwVB/hjs2tEcjFsZz31FAMV13zLGyuta2s+oJkPRKnZO6w3PAjHDowI8KbF6gRLGMiMljVOpTXGYMsQigqgt9PgHwvopjoFmQ+3F4mB427/RIjR4lkMcxV26qGH+R3AzADLc4wPVPNg/ZtLtECXCJPIePhWvui8yMrI8BAEHso1MLoNGnkdSouqowhjFfp14iS5fcIGtOBk1/P4LABeBb8yl2JTHdy2ApG5gvuvpVzirMHrRk2qJUwwOQg339s8VdonVxRPLUsbu6THOJDqFUzghE+yyTE7FFz1wqaxDWya3C1hv/UhDDxaCGIu7D/6E/gs1ojJQTgs0hpdzFjIrBf1buPYjZ67s11rni6rxmj7NUZb8AfGRhxegmTy7XQghz47WgZdPAo+O716I7TERBtVzZFz6ws+e
+  template:
+    metadata:
+      name: alertmanager-discord
+      namespace: monitoring
+    type: Opaque

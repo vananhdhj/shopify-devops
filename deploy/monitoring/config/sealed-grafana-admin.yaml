@@ -1,0 +1,18 @@
+# monitoring/grafana-admin, sealed by scripts/seal-secrets.py (`make secrets`) against
+# deploy/sealed-secrets/cert.pem; only the cluster's controller can decrypt it. Regenerated, never edited.
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: grafana-admin
+  namespace: monitoring
+  annotations:
+    shop.example/sealed-from: 93b0ef1c2d1576324dac08b58213c20d022175cb9ead79c25ae960a2cc98b5c8
+spec:
+  encryptedData:
+    admin-password: AgACDm1OXF7c5KbN65gnlE2w3ksJEH5iObc/nbwPIoNAW8PqVgWbMx1p/G2SMSCncD0PZ2pQdfxeijTDELLLg+tXXPa4pVX82ijBZLxVE2HcKRcD1DsdAhdoSKB2P5It+AX3p3+LRWJ6+vVDUyHhYAqZ9a8ZSf0y/vxOPCSrfskbov8w1kCtSQO22O2zSMKU4A5v0sgsBKQ1g5c+zp9LmD/SpRQy1eRVMZf8SgcubTH0agErip9Fs1KxzR+Ul5NMPFM7bbZuDPw+uNA8lfbq03z6gzvWs5va6pCv74YxzeSnvIxl4JA25tEfEOBGizwqX+n3CVkbRmjTs/3YVvVHhYj6gVw7XP7v8Q+5rl54E4K2nBCyvT0xCtw7NB8G3UIyJN6haEaw+BZzDlJqGoZs/TesO8UCrGSbbGgEj1qbv6g74aMOuUEIdrJObbqUDRMBW8Qeauq2B9TKHDlSIRHf68wqQiBCjyjw+U85rPqSE7g/Je+8CyIOYCgBcQ+tSKEHVTWhrNdGazghNs+sDi+P3jZ9fmrMZJ1KMZvQRUm3VuqM4jSH9wGVDy2PPCsgreKoMKxS1hw3+7/R9UvT0VDJvK/ltDP2mpR3G7M9dqMyp2Uvo+o4cylPZzqoTVYcyh/fuwgKev2+KC9rgAdOLRUEyjQvprw4+zKCALu6vggb1CBckbb+KhgPirrA9hJL593QQ4hatkjg//OuzMbVrgki19+x1I9hciNNqFuRsvibDwxdBPRIu+8BC84qOxYbT1PovMc=
+    admin-user: AgCtScA0TsV0Zm76rlL5bvAmNs/0IRfuQQJrDrOMxuhZ2QltptpZP9KnWDF+yW5bIdc+qr5lz7UhI2ejGbqISTe0vmugXCJ/yXhyobkzobW/pFNshSc6xgW5D9ACm86pc38D0pkSwLUta/DDaPuLmn31+c8my1BvRnV1K1AnOjgGKw4BmkBZ+GWnV2lRPQRgoPVyBhmct5PCIH+TOMnvYyk+5bwOq30OFLbTk+n3ZhhaJnde4PNWgb+qZkRgwnVSurCXXjoc6WZ7C6QBJGTya92Aije0PICsg2DAy/o4Y15FC52Cz0HmOhn2Z931yHiWj8Cxv0x7unds1RJhFsCqpPcfTvSWSRaXbWtNUkxvQqVGz9BqLi0eCr0M/J74255j7DzeW7R26ZLefEHcH138IweJOaGzxbCwZVb39QvEQrfxJ9QGQUSS9MIoUhCWzLXXOsnAa23ES1xy63r1at7S6HYWYcVdbuNVwzsFsL4I5FJr7dJde2/bY9T5ha3GQxFLx5VGC48iGwKkrXqLNnszIrPSGHf+rgCKjk+Ttlhuidi836KDtIiWOh8s268a/WpGikHn4CgmsTMRrpd1XsGKrvT4O5eOsxcPlQjuQefnBDbJoelg3CvOM70NLUZU6tHqNVAb9/bwoQ8LCZS/NzYQzi1KvUSPjRfF8gawQjT4FMIlKPYM2q77gHgjiEl+Id9WDuuiVsNlcA==
+  template:
+    metadata:
+      name: grafana-admin
+      namespace: monitoring
+    type: Opaque

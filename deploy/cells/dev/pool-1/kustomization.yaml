@@ -22,6 +22,8 @@ patches:
         value: pool-1
 resources:
   - ../../../base
+  # Secrets, sealed for Git (Phase 7): `make secrets` writes them; the controller decrypts them.
+  - sealed-shop-secrets.yaml
 components:
   - ../../components/dev-seed
 configMapGenerator:

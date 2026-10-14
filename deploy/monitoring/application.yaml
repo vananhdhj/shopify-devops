@@ -38,7 +38,7 @@ spec:
       path: deploy/monitoring/config
   destination:
     server: https://kubernetes.default.svc
-    namespace: monitoring # created, with its Secrets, by `make secrets`
+    namespace: monitoring # created by `make secrets`; its Secrets come sealed from Git (Phase 7)
   syncPolicy:
     automated:
       prune: true

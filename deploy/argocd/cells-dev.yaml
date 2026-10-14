@@ -44,7 +44,7 @@ spec:
         path: "{{.path.path}}"
       destination:
         server: https://kubernetes.default.svc
-        namespace: "{{.namespace}}" # created, with the cell's Secret, by `make secrets`
+        namespace: "{{.namespace}}" # created by `make secrets`; its Secrets come sealed from Git (Phase 7)
       syncPolicy:
         automated:
           prune: true
