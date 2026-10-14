@@ -32,4 +32,6 @@ Found after the merge (2026-10-14, fixed in a follow-up PR):
 - **The fix**:
   - targets as an average CPU per pod, several times an idle pod's: storefront 150m, catalog API 80m;
   - a scale-up behaviour: a 60 s stabilisation, then at most one pod a minute, so a startup burst cannot snowball.
+- **A second load source.** Each of #76's and #78's merges (manifests, a load test, scripts) set off a full release: every image rebuilt, and every unit in every cell rolled out through the waves. The release used CI's path filters, where `scripts/**`, the `Makefile`, `compose.yaml`, and `.github/**` count as shared by every service, though no image holds them.
+  - Fixed in a follow-up PR: `shared` keeps only what images are built from; the rest is `ci-shared`, which CI still tests every service for, and the release ignores.
 

@@ -33,7 +33,7 @@ jobs:
         with:
           filters: .github/path-filters.yml
       - id: affected
-        run: .github/scripts/affected-services.sh '${{ steps.filter.outputs.changes }}' '${{ github.event_name == 'workflow_dispatch' && inputs.all }}'
+        run: .github/scripts/affected-services.sh '${{ steps.filter.outputs.changes }}' '${{ github.event_name == 'workflow_dispatch' && inputs.all }}' release
 
   # One native build per service and architecture, pushed by digest only (no tag yet).
   build:

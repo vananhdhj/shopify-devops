@@ -1,5 +1,8 @@
-# Which paths make which unit "affected". Anything shared by several units (contracts, service-kit,
-# lockfile, build and CI config) is `shared` and affects every service.
+# Which paths make which unit "affected". What goes into every image (contracts, service-kit, the
+# lockfile, the build config) is `shared`: CI tests and the release rebuilds every service. What only
+# CI and the tests use (the Compose stack, the Makefile, scripts, CI config) is `ci-shared`: CI tests
+# every service, but the release rebuilds nothing for it, since no image holds it (Phase 7: two
+# merges of scripts and manifests rebuilt and rolled out all seven images in every cell).
 shared:
   - "packages/**"
   - "package.json"
@@ -7,9 +10,11 @@ shared:
   - "pnpm-workspace.yaml"
   - "turbo.json"
   - "tsconfig.base.json"
-  - "biome.jsonc"
   - ".dockerignore"
+ci-shared:
+  - "biome.jsonc"
   - "compose.yaml"
+  - "compose.*.yaml"
   - "Makefile"
   - "scripts/**"
   - ".github/**"
