@@ -5,6 +5,7 @@ import { loggingOptions } from "./logging.ts";
 import { registerMetrics } from "./metrics.ts";
 import { quietRoute } from "./routes.ts";
 import { requireTenantContext, withoutTenant } from "./tenant.ts";
+import { stopTracing, traceRequests } from "./tracing.ts";
 
 export interface ServiceOptions {
   /** Service name stamped on every log line, e.g. "order-service". */
@@ -47,6 +48,8 @@ export function createService({
 }: ServiceOptions): FastifyInstance {
   // No type coercion: a quantity sent as "2" is a client error, not a number.
   const app = Fastify({ ...loggingOptions(name, environment), ajv: { customOptions: { coerceTypes: false } } });
+  // First, so every later hook and the handler run inside the request's span.
+  traceRequests(app);
   if (tenantContextSecret) requireTenantContext(app, tenantContextSecret);
   registerMetrics(app, registry, recordRequests);
 
@@ -131,6 +134,7 @@ export async function runService(
     await beforeClose();
     await app.close();
     await db?.end();
+    await stopTracing();
     process.exit(0);
   }
 

@@ -1,4 +1,5 @@
 import type { InventoryEffectLine, InventoryEffectOutcome, InventoryEffectResult } from "@shop/contracts";
+import { SpanKind, traceHeaders, withSpan } from "@shop/service-kit";
 
 export interface InventoryClient {
   deduct(tenantId: string, orderId: string, items: InventoryEffectLine[]): Promise<InventoryEffectOutcome>;
@@ -13,14 +14,17 @@ export interface InventoryClient {
  */
 export function inventoryClient(catalogApiUrl: string, internalToken: string): InventoryClient {
   async function apply(tenantId: string, orderId: string, action: "deduct" | "release", items: InventoryEffectLine[]) {
-    const res = await fetch(`${catalogApiUrl}/internal/inventory-effects`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-internal-token": internalToken },
-      body: JSON.stringify({ tenantId, orderId, action, items }),
-      signal: AbortSignal.timeout(3_000),
+    return withSpan(`POST catalog inventory ${action}`, { kind: SpanKind.CLIENT }, async (span) => {
+      const res = await fetch(`${catalogApiUrl}/internal/inventory-effects`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-internal-token": internalToken, ...traceHeaders() },
+        body: JSON.stringify({ tenantId, orderId, action, items }),
+        signal: AbortSignal.timeout(3_000),
+      });
+      span.setAttribute("http.response.status_code", res.status);
+      if (!res.ok) throw new Error(`inventory ${action} for ${orderId} answered ${res.status}`);
+      return ((await res.json()) as InventoryEffectResult).outcome;
     });
-    if (!res.ok) throw new Error(`inventory ${action} for ${orderId} answered ${res.status}`);
-    return ((await res.json()) as InventoryEffectResult).outcome;
   }
   return {
     deduct: (tenantId, orderId, items) => apply(tenantId, orderId, "deduct", items),

@@ -1,5 +1,5 @@
 import { Queue, Worker } from "bullmq";
-import { createPool, createService, runService } from "@shop/service-kit";
+import { contextFrom, createPool, createService, runService, SpanKind, startTracing, withSpan } from "@shop/service-kit";
 import { config } from "./config.ts";
 import { dispatchOutbox } from "./dispatcher.ts";
 import { inventoryClient } from "./inventory-client.ts";
@@ -9,6 +9,7 @@ import { reconcileStalePending } from "./reconcile.ts";
 import { settleOrder } from "./settle.ts";
 import { withTimeout } from "./timeout.ts";
 
+startTracing("worker", config.environment);
 const db = createPool(config.databaseUrl);
 const connection = redisConnection(config.redisUrl);
 // The producer side fails fast while Redis is unreachable instead of buffering commands in
@@ -37,11 +38,23 @@ const settleDeps = {
 const worker = new Worker<SettleOrderJob>(
   ordersQueue,
   async (job) => {
-    const { tenantId, orderId } = job.data;
-    const settlement = await settleOrder(settleDeps, tenantId, orderId);
-    recordSettlement(metrics, tenantId, settlement);
-    ops.log.info({ tenantId, orderId, settlement, attempt: job.attemptsMade + 1 }, "order settled");
-    return settlement;
+    const { tenantId, orderId, traceparent } = job.data;
+    // The settlement continues the Checkout's trace (Phase 7); a re-enqueued job starts its own.
+    return withSpan(
+      "settle order",
+      {
+        kind: SpanKind.CONSUMER,
+        parent: contextFrom(traceparent),
+        attributes: { "tenant.id": tenantId, "order.id": orderId, "messaging.destination.name": "orders", "job.attempt": job.attemptsMade + 1 },
+      },
+      async (span) => {
+        const settlement = await settleOrder(settleDeps, tenantId, orderId);
+        span.setAttribute("order.settlement", settlement);
+        recordSettlement(metrics, tenantId, settlement);
+        ops.log.info({ tenantId, orderId, settlement, attempt: job.attemptsMade + 1 }, "order settled");
+        return settlement;
+      },
+    );
   },
   { connection, concurrency: config.concurrency, lockDuration: 10_000, stalledInterval: 5_000 },
 );

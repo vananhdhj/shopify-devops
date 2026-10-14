@@ -1,0 +1,25 @@
+# Tempo for the Compose stack (Phase 7): one process, traces in memory-backed local storage, kept
+# an hour. The units send OTLP over HTTP; the tests read traces back on port 3200.
+server:
+  http_listen_port: 3200
+  log_level: warn
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+compactor:
+  compaction:
+    block_retention: 1h
+ingester:
+  # Short, so a test finds a finished trace soon.
+  trace_idle_period: 2s
+  max_block_duration: 1m

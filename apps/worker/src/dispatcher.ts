@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { withTransaction } from "@shop/service-kit";
+import { contextFrom, currentTraceContext, SpanKind, withSpan, withTransaction } from "@shop/service-kit";
 import type { JobSink } from "./queue.ts";
 import { withTimeout } from "./timeout.ts";
 
@@ -40,15 +40,34 @@ export async function dispatchOutbox(db: Pool, queue: JobSink, retry: RetryPolic
       "SELECT event_id, tenant_id, order_id FROM orders.claim_fair_events(50, $1)",
       [perTenant],
     );
+    // Each event continues its Checkout's trace (Phase 7): a producer span here, whose context
+    // goes into the job for the worker's settlement.
+    const traces = new Map<string, string>();
+    if (rows.length > 0) {
+      const contexts = await client.query<{ event_id: string; trace_context: string }>(
+        "SELECT event_id, trace_context FROM orders.event_trace_contexts($1::uuid[])",
+        [rows.map((event) => event.event_id)],
+      );
+      for (const row of contexts.rows) traces.set(row.event_id, row.trace_context);
+    }
     for (const event of rows) {
-      await withTimeout(
-        queue.add(
-          "settle-order",
-          { tenantId: event.tenant_id, orderId: event.order_id },
-          settleJobOptions(retry, event.event_id),
-        ),
-        enqueueTimeoutMs,
-        "queue unreachable",
+      await withSpan(
+        "outbox dispatch",
+        {
+          kind: SpanKind.PRODUCER,
+          parent: contextFrom(traces.get(event.event_id)),
+          attributes: { "tenant.id": event.tenant_id, "order.id": event.order_id, "messaging.destination.name": "orders" },
+        },
+        () =>
+          withTimeout(
+            queue.add(
+              "settle-order",
+              { tenantId: event.tenant_id, orderId: event.order_id, traceparent: currentTraceContext() },
+              settleJobOptions(retry, event.event_id),
+            ),
+            enqueueTimeoutMs,
+            "queue unreachable",
+          ),
       );
     }
     if (rows.length > 0) {

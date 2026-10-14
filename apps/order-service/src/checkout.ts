@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import type { CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
-import { type Queryable, withTenant } from "@shop/service-kit";
+import { annotateSpan, currentTraceContext, type Queryable, withTenant } from "@shop/service-kit";
 import { fetchCart } from "./catalog-client.ts";
 
 export type CheckoutResult =
@@ -54,6 +54,8 @@ export async function acceptCheckout(
   if (!cart) return { outcome: "refused", reason: "cart_not_found" };
   if (cart.items.length === 0) return { outcome: "refused", reason: "cart_empty" };
 
+  // The request's trace (Phase 7) goes with the outbox event, so the settlement continues it.
+  const traceContext = currentTraceContext() ?? null;
   try {
     const orderId = await withTenant(db, tenant.id, async (client) => {
       const { rows } = await client.query<{ id: string }>(
@@ -74,11 +76,12 @@ export async function acceptCheckout(
         ],
       );
       await client.query(
-        "INSERT INTO orders.outbox (order_id, event_type, payload) VALUES ($1, 'order.accepted', $2)",
-        [id, { tenantId: tenant.id, orderId: id }],
+        "INSERT INTO orders.outbox (order_id, event_type, payload, trace_context) VALUES ($1, 'order.accepted', $2, $3)",
+        [id, { tenantId: tenant.id, orderId: id }, traceContext],
       );
       return id;
     });
+    annotateSpan({ "order.id": orderId });
     return { outcome: "accepted", orderId };
   } catch (err) {
     // A concurrent retry with the same key, or another Checkout of the same Cart, won the race.

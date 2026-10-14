@@ -28,6 +28,9 @@ configMapGenerator:
       - TENANT_BASE_DOMAIN=shop-staging.localhost
       # This cell in its control plane's cell directory (registered by the register-cell hook).
       - CELL_ID=pool-1
+      # Traces (Phase 7): OTLP to Alloy, each span naming this cell.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.svc:4318
+      - OTEL_RESOURCE_ATTRIBUTES=cell=pool-1
       - CELL_ROLE=pooled
       - CELL_CAPACITY=20 # the lab cap (Phase 5): bounds the tenant label on metrics
       # The control plane this cell belongs to: the routing table, sign-ins, and signup pages.

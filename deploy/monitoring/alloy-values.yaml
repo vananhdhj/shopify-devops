@@ -1,6 +1,7 @@
 # Grafana Alloy for the laptop lab (Phase 7, decision 1): one agent per node that reads every pod's
-# log lines through the Kubernetes API (no host paths) and pushes them to Loki. Ticket 03 adds its
-# OTLP receiver for traces. Chart version pinned in application.yaml.
+# log lines through the Kubernetes API (no host paths) and pushes them to Loki, and receives the
+# units' spans over OTLP/HTTP (port 4318) and sends them to Tempo. Chart version pinned in
+# application.yaml.
 # Pinned by digest (the manifest policies, ticket 01): v1.20.1, multi-arch.
 image:
   tag: v1.20.1
@@ -30,6 +31,12 @@ alloy:
   resources:
     requests: { cpu: 25m, memory: 64Mi }
     limits: { memory: 192Mi }
+  # The OTLP/HTTP receiver, on the agent's Service.
+  extraPorts:
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
   extraEnv:
     - name: NODE_NAME
       valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
@@ -80,6 +87,31 @@ alloy:
       loki.write "lab" {
         endpoint {
           url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+        }
+      }
+
+      // Traces (Phase 7): every unit sends OTLP/HTTP here; batched and passed on to Tempo.
+      otelcol.receiver.otlp "units" {
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.processor.batch.traces.input]
+        }
+      }
+
+      otelcol.processor.batch "traces" {
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.monitoring.svc:4317"
+          tls {
+            insecure = true
+          }
         }
       }
 

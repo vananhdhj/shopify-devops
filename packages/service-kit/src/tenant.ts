@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type pg from "pg";
 import { tenantContextHeader, type TenantContext, verifyTenantContext } from "@shop/tenancy";
+import { annotateSpan } from "./tracing.ts";
 import { withTransaction } from "./transactions.ts";
 
 declare module "fastify" {
@@ -30,6 +31,7 @@ export function requireTenantContext(app: FastifyInstance, secret: string): void
     }
     tenants.set(req, tenant);
     reply.log = req.log = req.log.child({ tenantId: tenant.id });
+    annotateSpan({ "tenant.id": tenant.id });
     // A shop frozen for a move or a restore (Phase 6) is read, never written: its rows are being
     // copied or replaced. Internal routes (the worker's settlement) carry no tenant context.
     if (tenant.readOnly && !readMethods.has(req.method)) {

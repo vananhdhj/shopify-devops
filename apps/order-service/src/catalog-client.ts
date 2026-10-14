@@ -1,4 +1,5 @@
 import type { Cart } from "@shop/contracts";
+import { SpanKind, traceHeaders, withSpan } from "@shop/service-kit";
 import { tenantContextHeader } from "@shop/tenancy";
 
 export class CatalogUnavailableError extends Error {}
@@ -9,16 +10,19 @@ export class CatalogUnavailableError extends Error {}
  * the token is unknown.
  */
 export async function fetchCart(catalogApiUrl: string, tenantContext: string, cartToken: string): Promise<Cart | undefined> {
-  let res: Response;
-  try {
-    res = await fetch(`${catalogApiUrl}/carts/${encodeURIComponent(cartToken)}`, {
-      headers: { [tenantContextHeader]: tenantContext },
-      signal: AbortSignal.timeout(3_000),
-    });
-  } catch (err) {
-    throw new CatalogUnavailableError("catalog-cart API unreachable", { cause: err });
-  }
-  if (res.status === 404) return undefined;
-  if (!res.ok) throw new CatalogUnavailableError(`catalog-cart API answered ${res.status}`);
-  return (await res.json()) as Cart;
+  return withSpan("GET catalog /carts/:id", { kind: SpanKind.CLIENT }, async (span) => {
+    let res: Response;
+    try {
+      res = await fetch(`${catalogApiUrl}/carts/${encodeURIComponent(cartToken)}`, {
+        headers: { [tenantContextHeader]: tenantContext, ...traceHeaders() },
+        signal: AbortSignal.timeout(3_000),
+      });
+    } catch (err) {
+      throw new CatalogUnavailableError("catalog-cart API unreachable", { cause: err });
+    }
+    span.setAttribute("http.response.status_code", res.status);
+    if (res.status === 404) return undefined;
+    if (!res.ok) throw new CatalogUnavailableError(`catalog-cart API answered ${res.status}`);
+    return (await res.json()) as Cart;
+  });
 }

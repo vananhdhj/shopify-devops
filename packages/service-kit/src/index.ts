@@ -8,3 +8,15 @@ export { quietRoute } from "./routes.ts";
 export { loggingOptions } from "./logging.ts";
 export { observeRequests } from "./metrics.ts";
 export { requireTenantContext, tenantOf, withTenant, withoutTenant, type Queryable } from "./tenant.ts";
+export {
+  annotateSpan,
+  contextFrom,
+  currentTraceContext,
+  SpanKind,
+  startTracing,
+  stopTracing,
+  traceHeaders,
+  traceIds,
+  traceRequests,
+  withSpan,
+} from "./tracing.ts";

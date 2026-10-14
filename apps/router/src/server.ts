@@ -1,11 +1,12 @@
 import { Registry } from "prom-client";
-import { createService, runService } from "@shop/service-kit";
+import { createService, runService, startTracing } from "@shop/service-kit";
 import { CellCredentials } from "@shop/tenancy";
 import { buildApp } from "./app.ts";
 import { config } from "./config.ts";
 import { registryRoutes, type RouteSource } from "./routes.ts";
 import { cellUpstreams } from "./upstreams.ts";
 
+startTracing("router", config.environment);
 const registry = new Registry();
 // Private operational listener: health and metrics only, never on the ingress. The router is ready
 // once it has a routing table, and stays ready on its cached table while the control plane is down.
