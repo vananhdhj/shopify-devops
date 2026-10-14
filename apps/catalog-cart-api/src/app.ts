@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import type { AdminUsage, InventoryEffectRequest, InventoryEffectResult, NewProduct, ProductList } from "@shop/contracts";
-import { planLimits } from "@shop/tenancy";
+import { planLimits, type TenantContextSecrets } from "@shop/tenancy";
 import {
   createService,
   isUuid,
@@ -69,7 +69,7 @@ export interface AppDeps {
   /** Presented by the control plane to purge a deleted shop from this cell. */
   platformCellToken: string;
   /** Verifies the tenant context every business request carries (from the router, via the storefront). */
-  tenantContextSecret: string;
+  tenantContextSecret: TenantContextSecrets;
   /**
    * Shop handles without a product quota: none in the cluster. The Compose test stack exempts the
    * seeded shops, whose catalogs grow with every test run on a volume that outlives the stack.

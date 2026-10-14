@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import type { AdminOrderList, AdminStatusChange, CheckoutAccepted, CheckoutRefusal, CheckoutRequest } from "@shop/contracts";
 import { createService, isUuid, requireSecretHeader, tenantOf, withTenant, withoutTenant } from "@shop/service-kit";
-import { planLimits, tenantContextHeader } from "@shop/tenancy";
+import { planLimits, tenantContextHeader, type TenantContextSecrets } from "@shop/tenancy";
 import { Counter, Histogram } from "prom-client";
 import { fulfillOrder, listOrders } from "./admin.ts";
 import { orderMetrics } from "./metrics.ts";
@@ -21,7 +21,7 @@ export interface AppDeps {
   /** Presented by the control plane to purge a deleted shop from this cell. */
   platformCellToken: string;
   /** Verifies the tenant context every business request carries (from the router, via the storefront). */
-  tenantContextSecret: string;
+  tenantContextSecret: TenantContextSecrets;
   /** Fails every Checkout with 500, standing in for a bad release in the rollback drill. */
   checkoutFault?: boolean;
   /**

@@ -1,6 +1,7 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import pg from "pg";
 import type { Registry } from "prom-client";
+import type { TenantContextSecrets } from "@shop/tenancy";
 import { loggingOptions } from "./logging.ts";
 import { registerMetrics } from "./metrics.ts";
 import { quietRoute } from "./routes.ts";
@@ -26,7 +27,7 @@ export interface ServiceOptions {
    * When set, every route except probes, scrapes, and routes marked `withoutTenant` requires a
    * tenant context signed with this secret.
    */
-  tenantContextSecret?: string;
+  tenantContextSecret?: TenantContextSecrets;
 }
 
 /**

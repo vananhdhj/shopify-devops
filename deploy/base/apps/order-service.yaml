@@ -45,6 +45,9 @@ spec:
               valueFrom: { secretKeyRef: { name: shop-secrets, key: ADMIN_SERVICE_TOKEN } }
             - name: TENANT_CONTEXT_SECRET
               valueFrom: { secretKeyRef: { name: shop-secrets, key: TENANT_CONTEXT_SECRET } }
+            # Set only during a rotation of the cell's tenant-context secret (Phase 7).
+            - name: TENANT_CONTEXT_SECRET_NEXT
+              valueFrom: { secretKeyRef: { name: shop-secrets, key: TENANT_CONTEXT_SECRET_NEXT, optional: true } }
             - name: PLATFORM_CELL_TOKEN
               valueFrom: { secretKeyRef: { name: shop-secrets, key: PLATFORM_CELL_TOKEN } }
           envFrom:

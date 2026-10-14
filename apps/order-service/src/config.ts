@@ -6,7 +6,8 @@ export const config = {
   catalogApiUrl: required("CATALOG_API_URL"),
   orderTokenSecret: required("ORDER_TOKEN_SECRET"),
   adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
-  tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
+  // The cell's current secret, and during a rotation (Phase 7) the next one as well.
+  tenantContextSecret: [required("TENANT_CONTEXT_SECRET"), process.env.TENANT_CONTEXT_SECRET_NEXT].filter((s): s is string => !!s),
   platformCellToken: required("PLATFORM_CELL_TOKEN"),
   environment: process.env.APP_ENV ?? "dev",
   // The bad-release drill's fault: when "true", every Checkout fails with 500.

@@ -6,7 +6,8 @@ export const config = {
   environment: process.env.APP_ENV ?? "dev",
   internalInventoryToken: required("INTERNAL_INVENTORY_TOKEN"),
   adminServiceToken: required("ADMIN_SERVICE_TOKEN"),
-  tenantContextSecret: required("TENANT_CONTEXT_SECRET"),
+  // The cell's current secret, and during a rotation (Phase 7) the next one as well.
+  tenantContextSecret: [required("TENANT_CONTEXT_SECRET"), process.env.TENANT_CONTEXT_SECRET_NEXT].filter((s): s is string => !!s),
   platformCellToken: required("PLATFORM_CELL_TOKEN"),
   /** Shop handles without a product quota: none in the cluster; the Compose test stack's seeded shops. */
   productQuotaExempt: new Set((process.env.PRODUCT_QUOTA_EXEMPT ?? "").split(",").filter(Boolean)),

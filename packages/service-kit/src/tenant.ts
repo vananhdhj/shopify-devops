@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type pg from "pg";
-import { tenantContextHeader, type TenantContext, verifyTenantContext } from "@shop/tenancy";
+import { tenantContextHeader, type TenantContext, type TenantContextSecrets, verifyTenantContext } from "@shop/tenancy";
 import { annotateSpan } from "./tracing.ts";
 import { withTransaction } from "./transactions.ts";
 
@@ -22,7 +22,7 @@ const readMethods = new Set(["GET", "HEAD", "OPTIONS"]);
  * except on routes marked `withoutTenant`, and every write for a read-only one (503 `shop_updating`). The default is refusal, so a new route cannot forget
  * the check. Request log lines then carry the tenant id.
  */
-export function requireTenantContext(app: FastifyInstance, secret: string): void {
+export function requireTenantContext(app: FastifyInstance, secret: TenantContextSecrets): void {
   app.addHook("onRequest", async (req, reply) => {
     if (req.routeOptions.config?.tenantContext === false) return;
     const tenant = verifyTenantContext(req.headers[tenantContextHeader], secret);

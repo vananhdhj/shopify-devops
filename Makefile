@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore experiment-trace tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy argocd-apps seal-key-backup seal-key-restore
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore experiment-trace rotate-tenant-context tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy argocd-apps seal-key-backup seal-key-restore
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -114,6 +114,12 @@ drill-control-plane-outage:
 ## ones in pool-1; it must get 429s and no 5xx, and their Checkout p95 stay within 20% of baseline
 experiment-noisy-neighbour:
 	@scripts/experiment-noisy-neighbour.sh
+
+## Rotate one cell's tenant-context secret with no request refused (Phase 7), one step at a time:
+## STEP=expand, then switch, then contract; each opens a pull request and waits for its merge
+STEP ?=
+rotate-tenant-context:
+	@scripts/rotate-tenant-context.sh $(CELL) $(STEP)
 
 ## Trace experiment (Phase 7): a Checkout through the ingress, its trace found in Tempo by the
 ## Order id, printed span by span; it must hold every unit, across the outbox and the queue
