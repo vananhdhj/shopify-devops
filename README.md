@@ -30,6 +30,13 @@ Merchant password; anyone can open another at the platform's address, `shop.loca
 - The platform operator suspends, reinstates, and deletes shops (`make tenant-*`). Deletion purges
   the shop from the cell and is complete only when no row of it is left
   ([ADR-0016](docs/adr/0016-deleting-a-shop-purges-and-verifies.md)).
+- The platform operator moves a shop to another cell (`make tenant-move`): the shop is frozen
+  read-only, its Pending Orders settle, its rows are copied and every table verified, and it is
+  switched over and purged from the old cell; anything failing first leaves it where it was
+  ([ADR-0028](docs/adr/0028-moves-copy-freeze-and-verify.md),
+  [ADR-0029](docs/adr/0029-a-read-only-freeze-through-the-signed-context.md)). Every shop is
+  exported every 15 minutes, and one can be restored to an export (`make tenant-restore`)
+  ([ADR-0030](docs/adr/0030-restore-points-are-scheduled-per-tenant-exports.md)).
 
 - The **edge router**, one for every cell and the only unit on the ingress, maps the address to a
   **tenant** and its **cell** from the control plane's routing table (cached, so shops keep
@@ -118,7 +125,8 @@ make dev-down
 The seeded shops' Merchants sign in at their shop's `/admin/login` with their passwords from
 `.secrets/dev.env` (`MERCHANT_PASSWORD_HARBOR`, `MERCHANT_PASSWORD_MEADOW`); a shop opened at
 signup uses the password chosen there. Operator actions: `make tenant-events|tenant-suspend|
-tenant-reinstate|tenant-delete HANDLE=<handle>`. Every `*.localhost`
+tenant-reinstate|tenant-delete|tenant-exports|tenant-export HANDLE=<handle>`, `make tenant-move
+HANDLE=<handle> CELL=<cell>`, `make tenant-restore HANDLE=<handle> EXPORT=<id>`. Every `*.localhost`
 name resolves to this machine, so no hosts-file entries are needed.
 
 ### On the lab cluster with GitOps
@@ -237,9 +245,11 @@ The bad-release drill is written up step by step in
 
 - One single-node k3d cluster on a laptop: no high availability, and the "dev" environment is the
   only one running. The staging overlay is rendered and validated in CI but never applied.
-- One cell, so placement is trivial and a cell outage stops every shop; more cells, placement by
-  plan, and tenant moves come in later phases of the blueprint. A deleted shop's data is not
-  exported first, and its handle is never reused.
+- Three cells, one of each role, on one node. A deleted shop's data is not exported first, its
+  exports are removed with it, and its handle is never reused.
+- A moved shop's Order links and Merchant session do not survive the move: both are signed with
+  the old cell's own secret, so buyers' links to earlier Orders stop opening and the Merchant signs
+  in again (Phase 6 evidence).
 - **Per-shop restore uses scheduled exports, for now (Phase 6, decision 3).** The control plane
   exports every shop's rows every 15 minutes (keeping 8), and a restore re-imports one of those
   exports, so changes made after the last export are lost by a restore. **To change later:**
@@ -272,10 +282,11 @@ The bad-release drill is written up step by step in
 
 ## Measured results
 
-All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11, Phase 3 on 2026-10-12, Phase 4 on 2026-10-13, Phase 5 on 2026-10-13/14 (Colima at 8 GB from its end).
+All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11, Phase 3 on 2026-10-12, Phase 4 on 2026-10-13, Phase 5 on 2026-10-13/14 (Colima at 8 GB from its end), Phase 6 on 2026-10-14.
 
 | What | Result |
 |---|---|
+| Tenant data operations (Phase 6) | A starter shop with 5 Orders, 3 of them Pending, moved from pool-1 to dedicated-1 frozen 5.3 s (bound 30 s): every table's count and md5 equal in both cells, the same 5 Orders after with none Pending, nothing left in pool-1, and 60 of 60 home-page requests answered through the ingress throughout. A Merchant's 2 deleted products came back with a restore to the export before (frozen 5.1 s): every table as exported, the later Order gone as warned, another shop's rows unchanged. Every shop is exported every 15 minutes, 8 kept ([Phase 6 evidence](docs/evidence/2026-10-14-phase-6-cluster.md)) |
 | Fair sharing (Phase 5) | Per-shop limits by plan: request rate at the edge, Checkouts in flight, products, Orders admitted into the settlement queue. One starter shop at 10× its rate quota (100 requests a second for 5 minutes) got 26,976 × 429 and 0 × 5xx, while three other starter shops in its cell kept their Checkout p95 (22–23 ms baseline, 15–18 ms under the noise) with no failed journey; fleet, cell, tenant, and control-plane dashboards and a plus shop's Checkout SLO alert ([Phase 5 evidence](docs/evidence/2026-10-14-phase-5-cluster.md)) |
 | Releases in waves (Phase 4) | A release reaches the canary, is soaked 5 minutes behind a gate (health, 5xx ratio, Pending age, alerts, a synthetic shop's Checkout), and is promoted to pool-1, then dedicated-1, with no human step: merge to last wave in about 31 minutes. A bad release that passed CI (Checkout failing only inside Kubernetes) halted 49 s into the canary's soak with 0 real tenants exposed, `PromotionHalted` fired 23 s later, pool-1 and dedicated-1 never ran it, and reverting its merge commit restored the canary and went through every wave ([Phase 4 evidence](docs/evidence/2026-10-13-phase-4-cluster.md)) |
 | Three cells on the cluster (Phase 3) | Starter shops in `pool-1`, the synthetic shop in `canary`, a plus shop alone in `dedicated-1` (a second plus signup refused: no capacity); with `dedicated-1`'s PostgreSQL stopped for 60 s its shop failed within 1 s while the other cells served 120 of 120 pages, and it recovered 5 s after the restore; a cell uses about 170 MiB, the edge router 34 MiB, with 5.4 GB still available in the VM ([Phase 3 evidence](docs/evidence/2026-10-12-phase-3-cluster.md)) |

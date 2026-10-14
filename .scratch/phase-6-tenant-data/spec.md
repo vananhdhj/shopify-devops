@@ -1,6 +1,6 @@
 # Spec: Phase 6 — tenant data operations
 
-**Status:** ready-for-agent (decisions 1–3 approved by the author on 2026-10-14; tickets under `issues/`)
+**Status:** resolved (2026-10-14: tickets 01–05 resolved; PRs #59–#63 and the ticket 05 PR merged and deployed to the lab cluster; the move and restore experiments met their bounds)
 
 Background: the blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`) puts Phase 6 after fair sharing: "Tenant data operations: per-tenant export and restore, tenant move between cells". The exit gate is "Tenant move and per-tenant restore experiments pass with evidence". The bounds come from its experiments table:
 - **Move:** move one tenant from `pool-1` to `dedicated-1` with a write freeze under 30 s, matching row counts and checksums, zero lost or duplicated Orders, and in-flight Pending Orders settled.
