@@ -1,0 +1,170 @@
+{
+  "schema_version": 2,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Vòng đời shop: DB cấm mọi bước đi lậu",
+    "output": "docs/architecture/shopify-devops/diagrams/tenant-lifecycle.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Đường chính"
+    },
+    {
+      "id": "pause",
+      "label": "Tạm dừng"
+    },
+    {
+      "id": "freeze",
+      "label": "Đóng băng"
+    }
+  ],
+  "states": [
+    {
+      "id": "prov",
+      "type": "start",
+      "label": "PROVISIONING",
+      "sublabel": "router trả 503",
+      "lane": "main",
+      "col": 0,
+      "width": 150,
+      "tag": "signup"
+    },
+    {
+      "id": "active",
+      "type": "success",
+      "label": "ACTIVE",
+      "sublabel": "router phục vụ buyer",
+      "lane": "main",
+      "col": 1,
+      "tag": "platform-worker"
+    },
+    {
+      "id": "deleting",
+      "type": "failure",
+      "label": "DELETING",
+      "sublabel": "đang purge",
+      "lane": "main",
+      "col": 3,
+      "width": 140,
+      "tag": "operator"
+    },
+    {
+      "id": "deleted",
+      "type": "failure",
+      "label": "DELETED",
+      "sublabel": "0 hàng trong cell",
+      "lane": "main",
+      "col": 4,
+      "width": 150,
+      "tag": "platform-worker"
+    },
+    {
+      "id": "susp",
+      "type": "success",
+      "label": "SUSPENDED",
+      "sublabel": "dữ liệu giữ nguyên",
+      "lane": "pause",
+      "col": 2,
+      "width": 150,
+      "tag": "operator"
+    },
+    {
+      "id": "moving",
+      "type": "success",
+      "label": "MOVING",
+      "sublabel": "read-only, đang move",
+      "lane": "freeze",
+      "col": 1,
+      "width": 150,
+      "tag": "operator"
+    },
+    {
+      "id": "restoring",
+      "type": "success",
+      "label": "RESTORING",
+      "sublabel": "read-only, đang restore",
+      "lane": "freeze",
+      "col": 2,
+      "width": 160,
+      "tag": "operator"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "prov",
+      "to": "active",
+      "label": "kích hoạt",
+      "variant": "emphasis"
+    },
+    {
+      "from": "active",
+      "to": "deleting",
+      "label": "delete",
+      "variant": "security",
+      "route": "bottom-channel"
+    },
+    {
+      "from": "deleting",
+      "to": "deleted",
+      "label": "purge + kiểm",
+      "variant": "emphasis"
+    },
+    {
+      "from": "active",
+      "to": "susp",
+      "label": "suspend"
+    },
+    {
+      "from": "susp",
+      "to": "active",
+      "label": "reinstate",
+      "route": "bottom-channel"
+    },
+    {
+      "from": "susp",
+      "to": "deleting",
+      "label": "delete",
+      "variant": "security"
+    },
+    {
+      "from": "active",
+      "to": "moving",
+      "label": "move"
+    },
+    {
+      "from": "active",
+      "to": "restoring",
+      "label": "restore"
+    },
+    {
+      "from": "moving",
+      "to": "active",
+      "label": "switch hoặc undo"
+    },
+    {
+      "from": "restoring",
+      "to": "active",
+      "label": "xong hoặc undo"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Trigger enforce_tenant_transition",
+      "items": [
+        "Bước nào ngoài bảng này là check_violation, bất kể ai gọi",
+        "MOVING và RESTORING chỉ đi từ ACTIVE và về ACTIVE; hàng mới chỉ vào ở PROVISIONING"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Ai làm gì",
+      "items": [
+        "Operator: suspend, reinstate, delete, mỗi bước một dòng audit",
+        "Worker: PROVISIONING sang ACTIVE, DELETING sang DELETED"
+      ]
+    }
+  ]
+}

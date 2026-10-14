@@ -31,7 +31,7 @@
       "col": 0,
       "type": "database",
       "label": "orders.outbox",
-      "sublabel": "dispatched_at NULL",
+      "sublabel": "mọi tenant · chưa dispatch",
       "width": 130
     },
     {
@@ -40,7 +40,7 @@
       "col": 1,
       "type": "backend",
       "label": "dispatchOutbox",
-      "sublabel": "mỗi 250 ms · 2 s timeout",
+      "sublabel": "claim_fair_events · 250 ms",
       "width": 140
     },
     {
@@ -84,7 +84,7 @@
       "col": 0,
       "type": "backend",
       "label": "reconcileStalePending",
-      "sublabel": "quá 30 s, mỗi 10 s",
+      "sublabel": "hàm requeue · quá 30 s",
       "width": 170
     }
   ],

@@ -8,13 +8,27 @@
   },
   "components": [
     {
+      "id": "router",
+      "type": "backend",
+      "label": "edge",
+      "sublabel": "ops :8001 · edge-dev",
+      "pos": [
+        60,
+        40
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
       "id": "storefront",
       "type": "frontend",
       "label": "storefront",
       "sublabel": "metrics :9464",
       "pos": [
-        40,
-        60
+        60,
+        140
       ],
       "size": [
         150,
@@ -27,8 +41,8 @@
       "label": "order-service",
       "sublabel": "/metrics :4002",
       "pos": [
-        40,
-        190
+        60,
+        210
       ],
       "size": [
         150,
@@ -41,8 +55,8 @@
       "label": "catalog-cart-api",
       "sublabel": "/metrics :4001",
       "pos": [
-        40,
-        260
+        60,
+        280
       ],
       "size": [
         150,
@@ -55,8 +69,8 @@
       "label": "worker",
       "sublabel": "ops :4003",
       "pos": [
-        40,
-        330
+        60,
+        350
       ],
       "size": [
         150,
@@ -69,8 +83,8 @@
       "label": "Traefik",
       "sublabel": "kube-system :9100",
       "pos": [
-        40,
-        440
+        60,
+        470
       ],
       "size": [
         150,
@@ -174,12 +188,26 @@
         150,
         56
       ]
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "platform-api, worker, promoter",
+      "sublabel": ":8101 · :8102 · :8103",
+      "pos": [
+        60,
+        570
+      ],
+      "size": [
+        240,
+        50
+      ]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
-      "label": "shop-dev (4 đơn vị của shop)",
+      "label": "mỗi cell: canary · pool-1 · dedicated-1 (4 đơn vị)",
       "wraps": [
         "storefront",
         "orders",
@@ -196,6 +224,20 @@
         "grafana",
         "catcher"
       ]
+    },
+    {
+      "kind": "region",
+      "label": "platform-dev (control plane)",
+      "wraps": [
+        "platform"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "edge-dev",
+      "wraps": [
+        "router"
+      ]
     }
   ],
   "connections": [
@@ -207,6 +249,13 @@
       "variant": "emphasis",
       "fromSide": "right",
       "toSide": "top"
+    },
+    {
+      "id": "scrape-router",
+      "from": "router",
+      "to": "prom",
+      "label": "① :8001",
+      "variant": "emphasis"
     },
     {
       "id": "scrape-orders",
@@ -278,6 +327,12 @@
       "to": "grafana",
       "label": "xem",
       "variant": "security"
+    },
+    {
+      "id": "scrape-platform",
+      "from": "platform",
+      "to": "prom",
+      "label": "① :8101 · :8102 · :8103"
     }
   ],
   "cards": [
@@ -286,16 +341,18 @@
       "title": "Nhãn có giới hạn",
       "items": [
         "Metric theo route template, không bao giờ theo id",
-        "Log JSON mang requestId; storefront chuyển x-request-id sang API",
-        "Storefront chỉ log path, không log query string"
+        "Log JSON mang requestId; router gán id, storefront chuyển x-request-id sang API",
+        "Storefront chỉ log path, không log query string",
+        "Series theo shop mang tenant_id, nối với tenant_info; mọi series có nhãn cell; bốn dashboard Grafana lưu trong Git"
       ]
     },
     {
       "dot": "amber",
-      "title": "Hai alert, cả hai đều có việc để làm",
+      "title": "Rule alert trong Git",
       "items": [
-        "ShopServerErrorRatioHigh: 5xx trên 5%, tối thiểu 0,1 req/s, for 1m, giữ thêm 1m",
-        "ShopOldestPendingOrderStale: Order PENDING quá 60 s",
+        "ShopServerErrorRatioHigh và ShopOldestPendingOrderStale (shop-alerts)",
+        "PromotionHalted và SyntheticCheckoutFailing (promoter)",
+        "PlusTenantCheckoutBudgetBurnFast và Slow (tenant-slo, chỉ shop plus)",
         "Rule mặc định của chart bị tắt (defaultRules.create=false)"
       ]
     }

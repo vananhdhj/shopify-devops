@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cell directory: cell tự đăng ký, edge định tuyến theo cell",
+    "output": "docs/architecture/shopify-devops/diagrams/cells.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "edge",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "host → shop → cell",
+      "pos": [
+        60,
+        250
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "cell directory · placement",
+      "pos": [
+        420,
+        250
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "database",
+      "label": "registry",
+      "sublabel": "platform.cells · tenants.cell",
+      "pos": [
+        420,
+        470
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "creds",
+      "type": "security",
+      "label": "cell-credentials",
+      "sublabel": "một file mỗi cell và key",
+      "pos": [
+        60,
+        470
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "canary",
+      "type": "backend",
+      "label": "cell canary",
+      "sublabel": "wave 0 · canary · cap 5",
+      "pos": [
+        860,
+        60
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "pool",
+      "type": "backend",
+      "label": "cell pool-1",
+      "sublabel": "wave 1 · pooled · cap 100",
+      "pos": [
+        860,
+        250
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "dedicated",
+      "type": "backend",
+      "label": "cell dedicated-1",
+      "sublabel": "wave 2 · dedicated · cap 1",
+      "pos": [
+        860,
+        440
+      ],
+      "size": [
+        170,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Cell trong Git: deploy/cells/dev/<cell>",
+      "wraps": [
+        "canary",
+        "pool",
+        "dedicated"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "reg1",
+      "from": "canary",
+      "to": "api",
+      "label": "① register · token cell",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "id": "reg2",
+      "from": "pool",
+      "to": "api",
+      "label": "① register · token cell",
+      "variant": "security"
+    },
+    {
+      "id": "reg3",
+      "from": "dedicated",
+      "to": "api",
+      "label": "① register · token cell",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "bottom"
+    },
+    {
+      "id": "dir",
+      "from": "api",
+      "to": "registry",
+      "label": "② lưu cell, tạo synthetic shop",
+      "variant": "emphasis"
+    },
+    {
+      "id": "routes",
+      "from": "edge",
+      "to": "api",
+      "label": "③ bảng routing + cells",
+      "variant": "emphasis"
+    },
+    {
+      "id": "secret",
+      "from": "creds",
+      "to": "edge",
+      "label": "tenant-context-secret mỗi cell",
+      "variant": "security"
+    },
+    {
+      "id": "secret2",
+      "from": "creds",
+      "to": "api",
+      "label": "cell-token, storefront-token",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Cell tự khai báo, không bị phát hiện",
+      "items": [
+        "Cell nằm trong Git (cell.json: id, namespace, wave); ApplicationSet sinh một Application mỗi thư mục",
+        "Job register-cell (PostSync) báo role, capacity, URL bằng token của chính cell",
+        "Chỉ cell đã đăng ký mới nhận shop mới"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Mỗi cell một bộ secret",
+      "items": [
+        "Rò một cell chỉ lộ cell đó: token, secret ký context và mật khẩu DB đều riêng",
+        "Control plane và edge đọc secret từ thư mục file, không cần restart khi thêm cell",
+        "Cell có shop không đổi được role và không giảm được capacity dưới số shop"
+      ]
+    }
+  ]
+}

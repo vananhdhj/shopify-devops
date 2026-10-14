@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "Merchant: mật khẩu ở storefront, service token ở sau lưng",
+    "title": "Merchant: mật khẩu ở control plane, session gắn shop và credentialVersion",
     "output": "docs/architecture/shopify-devops/diagrams/merchant.html",
     "quality_profile": "showcase",
     "column_fit": "spread"
@@ -21,6 +21,12 @@
       "sublabel": "/admin"
     },
     {
+      "id": "platform",
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "/internal/merchant-sign-ins"
+    },
+    {
       "id": "orders",
       "type": "backend",
       "label": "order-service",
@@ -33,59 +39,75 @@
       "from": "merchant",
       "to": "storefront",
       "y": 170,
-      "label": "① POST /admin/session · password",
+      "label": "① POST /admin/session · password của shop này",
       "variant": "emphasis"
+    },
+    {
+      "id": "check",
+      "from": "storefront",
+      "to": "platform",
+      "y": 206,
+      "label": "hỏi control plane: tenantId + password · token storefront của cell",
+      "variant": "security"
+    },
+    {
+      "id": "verdict",
+      "from": "platform",
+      "to": "storefront",
+      "y": 240,
+      "label": "scrypt khớp, shop ACTIVE → ok + credentialVersion",
+      "variant": "return"
     },
     {
       "id": "cookie",
       "from": "storefront",
       "to": "merchant",
-      "y": 205,
-      "label": "scrypt khớp → 303 + cookie ký HMAC, 8 giờ",
+      "y": 276,
+      "label": "303 + cookie ký HMAC(tenant id, hết hạn, credentialVersion)",
       "variant": "return"
     },
     {
       "id": "list",
       "from": "merchant",
       "to": "storefront",
-      "y": 245,
-      "label": "② GET /admin · cookie"
+      "y": 318,
+      "label": "② GET /admin · cookie (chỉ cần context, không gọi control plane)"
     },
     {
       "id": "list-api",
       "from": "storefront",
       "to": "orders",
-      "y": 280,
-      "label": "GET /admin/orders · x-admin-token"
+      "y": 354,
+      "label": "GET /admin/orders · x-admin-token + context"
     },
     {
       "id": "list-ok",
       "from": "orders",
       "to": "storefront",
-      "y": 315,
-      "label": "Confirmed trước, tối đa 200",
+      "y": 388,
+      "label": "Order của shop này, Confirmed trước, tối đa 200",
       "variant": "return"
     },
     {
       "id": "fulfill",
       "from": "merchant",
       "to": "storefront",
-      "y": 355,
+      "y": 428,
       "label": "③ POST …/fulfillment"
     },
     {
       "id": "patch",
       "from": "storefront",
       "to": "orders",
-      "y": 390,
-      "label": "PATCH status FULFILLED · x-admin-token",
+      "y": 462,
+      "label": "PATCH status FULFILLED · x-admin-token + context",
       "variant": "emphasis"
     },
     {
       "id": "patched",
       "from": "orders",
       "to": "storefront",
-      "y": 425,
+      "y": 496,
       "label": "200 | 409 chưa Confirmed",
       "variant": "return"
     }
@@ -93,18 +115,19 @@
   "cards": [
     {
       "dot": "emerald",
-      "title": "Hai credential tách nhau",
+      "title": "Credential không rời control plane",
       "items": [
-        "Mật khẩu người chỉ tới storefront",
-        "API chỉ thấy ADMIN_SERVICE_TOKEN"
+        "Hash scrypt chỉ ở registry; storefront chỉ nhận có hoặc không",
+        "Chỉ storefront của cell giữ shop mới hỏi được (401 với cell khác)"
       ]
     },
     {
       "dot": "rose",
-      "title": "Session không lưu server",
+      "title": "Session gắn shop và phiên bản",
       "items": [
-        "Đổi hash mật khẩu hoặc SESSION_SECRET là đăng xuất hết",
-        "Form post khác site bị từ chối"
+        "Chữ ký gồm tenant id và credentialVersion do router nêu",
+        "Tăng credentialVersion thì mọi session của shop hết hiệu lực sau một lần làm mới bảng (khoảng 2 s)",
+        "Control plane chết: không đăng nhập mới được, session cũ vẫn chạy"
       ]
     }
   ]

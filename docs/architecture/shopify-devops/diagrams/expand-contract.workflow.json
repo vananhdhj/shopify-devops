@@ -1,0 +1,117 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Expand/contract: migration chỉ mở rộng, image cũ chạy trên schema mới",
+    "output": "docs/architecture/shopify-devops/diagrams/expand-contract.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "ci",
+      "label": "CI trên pull request"
+    },
+    {
+      "id": "stack",
+      "label": "Compose compat"
+    }
+  ],
+  "mainPath": [
+    "lint",
+    "build",
+    "old",
+    "apply",
+    "test"
+  ],
+  "nodes": [
+    {
+      "id": "lint",
+      "lane": "ci",
+      "col": 0,
+      "type": "security",
+      "label": "migration-lint",
+      "sublabel": "migration mới, chỉ expand",
+      "width": 150
+    },
+    {
+      "id": "build",
+      "lane": "ci",
+      "col": 1,
+      "type": "backend",
+      "label": "build từ cây",
+      "sublabel": "migrations, platform, edge",
+      "width": 160
+    },
+    {
+      "id": "old",
+      "lane": "stack",
+      "col": 2,
+      "type": "cloud",
+      "label": "image cũ",
+      "sublabel": "cell wave cuối trên main",
+      "width": 150
+    },
+    {
+      "id": "apply",
+      "lane": "stack",
+      "col": 3,
+      "type": "database",
+      "label": "migrate",
+      "sublabel": "schema mới",
+      "width": 120
+    },
+    {
+      "id": "test",
+      "lane": "stack",
+      "col": 4,
+      "type": "external",
+      "label": "compat.test",
+      "sublabel": "signup đến xoá shop",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "from": "lint",
+      "to": "build",
+      "label": "① sạch"
+    },
+    {
+      "from": "build",
+      "to": "old",
+      "label": "② compose override",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "old",
+      "to": "apply",
+      "label": "③ chạy cạnh"
+    },
+    {
+      "from": "apply",
+      "to": "test",
+      "label": "④ kiểm",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Vì sao cần",
+      "items": [
+        "Manifest và schema đến mọi wave ngay lúc merge; chỉ digest image đi theo wave",
+        "Wave sau còn chạy image của release trước trên schema mới"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Statement bị chặn",
+      "items": [
+        "DROP, RENAME, đổi kiểu cột, SET NOT NULL, cột NOT NULL không default",
+        "Cần dòng -- contract: nêu release sau đó an toàn"
+      ]
+    }
+  ]
+}

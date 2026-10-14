@@ -1,0 +1,174 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Promotion: release vào wave 0, promoter soak, gate, commit sang wave kế",
+    "output": "docs/architecture/shopify-devops/diagrams/promotion.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "gh",
+      "label": "GitHub Actions"
+    },
+    {
+      "id": "cluster",
+      "label": "Trong cluster"
+    },
+    {
+      "id": "stop",
+      "label": "Halt",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "release",
+    "wave0",
+    "soak",
+    "gate",
+    "dispatch",
+    "commit"
+  ],
+  "nodes": [
+    {
+      "id": "release",
+      "lane": "gh",
+      "col": 0,
+      "type": "backend",
+      "label": "release.yml",
+      "sublabel": "digest vào wave 0 + platform + edge",
+      "width": 170
+    },
+    {
+      "id": "wave0",
+      "lane": "cluster",
+      "col": 1,
+      "type": "cloud",
+      "label": "Argo CD",
+      "sublabel": "wave 0 Synced, Healthy",
+      "width": 150
+    },
+    {
+      "id": "soak",
+      "lane": "cluster",
+      "col": 2,
+      "type": "backend",
+      "label": "soak",
+      "sublabel": "300 s · tick 15 s",
+      "width": 120
+    },
+    {
+      "id": "gate",
+      "lane": "cluster",
+      "col": 3,
+      "type": "security",
+      "label": "gate",
+      "sublabel": "5 kiểm tra mỗi cell",
+      "width": 130
+    },
+    {
+      "id": "dispatch",
+      "lane": "cluster",
+      "col": 4,
+      "type": "backend",
+      "label": "dispatch",
+      "sublabel": "token Actions: write",
+      "width": 130
+    },
+    {
+      "id": "commit",
+      "lane": "gh",
+      "col": 4,
+      "type": "backend",
+      "label": "promote.yml",
+      "sublabel": "commit wave n+1, deploy key",
+      "width": 160
+    },
+    {
+      "id": "halted",
+      "lane": "stop",
+      "col": 3,
+      "type": "security",
+      "label": "halted",
+      "sublabel": "ghi digest, cell, tenant lộ",
+      "width": 160
+    },
+    {
+      "id": "revert",
+      "lane": "stop",
+      "col": 4,
+      "type": "external",
+      "label": "git revert",
+      "sublabel": "operator, release kế thay",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "from": "release",
+      "to": "wave0",
+      "label": "① commit",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "wave0",
+      "to": "soak",
+      "label": "② cả wave cùng release"
+    },
+    {
+      "from": "soak",
+      "to": "gate",
+      "label": "③ mỗi tick"
+    },
+    {
+      "from": "gate",
+      "to": "dispatch",
+      "label": "④ đạt",
+      "variant": "emphasis"
+    },
+    {
+      "from": "dispatch",
+      "to": "commit",
+      "label": "⑤ workflow_dispatch",
+      "route": "drop",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "gate",
+      "to": "halted",
+      "label": "hai tick liên tiếp hỏng",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "halted",
+      "to": "revert",
+      "label": "PromotionHalted",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Git là lịch sử của từng wave",
+      "items": [
+        "Mỗi wave ghim digest trong cell.json của cell nó; promote là một commit",
+        "promote-wave.sh từ chối digest mà wave trước không chạy"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Promoter chỉ nhờ, không ghi",
+      "items": [
+        "Chỉ có token Actions: write; deploy key vẫn là danh tính ghi duy nhất (ADR-0003)",
+        "Release halted không bao giờ thử lại; không tự revert"
+      ]
+    }
+  ]
+}

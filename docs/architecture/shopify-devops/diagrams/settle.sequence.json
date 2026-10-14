@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "Worker settle một Order: outbox, queue, kho, trạng thái",
+    "title": "Worker settle một Order: outbox, queue, kho, trạng thái, theo tenant",
     "output": "docs/architecture/shopify-devops/diagrams/settle.html",
     "quality_profile": "showcase",
     "column_fit": "spread"
@@ -39,7 +39,7 @@
       "from": "worker",
       "to": "pg",
       "y": 170,
-      "label": "① SELECT outbox chưa dispatch · SKIP LOCKED"
+      "label": "① claim_fair_events(50, K) · K mỗi tenant, luân phiên"
     },
     {
       "id": "enqueue",
@@ -53,7 +53,7 @@
       "from": "redis",
       "to": "worker",
       "y": 240,
-      "label": "③ job settle-order {orderId}",
+      "label": "③ job settle-order {tenantId, orderId}",
       "variant": "return"
     },
     {
@@ -61,14 +61,14 @@
       "from": "worker",
       "to": "pg",
       "y": 275,
-      "label": "④ SELECT status, scenario, items"
+      "label": "④ tenant tx: SELECT status, scenario, items"
     },
     {
       "id": "deduct",
       "from": "worker",
       "to": "catalog",
       "y": 310,
-      "label": "⑤ POST deduct · x-internal-token",
+      "label": "⑤ POST deduct · tenantId trong body · x-internal-token",
       "variant": "emphasis"
     },
     {
@@ -76,7 +76,7 @@
       "from": "catalog",
       "to": "pg",
       "y": 345,
-      "label": "lock hàng · UPDATE stock · INSERT effect"
+      "label": "tenant tx: lock hàng · UPDATE stock · INSERT effect"
     },
     {
       "id": "outcome",
@@ -91,7 +91,7 @@
       "from": "worker",
       "to": "pg",
       "y": 415,
-      "label": "⑥ UPDATE status + INSERT order_events",
+      "label": "⑥ tenant tx: UPDATE status + INSERT order_events",
       "variant": "emphasis"
     }
   ],
@@ -100,16 +100,16 @@
       "dot": "emerald",
       "title": "Làm lại vẫn an toàn",
       "items": [
-        "Effect khoá theo (Order, action)",
+        "Effect khoá theo (tenant, Order, action)",
         "UPDATE chỉ áp từ PENDING; job thừa là no-op"
       ]
     },
     {
       "dot": "rose",
-      "title": "Decline thì nhả kho trước",
+      "title": "Tenant đi theo job",
       "items": [
-        "Release lỗi thì Order vẫn PENDING và retry",
-        "Payment scenario lưu trên Order, không roll lại"
+        "Dispatcher thấy mọi tenant chỉ qua hàm SECURITY DEFINER",
+        "Mỗi truy vấn của job chạy trong transaction của tenant đó"
       ]
     }
   ]

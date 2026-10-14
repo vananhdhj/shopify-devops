@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Move: freeze, drain, copy, verify, switch, purge",
+    "output": "docs/architecture/shopify-devops/diagrams/tenant-move.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Move một shop"
+    },
+    {
+      "id": "undo",
+      "label": "Hoàn tác trước switch",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "freeze",
+    "copy",
+    "verify",
+    "switch",
+    "purge"
+  ],
+  "nodes": [
+    {
+      "id": "freeze",
+      "lane": "main",
+      "col": 0,
+      "type": "external",
+      "label": "MOVING + drain",
+      "sublabel": "read-only, hết Pending",
+      "width": 150
+    },
+    {
+      "id": "copy",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "export + import",
+      "sublabel": "đích dọn trước",
+      "width": 140
+    },
+    {
+      "id": "verify",
+      "lane": "main",
+      "col": 2,
+      "type": "security",
+      "label": "verify",
+      "sublabel": "hàng và md5 mỗi bảng",
+      "width": 140
+    },
+    {
+      "id": "switch",
+      "lane": "main",
+      "col": 3,
+      "type": "database",
+      "label": "switch",
+      "sublabel": "cell, plan, ACTIVE",
+      "width": 120
+    },
+    {
+      "id": "purge",
+      "lane": "main",
+      "col": 4,
+      "type": "backend",
+      "label": "purge nguồn",
+      "sublabel": "phải còn 0 hàng",
+      "width": 120
+    },
+    {
+      "id": "undo",
+      "lane": "undo",
+      "col": 2,
+      "type": "security",
+      "label": "undo",
+      "sublabel": "mở freeze, xoá bản ở đích",
+      "width": 160
+    }
+  ],
+  "edges": [
+    {
+      "from": "freeze",
+      "to": "copy",
+      "label": "① grace 5 s, drain"
+    },
+    {
+      "from": "copy",
+      "to": "verify",
+      "label": "② nhập xong"
+    },
+    {
+      "from": "verify",
+      "to": "switch",
+      "label": "③ khớp",
+      "variant": "emphasis"
+    },
+    {
+      "from": "switch",
+      "to": "purge",
+      "label": "④ sau grace"
+    },
+    {
+      "from": "verify",
+      "to": "undo",
+      "label": "lỗi hoặc lệch",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Duyệt được suốt, ghi bị chặn vài giây",
+      "items": [
+        "Edge ký cờ ro vào context; API từ chối mọi ghi bằng 503 shop_updating",
+        "Storefront hiện trang \"This shop is updating\" cho giỏ, Checkout và form Merchant",
+        "Test: đóng băng khoảng 5,2 s, trong đó 5 s là grace"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Resume được",
+      "items": [
+        "tenant_moves lưu bước cuối đã xong: frozen, verified, switched, done",
+        "Sau switch chỉ thử lại, không hoàn tác; Order token và session Merchant ký theo cell nên link cũ hết hiệu lực"
+      ]
+    }
+  ]
+}

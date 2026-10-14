@@ -1,0 +1,149 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Dispatch công bằng: mỗi shop tối đa K Order trong queue, luân phiên",
+    "output": "docs/architecture/shopify-devops/diagrams/fair-dispatch.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Đường chính"
+    },
+    {
+      "id": "wait",
+      "label": "Chờ",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "burst",
+    "outbox",
+    "claim",
+    "admit",
+    "queue",
+    "settle"
+  ],
+  "nodes": [
+    {
+      "id": "burst",
+      "lane": "main",
+      "col": 0,
+      "type": "external",
+      "label": "Burst Order",
+      "sublabel": "50 Order của một shop",
+      "width": 150
+    },
+    {
+      "id": "outbox",
+      "lane": "main",
+      "col": 1,
+      "type": "database",
+      "label": "orders.outbox",
+      "sublabel": "chưa dispatch",
+      "width": 130
+    },
+    {
+      "id": "claim",
+      "lane": "main",
+      "col": 2,
+      "type": "backend",
+      "label": "claim_fair_events",
+      "sublabel": "(50, K) · 250 ms",
+      "width": 150
+    },
+    {
+      "id": "admit",
+      "lane": "main",
+      "col": 3,
+      "type": "security",
+      "label": "xếp hạng",
+      "sublabel": "đang chạy + chờ ≤ K mỗi shop",
+      "width": 170
+    },
+    {
+      "id": "queue",
+      "lane": "main",
+      "col": 4,
+      "type": "messagebus",
+      "label": "Redis · BullMQ",
+      "sublabel": "jobId = event_id",
+      "width": 130
+    },
+    {
+      "id": "settle",
+      "lane": "main",
+      "col": 5,
+      "type": "backend",
+      "label": "settle",
+      "sublabel": "Order rời PENDING",
+      "width": 120
+    },
+    {
+      "id": "held",
+      "lane": "wait",
+      "col": 3,
+      "type": "security",
+      "label": "ở lại outbox",
+      "sublabel": "sau K Order của shop đó",
+      "width": 170
+    }
+  ],
+  "edges": [
+    {
+      "from": "burst",
+      "to": "outbox",
+      "label": "① Checkout"
+    },
+    {
+      "from": "outbox",
+      "to": "claim",
+      "label": "② poll"
+    },
+    {
+      "from": "claim",
+      "to": "admit",
+      "label": "③ theo shop"
+    },
+    {
+      "from": "admit",
+      "to": "queue",
+      "label": "④ nhận vào",
+      "variant": "emphasis"
+    },
+    {
+      "from": "queue",
+      "to": "settle",
+      "label": "⑤ job"
+    },
+    {
+      "from": "admit",
+      "to": "held",
+      "label": "quá K",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Luân phiên giữa các shop",
+      "items": [
+        "Mỗi shop: Order cũ nhất đứng đầu, rồi tới Order thứ hai của mọi shop, và cứ thế",
+        "Chỗ mở ra khi Order của shop rời PENDING"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Hàm mới, hàm cũ giữ lại",
+      "items": [
+        "claim_fair_events thêm bên cạnh claim_undispatched_events (expand-only, ADR-0021)",
+        "Worker cũ vẫn chạy được trên schema mới"
+      ]
+    }
+  ]
+}
