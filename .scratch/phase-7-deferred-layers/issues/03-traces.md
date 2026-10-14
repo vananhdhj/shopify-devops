@@ -4,14 +4,14 @@
 
 **Blocked by:** 02
 
-**Status:** in review
+**Status:** resolved
 
 - [x] SDK set-up shared in `@shop/service-kit` (and the storefront's instrumentation): HTTP server and client, PostgreSQL; spans carry `tenant.id` and `cell`; `OTEL_EXPORTER_OTLP_ENDPOINT` unset means no export
 - [x] Migration (expand only): `orders.outbox.trace_context`; the order service writes it with the Order, the dispatcher puts it into the job, the worker's settlement span links to it
 - [x] Every log line gains `traceId` (and `spanId`)
 - [x] Tempo in `deploy/monitoring`, the Grafana datasource, trace ↔ logs links
 - [x] Compose `--profile tracing` with Tempo; test: a Checkout gives one trace with spans from the edge to the worker, and its log lines carry its id
-- [ ] Cluster: `make experiment-trace` finds a Checkout's trace by its Order id
+- [x] Cluster: `make experiment-trace` finds a Checkout's trace by its Order id
 
 ## Comments
 
@@ -57,3 +57,18 @@ Found on the way:
 - Restarting the cluster with the Compose stack still up drove the VM's load to 47, and etcd failed readiness for 10 minutes; it recovered once Compose was stopped. Compose is stopped first now.
 
 `make test CELLS=2` with the cluster stopped: 48 files, 248 tests passed, with the one flake above. A server-side dry-run of the monitoring config, every cell, the edge, and Alloy against the lab cluster passed (each cell's migration Job aside, immutable as always). `make policy`: 1,936 checks.
+
+Resolved 2026-10-14 with PR #69 (`82734a6`). The release went through the waves with no human step: wave 0 at 17:29, pool-1 dispatched 17:41, dedicated-1 17:54 UTC. Tempo and Alloy's OTLP receiver were up from the merge; Grafana has the Tempo datasource. On the lab cluster, `make experiment-trace` (Harbor's Checkout in pool-1, 17:54:37) found one trace of 22 spans from the five units:
+- the edge's `POST /*`, naming Harbor and pool-1;
+- the storefront's Next.js spans and its `fetch POST …/checkout`;
+- the order service's `POST /checkout`, its Cart fetch, and its transactions;
+- the catalog API's `GET /carts/:id`;
+- 56 ms in: the worker's `outbox dispatch` (producer) and `settle order` (consumer), then its inventory deduct and the catalog's `POST /internal/inventory-effects`.
+
+From the edge to the settlement's last transaction it took 66 ms. Repeated on a calm cluster: the same 22 spans, and every log line of the trace was in Loki (edge 1, order service 2, catalog API 3, worker 1), matching the pods' own logs.
+
+Found on the cluster:
+- **Lost log lines during a rollout.** In the first run, during wave 2's rollout, Loki lacked the order service's and the edge's lines of the trace. With the VM's load at 31 and the API server throttling Alloy, its API tailers stopped and reconnected (93 times in 40 minutes), and lines between a stop and the reconnect were lost. Calm, nothing was lost. Follow-up: read the pods' log files on the node (`loki.source.file`) instead of the API, which needs root for `/var/log/pods`.
+- **Stream labels.** Streams are split per pod and container too. Alloy adds `instance` (namespace/pod:container) and `job`, and Loki derives `service_name`. That is bounded by the pods of 24 h, not by shops, so it is kept; ticket 02's "namespace, cell, app only" was not the whole story.
+- **The experiment's port-forward.** It stopped the script silently while the API server was overloaded (load 31, etcd failing readiness during the rollout). The script now waits up to 60 s for the forward and retries failed queries.
+- Memory, calm: Tempo 153 MiB, Loki 115 MiB, Alloy 128 MiB; the VM had 2,636 MiB available.
