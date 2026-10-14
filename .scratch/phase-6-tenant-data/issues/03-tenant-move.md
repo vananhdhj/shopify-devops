@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02 (both deployed to every wave)
 
-**Status:** in review
+**Status:** resolved
 
 - [x] `POST /operator/tenants/:handle/move {cell}`: refuses an unregistered or full target, a shop not ACTIVE, an internal shop; a dedicated target makes the plan `plus`
 - [x] Outbox action `move`: freeze, drain Pending (60 s), export, import, verify counts and checksums, switch cell and plan and unfreeze in one transaction, purge and verify the source; every step an event with its counts; resumable
@@ -38,3 +38,7 @@ Tests (`move.test.ts`, Compose, two cells, fresh starter shops):
 - Refusals: an unknown shop or cell, the same cell, a full cell, a synthetic shop, and a plus shop into a pooled cell.
 
 In the last run, the move was frozen 5.2 s, of which 5 s was the grace; drain, export, import, and verify took 40 ms; the source was purged 5.2 s after the switch, after the worker's restart. `make test CELLS=2` with the cluster stopped: 45 files, 237 tests passed (357 s).
+
+Resolved 2026-10-14 with PR #61 (`c7fae54`). The release went through the waves with no human step: canary soaked 571 s (16 ticks: the host was busy), pool-1 promoted 00:19 UTC, dedicated-1 promoted 00:26. On the cluster, through the operator endpoint (port-forwarded), moves of `nn-quiet-1-86d161` were refused as expected: to dedicated-1 `no_capacity` (it holds `plus-a2d37b`), to the canary `canary_cell`, to an unknown cell `unknown_cell`. A real move on the cluster is ticket 05's experiment, which first frees dedicated-1.
+
+Found in ticket 04's work (fixed there): with exports running on the same worker loop, a round of every shop's export held a move up until its test timed out. Exports now have their own loop.

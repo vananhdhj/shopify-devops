@@ -5,9 +5,11 @@ import type { Queryable } from "@shop/service-kit";
 export interface LifecycleEvent {
   eventId: string;
   tenantId: string;
-  action: "provision" | "delete" | "move";
+  action: "provision" | "delete" | "move" | "export" | "restore";
   attempts: number;
   createdAt: Date;
+  /** 1 for an operator's export, before a round of scheduled ones (0). */
+  priority: number;
 }
 
 /** How long a claimed event is reserved for one worker; a worker that crashes lets it lapse. */
@@ -17,26 +19,29 @@ const leaseSeconds = 30;
  * Claims up to `batch` lifecycle events that are due, leasing each to this worker by moving its
  * `not_before` forward. The claim commits at once, so no transaction stays open while a step
  * calls out (the router check can take seconds); SKIP LOCKED lets several workers claim side by
- * side, and an event whose worker crashed comes due again when its lease lapses.
+ * side, and an event whose worker crashed comes due again when its lease lapses. Exports (Phase 6)
+ * are claimed apart (`exports`), by their own loop, so a round of every shop's export never holds
+ * up a signup, a deletion, a move, or a restore.
  */
-export async function claimDue(db: Pool, batch = 10): Promise<LifecycleEvent[]> {
+export async function claimDue(db: Pool, batch = 10, exports = false): Promise<LifecycleEvent[]> {
   const { rows } = await db.query<{
     event_id: string;
     tenant_id: string;
-    action: "provision" | "delete" | "move";
+    action: "provision" | "delete" | "move" | "export" | "restore";
     attempts: number;
     created_at: Date;
+    priority: number;
   }>(
     `UPDATE platform.lifecycle_outbox AS e
         SET not_before = now() + make_interval(secs => $2), attempts = e.attempts + 1
       WHERE e.event_id IN (
         SELECT event_id FROM platform.lifecycle_outbox
-         WHERE completed_at IS NULL AND not_before <= now()
-         ORDER BY not_before
+         WHERE completed_at IS NULL AND not_before <= now() AND (action = 'export') = $3
+         ORDER BY priority DESC, not_before
          LIMIT $1
            FOR UPDATE SKIP LOCKED)
-      RETURNING e.event_id, e.tenant_id, e.action, e.attempts, e.created_at`,
-    [batch, leaseSeconds],
+      RETURNING e.event_id, e.tenant_id, e.action, e.attempts, e.created_at, e.priority`,
+    [batch, leaseSeconds, exports],
   );
   return rows.map((row) => ({
     eventId: row.event_id,
@@ -44,6 +49,7 @@ export async function claimDue(db: Pool, batch = 10): Promise<LifecycleEvent[]> 
     action: row.action,
     attempts: row.attempts,
     createdAt: row.created_at,
+    priority: row.priority,
   }));
 }
 

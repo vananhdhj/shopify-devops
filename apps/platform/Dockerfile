@@ -28,6 +28,8 @@ WORKDIR /app
 COPY --from=build /out/package.json ./
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /repo/apps/platform/dist ./dist
+# The platform worker's export volume (Phase 6): a fresh named volume takes this owner.
+RUN mkdir /exports && chown node:node /exports && chmod 700 /exports
 USER node
 EXPOSE 8100 8101 8102
 CMD ["node", "dist/api-server.js"]

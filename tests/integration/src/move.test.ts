@@ -1,11 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Browser } from "./browser.ts";
 import { empty, shopChecksums } from "./cell-data.ts";
-import { cellQuery, platformQuery } from "./db.ts";
+import { platformQuery } from "./db.ts";
 import { platformInternalUrl } from "./http.ts";
-import { baseDomain, routerPort, viaRouter } from "./router.ts";
-import { secret } from "./secrets.ts";
+import { type Shop, deleteShop, eventsOf, operatorHeaders, ordersIn, placeOrder, starterShop, stepsOf, tenantOf, waitUntil } from "./shops.ts";
 import { compose, restartService, secondCellRunning } from "./stack.ts";
 
 /**
@@ -17,28 +15,6 @@ import { compose, restartService, secondCellRunning } from "./stack.ts";
 const twoCells = secondCellRunning();
 if (!twoCells) console.warn("move tests skipped: the second cell is not running (make dev-up CELLS=2)");
 
-const operatorHeaders = { "x-operator-token": secret("PLATFORM_OPERATOR_TOKEN") };
-const password = `pw-${randomUUID()}`;
-
-interface Shop {
-  id: string;
-  handle: string;
-}
-interface Event {
-  step: string;
-  toStatus: string | null;
-  detail: Record<string, unknown>;
-}
-
-const tenantOf = async (id: string) =>
-  (await platformQuery<{ cell: string | null; status: string; plan: string }>("SELECT cell, status, plan FROM platform.tenants WHERE id = $1", [id]))[0];
-
-async function eventsOf(handle: string): Promise<Event[]> {
-  const res = await fetch(`${platformInternalUrl}/operator/tenants/${handle}/events`, { headers: operatorHeaders });
-  return ((await res.json()) as { events: Event[] }).events;
-}
-const stepsOf = async (handle: string) => (await eventsOf(handle)).map((event) => event.step);
-
 function requestMove(handle: string, cell: string): Promise<Response> {
   return fetch(`${platformInternalUrl}/operator/tenants/${handle}/move`, {
     method: "POST",
@@ -46,63 +22,6 @@ function requestMove(handle: string, cell: string): Promise<Response> {
     body: JSON.stringify({ cell }),
   });
 }
-
-/** Polls `check` until it is true; usable in hooks, where `expect.poll` is not. */
-async function waitUntil(what: string, check: () => Promise<boolean>, timeoutMs = 60_000, intervalMs = 500): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!(await check())) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting until ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-}
-
-async function deleteShop(shop: Shop): Promise<void> {
-  const res = await fetch(`${platformInternalUrl}/operator/tenants/${shop.handle}/delete`, { method: "POST", headers: operatorHeaders });
-  if (res.status !== 200) throw new Error(`deleting ${shop.handle} answered ${res.status}`);
-  await waitUntil(`${shop.handle} is deleted`, async () => (await tenantOf(shop.id))?.status === "DELETED", 90_000);
-}
-
-/** A starter shop in pool-1 with two products, a Cart, and settled Orders, through the edge as its Merchant and buyers. */
-async function starterShop(): Promise<{ shop: Shop; products: string[] }> {
-  const handle = `mv-${randomUUID().slice(0, 8)}`;
-  const res = await viaRouter(`${baseDomain}:${routerPort}`, "/signups", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ idempotencyKey: randomUUID(), handle, name: `Moving ${handle}`, password, plan: "starter" }),
-  });
-  expect(res.status).toBe(202);
-  const shop = { id: (JSON.parse(res.body) as { tenantId: string }).tenantId, handle };
-  await waitUntil(`${handle} is ACTIVE`, async () => (await tenantOf(shop.id))?.status === "ACTIVE", 30_000);
-  expect((await tenantOf(shop.id))?.cell).toBe("pool-1");
-
-  const merchant = new Browser(handle);
-  await waitUntil(`${handle}'s Merchant signs in`, async () => (await merchant.submit("/admin/session", { password })).headers.get("location") === "/admin", 15_000, 1_000);
-  for (const name of ["Moving Lamp", "Moving Rug"]) {
-    expect((await merchant.submit("/admin/products", { name, priceMinor: "1500", stock: "50" })).status).toBe(303);
-  }
-  const products = (
-    await cellQuery<{ id: string }>("pool-1", "SELECT id FROM catalog.products WHERE tenant_id = $1 ORDER BY name", [shop.id])
-  ).map((row) => row.id);
-  return { shop, products };
-}
-
-function checkoutKeyIn(html: string): string {
-  const match = html.match(/name="checkoutKey" value="([^"]+)"/);
-  if (!match) throw new Error("checkout form has no checkoutKey");
-  return match[1]!;
-}
-
-/** A buyer's Checkout of one product through the edge; returns the Order's id. */
-async function placeOrder(handle: string, productId: string, paymentScenario: string): Promise<string> {
-  const buyer = new Browser(handle);
-  expect((await buyer.submit("/cart/items", { productId, action: "add" })).status).toBe(303);
-  const placed = await buyer.submit("/orders", { checkoutKey: checkoutKeyIn(await buyer.html("/checkout")), paymentScenario });
-  expect(placed.status).toBe(303);
-  return placed.headers.get("location")!.match(/^\/orders\/([0-9a-f-]{36})/)![1]!;
-}
-
-const ordersIn = (cell: string, tenantId: string) =>
-  cellQuery<{ id: string; status: string }>(cell, "SELECT id, status FROM orders.orders WHERE tenant_id = $1 ORDER BY id", [tenantId]);
 
 describe.skipIf(!twoCells)("tenant move", () => {
   const shops: Shop[] = [];
@@ -120,7 +39,7 @@ describe.skipIf(!twoCells)("tenant move", () => {
   }, 180_000);
 
   it("undoes a move whose target cannot import: the shop stays ACTIVE in pool-1, and nothing of it is left in dedicated-1", async () => {
-    const { shop, products } = await starterShop();
+    const { shop, products } = await starterShop("mv", ["Moving Lamp", "Moving Rug"]);
     shops.push(shop);
     const order = await placeOrder(shop.handle, products[0]!, "approve");
     await expect.poll(async () => (await ordersIn("pool-1", shop.id)).find((o) => o.id === order)?.status, { timeout: 20_000, interval: 250 }).toBe("CONFIRMED");
@@ -147,7 +66,7 @@ describe.skipIf(!twoCells)("tenant move", () => {
   }, 180_000);
 
   it("moves a starter shop with Pending Orders to dedicated-1, verified, resuming after a worker crash, and serves it from there as plus", async () => {
-    const { shop, products } = await starterShop();
+    const { shop, products } = await starterShop("mv", ["Moving Lamp", "Moving Rug"]);
     shops.push(shop);
     await placeOrder(shop.handle, products[0]!, "approve");
     await placeOrder(shop.handle, products[1]!, "decline");
@@ -201,10 +120,16 @@ describe.skipIf(!twoCells)("tenant move", () => {
       ["no-such-shop", "dedicated-1", 404, "tenant_not_found"],
       ["meadow", "nowhere-1", 409, "unknown_cell"],
       ["meadow", "pool-1", 409, "same_cell"],
-      ["meadow", "dedicated-1", 409, "no_capacity"],
       ["synthetic-pool-1", "dedicated-1", 409, "internal_shop"],
-      ...(moved ? ([[moved.handle, "pool-1", 409, "plan_downgrade"]] as [string, string, number, string][]) : []),
+      // Only with dedicated-1 taken (by the shop moved above): otherwise the first would move Meadow.
+      ...(moved
+        ? ([
+            ["meadow", "dedicated-1", 409, "no_capacity"],
+            [moved.handle, "pool-1", 409, "plan_downgrade"],
+          ] as [string, string, number, string][])
+        : []),
     ];
+    expect(moved, "the moved shop holds dedicated-1").toBeDefined();
     for (const [handle, cell, status, error] of cases) {
       const res = await requestMove(handle, cell);
       expect({ handle, cell, status: res.status, body: await res.json() }).toMatchObject({ status, body: { error } });
