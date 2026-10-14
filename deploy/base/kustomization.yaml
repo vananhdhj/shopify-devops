@@ -1,5 +1,5 @@
 # Everything an environment runs. Overlays set the namespace, environment values, and the
-# exact image digests. Secrets are created out of band by `make secrets` (never in Git).
+# exact image digests. Each dev cell's Secret is sealed beside its overlay (Phase 7).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 labels:

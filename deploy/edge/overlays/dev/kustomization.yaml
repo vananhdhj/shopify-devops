@@ -6,6 +6,9 @@ kind: Kustomization
 namespace: edge-dev
 resources:
   - ../../base
+  # Secrets, sealed for Git (Phase 7): `make secrets` writes them; the controller decrypts them.
+  - sealed-edge-secrets.yaml
+  - sealed-cell-credentials.yaml
 configMapGenerator:
   - name: edge-env
     literals:

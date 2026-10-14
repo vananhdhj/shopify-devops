@@ -11,13 +11,21 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore experiment-trace tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy argocd-apps
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore experiment-trace tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy argocd-apps seal-key-backup seal-key-restore
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
 secrets:
 	@scripts/secrets.sh
+	@scripts/seal-secrets.py
 	@scripts/cluster-secrets.sh $(CONTEXT) $(PLATFORM_NAMESPACE) $(EDGE_NAMESPACE)
+
+## The Sealed Secrets controller's keys (Phase 7): back up to .secrets/ (never Git), or restore
+seal-key-backup:
+	@scripts/seal-key.sh backup $(CONTEXT)
+
+seal-key-restore:
+	@scripts/seal-key.sh restore $(CONTEXT)
 
 ## Point git at the repo's hooks (Gitleaks pre-commit)
 hooks:

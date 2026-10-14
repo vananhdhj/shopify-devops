@@ -14,7 +14,7 @@ spec:
     path: deploy/platform/overlays/dev
   destination:
     server: https://kubernetes.default.svc
-    namespace: platform-dev # created, with its Secret, by `make secrets`
+    namespace: platform-dev # created by `make secrets`; its Secrets come sealed from Git (Phase 7)
   syncPolicy:
     automated:
       prune: true

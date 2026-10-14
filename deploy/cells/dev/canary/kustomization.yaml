@@ -21,6 +21,8 @@ patches:
         value: canary
 resources:
   - ../../../base
+  # Secrets, sealed for Git (Phase 7): `make secrets` writes them; the controller decrypts them.
+  - sealed-shop-secrets.yaml
 configMapGenerator:
   - name: shop-env
     literals:
