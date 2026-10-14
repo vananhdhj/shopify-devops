@@ -26,6 +26,20 @@ export async function fulfillOrder(orderId: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * True when the product was deleted (Phase 6); false when there is none, or the catalog API is of
+ * the previous release, which a storefront can meet while its cell rolls. No body, so no content type.
+ */
+export async function deleteProduct(productId: string): Promise<boolean> {
+  const res = await backendFetch("CATALOG_API_URL", `/admin/products/${encodeURIComponent(productId)}`, {
+    method: "DELETE",
+    headers: { "x-admin-token": requiredEnv("ADMIN_SERVICE_TOKEN") },
+  });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new Error(`delete product failed: ${res.status}`);
+  return true;
+}
+
 /** Whether the catalog accepted the product, refused the input, or refused it over the plan's quota. */
 export async function addProduct(product: NewProduct): Promise<"added" | "invalid" | "quota"> {
   const res = await backendFetch("CATALOG_API_URL", "/admin/products", {

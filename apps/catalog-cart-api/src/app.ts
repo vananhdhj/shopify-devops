@@ -13,7 +13,7 @@ import {
 } from "@shop/service-kit";
 import { createCart, getCart, setCartItemQuantity, type Missing } from "./carts.ts";
 import { applyInventoryEffect } from "./inventory.ts";
-import { addProduct, countProducts, findProduct, listProducts } from "./products.ts";
+import { addProduct, countProducts, deleteProduct, findProduct, listProducts } from "./products.ts";
 
 function notFound(reply: FastifyReply, missing: Missing) {
   return reply.code(404).send({ error: `${missing}_not_found`, message: `${missing} not found` });
@@ -160,6 +160,20 @@ export function buildApp(deps: AppDeps) {
       }
       req.log.info({ productId: product.id }, "product added");
       return reply.code(201).send(product);
+    },
+  );
+
+  // A Merchant deletes a product (Phase 6): out of every Cart, gone from the catalog. Orders keep
+  // their own lines. A restore to an export from before brings it back.
+  app.delete<{ Params: { id: string } }>(
+    "/admin/products/:id",
+    { preHandler: requireSecretHeader("x-admin-token", deps.adminServiceToken) },
+    async (req, reply) => {
+      const { id } = req.params;
+      const deleted = isUuid(id) && (await asTenant(req, (db) => deleteProduct(db, id)));
+      if (!deleted) return notFound(reply, "product");
+      req.log.info({ productId: id }, "product deleted");
+      return reply.code(204).send();
     },
   );
 

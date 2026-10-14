@@ -53,3 +53,11 @@ export async function addProduct(db: Queryable, product: NewProduct): Promise<Pr
   return toProduct(rows[0]!);
 }
 
+/**
+ * Deletes one product of the transaction's tenant, out of every Cart first; false when there is
+ * none. Through the schema's narrow function: the catalog identity has no DELETE of its own.
+ */
+export async function deleteProduct(db: Queryable, id: string): Promise<boolean> {
+  const { rows } = await db.query<{ deleted: boolean }>("SELECT catalog.delete_product($1) AS deleted", [id]);
+  return rows[0]!.deleted;
+}

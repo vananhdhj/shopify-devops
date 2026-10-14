@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -96,6 +96,16 @@ drill-control-plane-outage:
 ## ones in pool-1; it must get 429s and no 5xx, and their Checkout p95 stay within 20% of baseline
 experiment-noisy-neighbour:
 	@scripts/experiment-noisy-neighbour.sh
+
+## Tenant move experiment (Phase 6): dedicated-1 freed of its shop, then a starter shop with
+## Pending Orders moved there from pool-1; frozen under 30 s, verified, browsing answered throughout
+experiment-tenant-move:
+	@scripts/experiment-tenant-move.sh
+
+## Tenant restore experiment (Phase 6): a Merchant's deleted products brought back from the export
+## before; the later Order lost, as warned; another shop's rows unchanged
+experiment-tenant-restore:
+	@scripts/experiment-tenant-restore.sh
 
 ## Cell outage drill: one cell's PostgreSQL stopped; its shop fails, other cells' shops keep serving
 CELL ?= dedicated-1
