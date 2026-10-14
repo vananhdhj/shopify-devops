@@ -42,14 +42,45 @@ deny contains msg if {
 # Non-root: runAsNonRoot on the container or its pod, and no user 0 at either level.
 deny contains msg if {
 	some x in containers
+	not excepted("non-root", x)
 	object.get(x.c, ["securityContext", "runAsNonRoot"], object.get(x.pod, ["securityContext", "runAsNonRoot"], false)) != true
 	msg := sprintf("non-root: %s container %s must run with runAsNonRoot: true (container or pod)", [name(x.obj), x.c.name])
 }
 
 deny contains msg if {
 	some x in containers
+	not excepted("non-root", x)
 	object.get(x.c, ["securityContext", "runAsUser"], object.get(x.pod, ["securityContext", "runAsUser"], -1)) == 0
 	msg := sprintf("non-root: %s container %s runs as user 0", [name(x.obj), x.c.name])
+}
+
+# --- Exceptions ------------------------------------------------------------------------------
+
+# Each exception names one rule, one container, an owner, why, and when it expires; an expired
+# exception is a denial of its own, so it is renewed or removed rather than forgotten.
+exceptions := [{
+	"rule": "non-root",
+	"kind": "DaemonSet",
+	"name": "alloy",
+	"container": "alloy",
+	"owner": "the repository's author",
+	"why": "reads the node's pod log files (/var/log/pods, root-owned 0640) read-only, every capability dropped; reading them through the Kubernetes API overloaded k3s (Phase 7)",
+	"expires": "2027-01-15",
+}]
+
+excepted(rule, x) if {
+	some e in exceptions
+	e.rule == rule
+	e.kind == x.obj.kind
+	e.name == x.obj.metadata.name
+	e.container == x.c.name
+	time.now_ns() < time.parse_ns("2006-01-02", e.expires)
+}
+
+deny contains msg if {
+	some e in exceptions
+	time.now_ns() >= time.parse_ns("2006-01-02", e.expires)
+	msg := sprintf("exception-expired: the %s exception for %s/%s container %s (owner: %s) expired on %s", [e.rule, e.kind, e.name, e.container, e.owner, e.expires])
 }
 
 deny contains msg if {

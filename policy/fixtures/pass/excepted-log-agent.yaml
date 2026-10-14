@@ -1,0 +1,15 @@
+# The one listed exception (policy/kubernetes.rego): the log agent reads root-owned files.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+spec:
+  selector: { matchLabels: { app: alloy } }
+  template:
+    metadata: { labels: { app: alloy } }
+    spec:
+      containers:
+        - name: alloy
+          image: docker.io/grafana/alloy@sha256:2222222222222222222222222222222222222222222222222222222222222222
+          securityContext: { runAsUser: 0, runAsNonRoot: false, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 64Mi } }
