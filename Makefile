@@ -11,7 +11,7 @@ NAMESPACE := shop-dev
 PLATFORM_NAMESPACE := platform-dev
 EDGE_NAMESPACE := edge-dev
 
-.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy
+.PHONY: secrets hooks install dev-up seed test dev-down cluster-up cluster-down bootstrap-gitops smoke drill-stale-pending drill-control-plane-outage drill-cell-outage experiment-noisy-neighbour experiment-tenant-move experiment-tenant-restore tenant-list tenant-events tenant-suspend tenant-reinstate tenant-delete tenant-move tenant-exports tenant-export tenant-restore fleet compat policy argocd-apps
 
 ## Generate local secrets into .secrets/ (the platform's, one file per cell; never overwrites
 ## existing values), and copy them into the lab cluster as Secrets when the cluster is running
@@ -43,6 +43,12 @@ test: install dev-up
 	@scripts/warn-cluster-running.sh $(CLUSTER)
 	pnpm typecheck
 	pnpm test:integration
+
+## Argo CD's own Applications (and the cells' ApplicationSet), from Git. Argo CD syncs what they
+## point at, not their own definitions: re-run this after changing deploy/argocd/*.yaml or
+## deploy/monitoring/application.yaml (a new chart source, a new Application).
+argocd-apps:
+	kubectl --context $(CONTEXT) apply -f deploy/argocd/platform-dev.yaml -f deploy/argocd/edge-dev.yaml -f deploy/argocd/cells-dev.yaml -f deploy/monitoring/application.yaml
 
 ## Manifest policies (Phase 7): every rendered manifest through Conftest, then the policy's fixtures
 policy:
@@ -78,7 +84,7 @@ bootstrap-gitops: cluster-up
 	  --version $(ARGOCD_CHART_VERSION) --namespace argocd --create-namespace \
 	  --kube-context $(CONTEXT) --values deploy/argocd/values.yaml --wait --timeout 10m
 	@scripts/cluster-secrets.sh $(CONTEXT) $(PLATFORM_NAMESPACE) $(EDGE_NAMESPACE)
-	kubectl --context $(CONTEXT) apply -f deploy/argocd/platform-dev.yaml -f deploy/argocd/edge-dev.yaml -f deploy/argocd/cells-dev.yaml -f deploy/monitoring/application.yaml
+	@$(MAKE) --no-print-directory argocd-apps
 	@echo "Argo CD UI: kubectl --context $(CONTEXT) -n argocd port-forward svc/argocd-server 8081:80"
 	@echo "Grafana:    kubectl --context $(CONTEXT) -n monitoring port-forward svc/monitoring-grafana 8082:80  (admin / GRAFANA_ADMIN_PASSWORD)"
 
