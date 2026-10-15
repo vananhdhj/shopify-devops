@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Trace một Checkout: edge, storefront, API, outbox, queue, settle",
+    "output": "docs/architecture/shopify-devops/diagrams/traces.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      944,
+      600
+    ]
+  },
+  "participants": [
+    {
+      "id": "edge",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "bắt đầu mọi trace"
+    },
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "span của Next.js"
+    },
+    {
+      "id": "orders",
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "POST /checkout"
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog API",
+      "sublabel": "Cart, kho"
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "outbox.trace_context"
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "dispatcher, consumer"
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "BullMQ",
+      "sublabel": "job.traceparent"
+    },
+    {
+      "id": "tempo",
+      "type": "database",
+      "label": "Alloy → Tempo",
+      "sublabel": "OTLP, 24 giờ"
+    }
+  ],
+  "messages": [
+    {
+      "id": "start",
+      "from": "edge",
+      "to": "storefront",
+      "y": 165,
+      "label": "① bỏ traceparent của client · span gốc"
+    },
+    {
+      "id": "checkout",
+      "from": "storefront",
+      "to": "orders",
+      "y": 201,
+      "label": "② backendFetch · traceparent"
+    },
+    {
+      "id": "cart",
+      "from": "orders",
+      "to": "catalog",
+      "y": 237,
+      "label": "③ GET /carts/:id · span client"
+    },
+    {
+      "id": "outbox",
+      "from": "orders",
+      "to": "pg",
+      "y": 273,
+      "label": "④ INSERT outbox · trace_context",
+      "variant": "emphasis"
+    },
+    {
+      "id": "claim",
+      "from": "worker",
+      "to": "pg",
+      "y": 309,
+      "label": "⑤ claim_fair_events, event_trace_contexts"
+    },
+    {
+      "id": "dispatch",
+      "from": "worker",
+      "to": "redis",
+      "y": 345,
+      "label": "⑥ outbox dispatch (producer)"
+    },
+    {
+      "id": "consume",
+      "from": "redis",
+      "to": "worker",
+      "y": 381,
+      "label": "⑦ settle order (consumer)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "settle",
+      "from": "worker",
+      "to": "catalog",
+      "y": 417,
+      "label": "⑧ POST inventory deduct · traceparent"
+    },
+    {
+      "id": "export",
+      "from": "worker",
+      "to": "tempo",
+      "y": 453,
+      "label": "⑨ mọi đơn vị gửi span · OTLP/HTTP",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Một trace, năm đơn vị",
+      "items": [
+        "Trên cluster: 22 span, 66 ms từ edge tới transaction cuối của settle",
+        "Mỗi dòng log trong trace mang traceId và spanId"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Span làm bằng tay",
+      "items": [
+        "Không auto-instrumentation: một span mỗi request, mỗi lời gọi, mỗi transaction trong trace",
+        "Tắt khi không có OTEL_EXPORTER_OTLP_ENDPOINT"
+      ]
+    }
+  ]
+}

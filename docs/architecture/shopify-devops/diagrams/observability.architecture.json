@@ -2,19 +2,33 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Quan sát: metric theo route, alert vào hai receiver",
+    "title": "Quan sát: metric, log, trace; alert vào hai receiver",
     "output": "docs/architecture/shopify-devops/diagrams/observability.html",
     "quality_profile": "showcase"
   },
   "components": [
+    {
+      "id": "router",
+      "type": "backend",
+      "label": "edge",
+      "sublabel": "ops :8001 · edge-dev",
+      "pos": [
+        60,
+        180
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
     {
       "id": "storefront",
       "type": "frontend",
       "label": "storefront",
       "sublabel": "metrics :9464",
       "pos": [
-        40,
-        60
+        60,
+        280
       ],
       "size": [
         150,
@@ -27,8 +41,8 @@
       "label": "order-service",
       "sublabel": "/metrics :4002",
       "pos": [
-        40,
-        190
+        60,
+        350
       ],
       "size": [
         150,
@@ -41,8 +55,8 @@
       "label": "catalog-cart-api",
       "sublabel": "/metrics :4001",
       "pos": [
-        40,
-        260
+        60,
+        420
       ],
       "size": [
         150,
@@ -55,8 +69,8 @@
       "label": "worker",
       "sublabel": "ops :4003",
       "pos": [
-        40,
-        330
+        60,
+        490
       ],
       "size": [
         150,
@@ -69,8 +83,8 @@
       "label": "Traefik",
       "sublabel": "kube-system :9100",
       "pos": [
-        40,
-        440
+        60,
+        610
       ],
       "size": [
         150,
@@ -84,7 +98,7 @@
       "sublabel": "Git là nguồn",
       "pos": [
         400,
-        520
+        660
       ],
       "size": [
         150,
@@ -98,7 +112,7 @@
       "sublabel": "15 s · giữ 1 ngày",
       "pos": [
         400,
-        230
+        370
       ],
       "size": [
         170,
@@ -112,7 +126,7 @@
       "sublabel": "group_wait 10 s",
       "pos": [
         690,
-        180
+        320
       ],
       "size": [
         160,
@@ -126,7 +140,7 @@
       "sublabel": "dashboard từ Git",
       "pos": [
         690,
-        340
+        480
       ],
       "size": [
         160,
@@ -140,7 +154,7 @@
       "sublabel": "GET /alerts",
       "pos": [
         970,
-        140
+        280
       ],
       "size": [
         150,
@@ -154,7 +168,7 @@
       "sublabel": "webhook từ file secret",
       "pos": [
         970,
-        230
+        370
       ],
       "size": [
         150,
@@ -168,18 +182,74 @@
       "sublabel": "port-forward :8082",
       "pos": [
         970,
-        340
+        480
       ],
       "size": [
         150,
         56
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "platform-api, worker, promoter",
+      "sublabel": ":8101 · :8102 · :8103",
+      "pos": [
+        60,
+        710
+      ],
+      "size": [
+        240,
+        50
+      ]
+    },
+    {
+      "id": "alloy",
+      "type": "backend",
+      "label": "Alloy",
+      "sublabel": "DaemonSet · đọc /var/log/pods",
+      "pos": [
+        400,
+        70
+      ],
+      "size": [
+        190,
+        56
+      ]
+    },
+    {
+      "id": "loki",
+      "type": "database",
+      "label": "Loki",
+      "sublabel": "single-binary · 24 giờ",
+      "pos": [
+        690,
+        40
+      ],
+      "size": [
+        160,
+        50
+      ]
+    },
+    {
+      "id": "tempo",
+      "type": "database",
+      "label": "Tempo",
+      "sublabel": "OTLP :4317 · 24 giờ",
+      "pos": [
+        690,
+        120
+      ],
+      "size": [
+        160,
+        50
       ]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
-      "label": "shop-dev (4 đơn vị của shop)",
+      "label": "mỗi cell: canary · pool-1 · dedicated-1 (4 đơn vị)",
       "wraps": [
         "storefront",
         "orders",
@@ -189,12 +259,29 @@
     },
     {
       "kind": "region",
-      "label": "monitoring (kube-prometheus-stack)",
+      "label": "monitoring (Prometheus stack, Loki, Alloy, Tempo)",
       "wraps": [
         "prom",
         "alertmanager",
         "grafana",
-        "catcher"
+        "catcher",
+        "alloy",
+        "loki",
+        "tempo"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "platform-dev (control plane)",
+      "wraps": [
+        "platform"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "edge-dev",
+      "wraps": [
+        "router"
       ]
     }
   ],
@@ -207,6 +294,13 @@
       "variant": "emphasis",
       "fromSide": "right",
       "toSide": "top"
+    },
+    {
+      "id": "scrape-router",
+      "from": "router",
+      "to": "prom",
+      "label": "① :8001",
+      "variant": "emphasis"
     },
     {
       "id": "scrape-orders",
@@ -278,6 +372,33 @@
       "to": "grafana",
       "label": "xem",
       "variant": "security"
+    },
+    {
+      "id": "scrape-platform",
+      "from": "platform",
+      "to": "prom",
+      "label": "① :8101 · :8102 · :8103"
+    },
+    {
+      "id": "collect",
+      "from": "router",
+      "to": "alloy",
+      "label": "⑤ log file · OTLP :4318",
+      "variant": "emphasis"
+    },
+    {
+      "id": "logs",
+      "from": "alloy",
+      "to": "loki",
+      "label": "⑥ push",
+      "variant": "emphasis"
+    },
+    {
+      "id": "traces",
+      "from": "alloy",
+      "to": "tempo",
+      "label": "⑥ span",
+      "variant": "emphasis"
     }
   ],
   "cards": [
@@ -286,16 +407,18 @@
       "title": "Nhãn có giới hạn",
       "items": [
         "Metric theo route template, không bao giờ theo id",
-        "Log JSON mang requestId; storefront chuyển x-request-id sang API",
-        "Storefront chỉ log path, không log query string"
+        "Log JSON mang requestId, traceId, spanId; Alloy chỉ gắn nhãn namespace, cell, app",
+        "Grafana mở trace từ traceId của log, và log từ span",
+        "Series theo shop mang tenant_id; mọi series có nhãn cell; dashboard lưu trong Git"
       ]
     },
     {
       "dot": "amber",
-      "title": "Hai alert, cả hai đều có việc để làm",
+      "title": "Rule alert trong Git",
       "items": [
-        "ShopServerErrorRatioHigh: 5xx trên 5%, tối thiểu 0,1 req/s, for 1m, giữ thêm 1m",
-        "ShopOldestPendingOrderStale: Order PENDING quá 60 s",
+        "ShopServerErrorRatioHigh và ShopOldestPendingOrderStale (shop-alerts)",
+        "PromotionHalted và SyntheticCheckoutFailing (promoter)",
+        "PlusTenantCheckoutBudgetBurnFast và Slow (tenant-slo, chỉ shop plus)",
         "Rule mặc định của chart bị tắt (defaultRules.create=false)"
       ]
     }

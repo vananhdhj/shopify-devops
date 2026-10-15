@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Export định kỳ và restore: mất những gì đổi sau export",
+    "output": "docs/architecture/shopify-devops/diagrams/export-restore.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "sched",
+      "label": "Export định kỳ"
+    },
+    {
+      "id": "restore",
+      "label": "Restore (operator)"
+    }
+  ],
+  "mainPath": [
+    "scheduler",
+    "export",
+    "volume",
+    "pick",
+    "freeze"
+  ],
+  "nodes": [
+    {
+      "id": "scheduler",
+      "lane": "sched",
+      "col": 0,
+      "type": "backend",
+      "label": "scheduler",
+      "sublabel": "mỗi 60 s, ≤ 20",
+      "width": 120
+    },
+    {
+      "id": "export",
+      "lane": "sched",
+      "col": 1,
+      "type": "backend",
+      "label": "exportShop",
+      "sublabel": "mỗi 15 phút/shop",
+      "width": 140
+    },
+    {
+      "id": "volume",
+      "lane": "sched",
+      "col": 2,
+      "type": "database",
+      "label": "tenant-exports",
+      "sublabel": "PVC · giữ 8/shop",
+      "width": 140
+    },
+    {
+      "id": "pick",
+      "lane": "restore",
+      "col": 2,
+      "type": "external",
+      "label": "chọn export",
+      "sublabel": "make tenant-restore",
+      "width": 140
+    },
+    {
+      "id": "freeze",
+      "lane": "restore",
+      "col": 3,
+      "type": "security",
+      "label": "RESTORING",
+      "sublabel": "drain, lưu pre-restore",
+      "width": 150
+    },
+    {
+      "id": "replace",
+      "lane": "restore",
+      "col": 4,
+      "type": "database",
+      "label": "purge + import",
+      "sublabel": "so md5 với export",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "from": "scheduler",
+      "to": "export",
+      "label": "① outbox"
+    },
+    {
+      "from": "export",
+      "to": "volume",
+      "label": "② ghi, rename"
+    },
+    {
+      "from": "volume",
+      "to": "pick",
+      "label": "③ liệt kê",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "pick",
+      "to": "freeze",
+      "label": "④ operator"
+    },
+    {
+      "from": "freeze",
+      "to": "replace",
+      "label": "⑤ thay hàng",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Giới hạn nói rõ",
+      "items": [
+        "Restore mất mọi thứ shop đổi sau export, kể cả Order",
+        "Export đọc catalog và Orders bằng hai câu lệnh nên không cùng một snapshot",
+        "PITR của Postgres được hoãn, ghi trong README"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "An toàn khi lỗi",
+      "items": [
+        "Lỗi khi đang đóng băng: mở lại shop như cũ",
+        "Lỗi sau khi lưu: đặt lại bản pre-restore rồi mở",
+        "Chỉ chạm hàng của một tenant id"
+      ]
+    }
+  ]
+}

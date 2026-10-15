@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Control plane: registry, cell directory, worker vòng đời, promoter",
+    "output": "docs/architecture/shopify-devops/diagrams/control-plane.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "newmerchant",
+      "type": "external",
+      "label": "Merchant mới",
+      "sublabel": "shop.localhost",
+      "pos": [
+        40,
+        80
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "Platform operator",
+      "sublabel": "make tenant-*",
+      "pos": [
+        40,
+        420
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "edge",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "router image · :8000",
+      "pos": [
+        320,
+        80
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "cell · sign-in Merchant",
+      "pos": [
+        320,
+        250
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "cellapis",
+      "type": "backend",
+      "label": "catalog + order API",
+      "sublabel": "cell của shop · purge · synthetic-catalog",
+      "pos": [
+        320,
+        440
+      ],
+      "size": [
+        210,
+        60
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "public :8100 · internal :8101",
+      "pos": [
+        730,
+        80
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "platform-worker",
+      "sublabel": "provision · delete · ops :8102",
+      "pos": [
+        730,
+        440
+      ],
+      "size": [
+        190,
+        60
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "database",
+      "label": "registry",
+      "sublabel": "tenants · cells · signups · events · outbox · promotions",
+      "pos": [
+        1090,
+        250
+      ],
+      "size": [
+        230,
+        60
+      ]
+    },
+    {
+      "id": "promoter",
+      "type": "backend",
+      "label": "platform-promoter",
+      "sublabel": "soak · gate · dispatch",
+      "pos": [
+        730,
+        250
+      ],
+      "size": [
+        190,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Cell của shop (canary · pool-1 · dedicated-1)",
+      "wraps": [
+        "edge",
+        "storefront",
+        "cellapis"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Control plane · platform-dev",
+      "wraps": [
+        "api",
+        "worker",
+        "registry"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "signup",
+      "from": "newmerchant",
+      "to": "edge",
+      "label": "① signup · bare domain",
+      "variant": "emphasis"
+    },
+    {
+      "id": "public",
+      "from": "edge",
+      "to": "api",
+      "label": "② forward :8100 · không context",
+      "variant": "emphasis"
+    },
+    {
+      "id": "routes",
+      "from": "edge",
+      "to": "api",
+      "label": "bảng routing · token router",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "signin",
+      "from": "storefront",
+      "to": "api",
+      "label": "merchant-sign-ins · token storefront của cell",
+      "variant": "security"
+    },
+    {
+      "id": "op",
+      "from": "operator",
+      "to": "api",
+      "label": "operator · token operator · port-forward",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "sql",
+      "from": "api",
+      "to": "registry",
+      "label": "③ tenant + signup + outbox · một transaction",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "claim",
+      "from": "worker",
+      "to": "registry",
+      "label": "④ claim outbox · SKIP LOCKED",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "check",
+      "from": "worker",
+      "to": "edge",
+      "label": "⑤ kiểm shop như buyer · Host",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "purge",
+      "from": "worker",
+      "to": "cellapis",
+      "label": "⑥ purge · token của cell đó",
+      "variant": "security"
+    },
+    {
+      "id": "promo-db",
+      "from": "promoter",
+      "to": "registry",
+      "label": "promotions",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Control plane tách khỏi cell",
+      "items": [
+        "Registry ở Postgres riêng; cell directory nằm trong đó, cell tự đăng ký bằng token của chính nó",
+        "Cell chết thì signup vào cell khác và thao tác operator vẫn chạy; control plane chết thì buyer của shop cũ vẫn mua được",
+        "Mỗi cell một token, nên cell chỉ được tin cho chính nó và shop của nó"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Vòng đời qua outbox",
+      "items": [
+        "Mỗi yêu cầu (provision, delete) là một dòng lifecycle_outbox, ghi cùng transaction đổi trạng thái",
+        "Worker claim bằng lease 30 s; làm lại sau crash không đổi gì đã xong"
+      ]
+    }
+  ]
+}

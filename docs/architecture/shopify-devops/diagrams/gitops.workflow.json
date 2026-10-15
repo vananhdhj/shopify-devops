@@ -70,17 +70,17 @@
       "col": 3,
       "type": "backend",
       "label": "deploy-dev",
-      "sublabel": "ghi digest, deploy key",
-      "width": 150
+      "sublabel": "digest vào wave 0, platform, edge",
+      "width": 170
     },
     {
       "id": "overlay",
       "lane": "repo",
       "col": 4,
       "type": "database",
-      "label": "overlays/dev",
+      "label": "cells/dev/<cell>",
       "sublabel": "kustomization.yaml",
-      "width": 140
+      "width": 150
     },
     {
       "id": "argo",
@@ -88,15 +88,17 @@
       "col": 4,
       "type": "cloud",
       "label": "Argo CD",
-      "sublabel": "poll 60 s, auto-sync"
+      "sublabel": "cells-dev: 1 app/cell",
+      "width": 140
     },
     {
       "id": "pods",
       "lane": "cluster",
       "col": 5,
       "type": "backend",
-      "label": "shop-dev",
-      "sublabel": "pod theo digest"
+      "label": "cell canary",
+      "sublabel": "rồi pool-1, dedicated-1",
+      "width": 150
     }
   ],
   "edges": [
@@ -161,7 +163,8 @@
       "title": "Không lặp vô hạn",
       "items": [
         "release bỏ qua commit chỉ đổi deploy/",
-        "Deploy key là danh tính duy nhất vượt branch protection"
+        "Deploy key là danh tính duy nhất vượt branch protection; promote.yml cũng dùng nó",
+        "Wave 1 và 2 chỉ nhận release qua promoter (xem Promotion)"
       ]
     }
   ]

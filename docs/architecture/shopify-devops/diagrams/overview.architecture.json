@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Shopify DevOps Lab: tổng quan hiện tại",
+    "title": "Shopify DevOps Lab: edge, ba cell, control plane, promoter",
     "output": "docs/architecture/shopify-devops/diagrams/overview.html",
     "quality_profile": "showcase"
   },
@@ -11,7 +11,7 @@
       "id": "guest",
       "type": "external",
       "label": "Guest buyer",
-      "sublabel": "trình duyệt",
+      "sublabel": "<shop>.shop.localhost",
       "pos": [
         40,
         240
@@ -25,7 +25,7 @@
       "id": "merchant",
       "type": "external",
       "label": "Merchant",
-      "sublabel": "trình duyệt",
+      "sublabel": "đăng ký · sign-in · Fulfill",
       "pos": [
         40,
         440
@@ -36,12 +36,26 @@
       ]
     },
     {
+      "id": "edge",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "host → shop → cell · :8000",
+      "pos": [
+        320,
+        240
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
       "id": "storefront",
       "type": "frontend",
       "label": "storefront",
-      "sublabel": "Next.js :3000",
+      "sublabel": "Next.js :3000 · shop của cell",
       "pos": [
-        300,
+        580,
         240
       ],
       "size": [
@@ -55,7 +69,7 @@
       "label": "order-service",
       "sublabel": "Fastify :4002",
       "pos": [
-        580,
+        850,
         60
       ],
       "size": [
@@ -69,7 +83,7 @@
       "label": "catalog-cart-api",
       "sublabel": "Fastify :4001",
       "pos": [
-        580,
+        850,
         240
       ],
       "size": [
@@ -83,7 +97,7 @@
       "label": "worker",
       "sublabel": "BullMQ · ops :4003",
       "pos": [
-        580,
+        850,
         440
       ],
       "size": [
@@ -94,10 +108,10 @@
     {
       "id": "pg",
       "type": "database",
-      "label": "PostgreSQL 18",
-      "sublabel": "schema catalog + orders",
+      "label": "PostgreSQL 18 (cell)",
+      "sublabel": "tenant_id + RLS mọi bảng",
       "pos": [
-        880,
+        1170,
         240
       ],
       "size": [
@@ -111,7 +125,7 @@
       "label": "Redis 8",
       "sublabel": "queue orders",
       "pos": [
-        880,
+        1170,
         440
       ],
       "size": [
@@ -123,9 +137,9 @@
       "id": "monitoring",
       "type": "cloud",
       "label": "Monitoring",
-      "sublabel": "Prometheus · Alertmanager · Grafana",
+      "sublabel": "metric · log · trace · alert",
       "pos": [
-        560,
+        960,
         640
       ],
       "size": [
@@ -139,11 +153,53 @@
       "label": "Discord",
       "sublabel": "webhook · kênh riêng",
       "pos": [
-        880,
+        1250,
         640
       ],
       "size": [
         150,
+        60
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "platform-api + worker",
+      "sublabel": "registry · cell directory · lifecycle",
+      "pos": [
+        260,
+        600
+      ],
+      "size": [
+        190,
+        60
+      ]
+    },
+    {
+      "id": "platform_db",
+      "type": "database",
+      "label": "PostgreSQL (registry)",
+      "sublabel": "DB riêng · platform_app",
+      "pos": [
+        500,
+        600
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "promoter",
+      "type": "backend",
+      "label": "platform-promoter",
+      "sublabel": "soak · gate · dispatch",
+      "pos": [
+        770,
+        600
+      ],
+      "size": [
+        170,
         60
       ]
     }
@@ -151,7 +207,7 @@
   "boundaries": [
     {
       "kind": "region",
-      "label": "Compose · hoặc k3d namespace shop-dev",
+      "label": "Mỗi cell (canary · pool-1 · dedicated-1: ba bản sao) · namespace riêng",
       "wraps": [
         "storefront",
         "orders",
@@ -160,21 +216,37 @@
         "pg",
         "redis"
       ]
+    },
+    {
+      "kind": "region",
+      "label": "Control plane · namespace platform-dev",
+      "wraps": [
+        "platform",
+        "platform_db",
+        "promoter"
+      ]
     }
   ],
   "connections": [
     {
       "id": "browse",
       "from": "guest",
-      "to": "storefront",
-      "label": "① HTTP :3000",
+      "to": "edge",
+      "label": "① HTTP · Host chọn shop",
       "variant": "emphasis"
+    },
+    {
+      "id": "route",
+      "from": "edge",
+      "to": "storefront",
+      "label": "② ký theo cell",
+      "variant": "security"
     },
     {
       "id": "checkout",
       "from": "storefront",
       "to": "orders",
-      "label": "② POST /checkout",
+      "label": "③ POST /checkout + context",
       "variant": "emphasis",
       "fromSide": "top",
       "toSide": "left"
@@ -183,7 +255,7 @@
       "id": "orders-to-pg",
       "from": "orders",
       "to": "pg",
-      "label": "③ Order + outbox · order_app",
+      "label": "④ Order + outbox · withTenant",
       "fromSide": "right",
       "toSide": "top"
     },
@@ -191,14 +263,14 @@
       "id": "worker-to-redis",
       "from": "worker",
       "to": "redis",
-      "label": "④ enqueue / consume",
+      "label": "⑤ job mang tenantId",
       "variant": "emphasis"
     },
     {
       "id": "worker-to-catalog",
       "from": "worker",
       "to": "catalog",
-      "label": "⑤ Inventory effect",
+      "label": "⑥ Inventory effect · tenantId",
       "variant": "emphasis",
       "fromSide": "top",
       "toSide": "bottom"
@@ -207,24 +279,18 @@
       "id": "worker-to-pg",
       "from": "worker",
       "to": "pg",
-      "label": "⑥ status · order_app",
+      "label": "⑦ status · hàm xuyên tenant",
       "fromSide": "right",
       "toSide": "bottom"
     },
     {
       "id": "merchant-to-store",
       "from": "merchant",
-      "to": "storefront",
-      "label": "⑦ sign-in · Fulfill",
+      "to": "edge",
+      "label": "signup · sign-in · Fulfill",
       "variant": "security",
       "fromSide": "right",
       "toSide": "bottom"
-    },
-    {
-      "id": "storefront-to-catalog",
-      "from": "storefront",
-      "to": "catalog",
-      "label": "HTTP server-side"
     },
     {
       "id": "orders-to-catalog",
@@ -238,7 +304,7 @@
       "id": "catalog-to-pg",
       "from": "catalog",
       "to": "pg",
-      "label": "SQL · catalog_app"
+      "label": "SQL · catalog_app · RLS"
     },
     {
       "id": "scrape",
@@ -252,27 +318,69 @@
       "id": "alert",
       "from": "monitoring",
       "to": "discord",
-      "label": "alert · FIRING, RESOLVED",
+      "label": "alert · FIRING",
       "variant": "security"
+    },
+    {
+      "id": "routes",
+      "from": "platform",
+      "to": "edge",
+      "label": "bảng routing + cells · 2 s",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "signin-check",
+      "from": "storefront",
+      "to": "platform",
+      "label": "kiểm mật khẩu · token của cell",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "registry",
+      "from": "platform",
+      "to": "platform_db",
+      "label": "registry · outbox lifecycle"
+    },
+    {
+      "id": "gate",
+      "from": "promoter",
+      "to": "monitoring",
+      "label": "gate",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "promoter-db",
+      "from": "promoter",
+      "to": "platform_db",
+      "label": "state",
+      "fromSide": "left",
+      "toSide": "right"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "Bốn đơn vị, hai ranh giới dữ liệu",
+      "title": "Edge, cell và control plane",
       "items": [
-        "catalog-cart-api sở hữu sản phẩm, giá, Cart, Stock",
-        "order-service và worker dùng chung danh tính order_app",
-        "Không service nào gọi DB của lát kia"
+        "edge là đơn vị duy nhất trên ingress: shop nào, cell nào, ký context bằng secret của cell đó",
+        "Mỗi cell có Postgres, Redis, secret riêng (niêm trong Git); cell tự đăng ký vào cell directory",
+        "Control plane giữ registry, mật khẩu Merchant, placement theo plan"
       ]
     },
     {
       "dot": "amber",
-      "title": "Quan sát và drill",
+      "title": "Release đi theo wave",
       "items": [
-        "Metric theo route template, 2 alert trong Git",
-        "Drill: dừng worker, và bật cờ lỗi Checkout rồi git revert",
-        "CI, GHCR, Argo CD: xem diagram gitops"
+        "Release chỉ vào wave 0 (canary); promoter soak, kiểm gate rồi nhờ workflow promote commit sang wave 1, 2",
+        "Mỗi cell có một synthetic shop để mua thử mỗi 15 giây",
+        "Quan sát: metric theo route template, log ở Loki, trace ở Tempo, alert trong Git",
+        "Mỗi shop có giới hạn theo plan: rate ở edge, checkout đồng thời, quota sản phẩm, dispatch công bằng"
       ]
     }
   ]

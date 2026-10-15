@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Xoá shop: purge, chờ, purge lại, rồi mới ghi DELETED",
+    "output": "docs/architecture/shopify-devops/diagrams/shop-deletion.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Đường chính"
+    },
+    {
+      "id": "cell",
+      "label": "Trong cell"
+    }
+  ],
+  "mainPath": [
+    "op",
+    "orders",
+    "catalog",
+    "pass1",
+    "verify",
+    "deleted"
+  ],
+  "nodes": [
+    {
+      "id": "op",
+      "lane": "main",
+      "col": 0,
+      "type": "external",
+      "label": "operator delete",
+      "sublabel": "DELETING",
+      "width": 120
+    },
+    {
+      "id": "orders",
+      "lane": "cell",
+      "col": 1,
+      "type": "backend",
+      "label": "purge orders",
+      "sublabel": "cell của shop · token cell",
+      "width": 140
+    },
+    {
+      "id": "catalog",
+      "lane": "cell",
+      "col": 2,
+      "type": "backend",
+      "label": "purge catalog",
+      "sublabel": "cùng cell · 4 bảng",
+      "width": 140
+    },
+    {
+      "id": "pass1",
+      "lane": "main",
+      "col": 3,
+      "type": "security",
+      "label": "'purged' + grace",
+      "sublabel": "15 s · 3 s Compose",
+      "width": 140
+    },
+    {
+      "id": "verify",
+      "lane": "main",
+      "col": 4,
+      "type": "backend",
+      "label": "lượt kiểm",
+      "sublabel": "xoá 0, còn 0",
+      "width": 120
+    },
+    {
+      "id": "deleted",
+      "lane": "main",
+      "col": 5,
+      "type": "external",
+      "label": "DELETED",
+      "sublabel": "audit ghi lại",
+      "width": 110
+    }
+  ],
+  "edges": [
+    {
+      "from": "op",
+      "to": "orders",
+      "label": "① outbox delete",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "orders",
+      "to": "catalog",
+      "label": "② rồi catalog"
+    },
+    {
+      "from": "catalog",
+      "to": "pass1",
+      "label": "③ báo cáo",
+      "route": "drop",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "pass1",
+      "to": "verify",
+      "label": "④ purge lần hai"
+    },
+    {
+      "from": "verify",
+      "to": "deleted",
+      "label": "⑤ sạch",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Không có DELETE trần",
+      "items": [
+        "Mỗi schema một hàm SECURITY DEFINER purge_tenant, chỉ xoá một tenant theo thứ tự phụ thuộc",
+        "Endpoint purge từ chối thiếu token của cell; control plane gọi cell của shop bằng token riêng của cell đó"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Vì sao hai lượt",
+      "items": [
+        "Job settle đã nạp Order trước lượt đầu có thể còn ghi Inventory effect vài giây",
+        "Crash giữa chừng chỉ lặp một lượt: purge idempotent"
+      ]
+    }
+  ]
+}

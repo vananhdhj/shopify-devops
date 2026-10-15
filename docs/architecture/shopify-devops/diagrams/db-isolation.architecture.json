@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Một PostgreSQL, hai schema, ba danh tính",
+    "title": "Một PostgreSQL, hai schema, ba danh tính, mỗi dòng một tenant",
     "output": "docs/architecture/shopify-devops/diagrams/db-isolation.html",
     "quality_profile": "showcase"
   },
@@ -25,7 +25,7 @@
       "id": "migrator",
       "type": "security",
       "label": "migrator",
-      "sublabel": "sở hữu cả hai schema",
+      "sublabel": "sở hữu bảng · không bị RLS",
       "tag": "dbmate",
       "pos": [
         330,
@@ -40,7 +40,7 @@
       "id": "schema_catalog",
       "type": "database",
       "label": "schema catalog",
-      "sublabel": "products · carts · inventory_effects",
+      "sublabel": "4 bảng · tenant_id + RLS",
       "pos": [
         640,
         40
@@ -54,7 +54,7 @@
       "id": "schema_orders",
       "type": "database",
       "label": "schema orders",
-      "sublabel": "orders · items · outbox · order_events",
+      "sublabel": "4 bảng · tenant_id + RLS",
       "pos": [
         640,
         260
@@ -89,6 +89,20 @@
       ],
       "size": [
         140,
+        60
+      ]
+    },
+    {
+      "id": "functions",
+      "type": "backend",
+      "label": "SECURITY DEFINER hẹp",
+      "sublabel": "claim · mark · requeue · gauge · purge",
+      "pos": [
+        305,
+        380
+      ],
+      "size": [
+        190,
         60
       ]
     }
@@ -139,35 +153,61 @@
       "id": "catalog-rw",
       "from": "catalog_app",
       "to": "schema_catalog",
-      "label": "SELECT · INSERT · UPDATE (stock)",
+      "label": "RLS: tenant của transaction",
       "variant": "security"
     },
     {
       "id": "orders-rw",
       "from": "order_app",
       "to": "schema_orders",
-      "label": "SELECT · INSERT · UPDATE (status)",
+      "label": "RLS: tenant của transaction",
       "variant": "security"
+    },
+    {
+      "id": "owns-functions",
+      "from": "migrator",
+      "to": "functions",
+      "label": "sở hữu",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "execute",
+      "from": "order_app",
+      "to": "functions",
+      "label": "EXECUTE · worker, gauge",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "cross-tenant",
+      "from": "functions",
+      "to": "schema_orders",
+      "label": "xuyên tenant · chỉ id",
+      "fromSide": "top",
+      "toSide": "bottom"
     }
   ],
   "cards": [
     {
       "dot": "rose",
-      "title": "Least privilege",
+      "title": "Least privilege, theo dòng",
       "items": [
-        "Runtime role không có DDL, không DROP",
-        "UPDATE theo cột trên products, orders, outbox: stock, status, dispatched_at",
-        "Riêng Cart: catalog_app sửa cả dòng carts, cart_items và xoá dòng cart_items",
-        "Không có FK xuyên schema"
+        "Runtime role không sở hữu bảng, không BYPASSRLS",
+        "Policy: tenant_id = current_tenant(); thiếu tenant thì NULL, không khớp dòng nào",
+        "Khoá và FK có tenant_id: Cart không chứa được sản phẩm shop khác",
+        "order_app không SELECT hay UPDATE outbox trực tiếp"
       ]
     },
     {
       "dot": "emerald",
       "title": "Đã kiểm chứng",
       "items": [
-        "db-identities.test.ts chạy bằng từng danh tính",
-        "catalog_app không đọc/ghi orders",
-        "order_app không sửa stock, Cart, snapshot"
+        "db-identities: từ chối chéo schema",
+        "tenant-database: thiếu tenant thì rỗng, tenant này không chạm tenant kia",
+        "Schema test: bảng mới thiếu tenant_id hay RLS là CI đỏ",
+        "Control plane có Postgres riêng (platform_migrator, platform_app); cell chỉ gọi nó qua cổng nội bộ"
       ]
     }
   ]

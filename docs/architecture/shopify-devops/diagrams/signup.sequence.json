@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Signup: một transaction nhận, worker dựng, router kiểm",
+    "output": "docs/architecture/shopify-devops/diagrams/signup.html",
+    "column_fit": "spread",
+    "quality_profile": "showcase"
+  },
+  "participants": [
+    {
+      "id": "merchant",
+      "type": "external",
+      "label": "Merchant mới",
+      "sublabel": "shop.localhost"
+    },
+    {
+      "id": "router",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "router image"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "public :8100"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "registry",
+      "sublabel": "platform_app"
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "platform-worker",
+      "sublabel": "lease 30 s"
+    }
+  ],
+  "messages": [
+    {
+      "id": "post",
+      "from": "merchant",
+      "to": "router",
+      "y": 170,
+      "label": "① POST /signups · key, handle, name, password, plan",
+      "variant": "emphasis"
+    },
+    {
+      "id": "fwd",
+      "from": "router",
+      "to": "api",
+      "y": 206,
+      "label": "forward, không gắn context"
+    },
+    {
+      "id": "tx",
+      "from": "api",
+      "to": "db",
+      "y": 242,
+      "label": "② một transaction: tenant, đặt cell theo plan (khóa), signup, event, outbox",
+      "variant": "emphasis"
+    },
+    {
+      "id": "acc",
+      "from": "api",
+      "to": "merchant",
+      "y": 278,
+      "label": "303 /signups/:id · hoặc 409 no_capacity, không ghi gì",
+      "variant": "return"
+    },
+    {
+      "id": "claim",
+      "from": "worker",
+      "to": "db",
+      "y": 322,
+      "label": "③ claimDue: lease, SKIP LOCKED"
+    },
+    {
+      "id": "place",
+      "from": "worker",
+      "to": "db",
+      "y": 358,
+      "label": "④ PROVISIONING → ACTIVE, ghi audit",
+      "variant": "emphasis"
+    },
+    {
+      "id": "check",
+      "from": "worker",
+      "to": "router",
+      "y": 394,
+      "label": "⑤ GET / · Host handle.shop.localhost",
+      "variant": "security"
+    },
+    {
+      "id": "seen",
+      "from": "router",
+      "to": "worker",
+      "y": 428,
+      "label": "200 và có tên shop (503 cho tới khi bảng làm mới)",
+      "variant": "return"
+    },
+    {
+      "id": "done",
+      "from": "worker",
+      "to": "db",
+      "y": 464,
+      "label": "⑥ checked, hoàn tất; lỗi thì check_failed và backoff"
+    },
+    {
+      "id": "poll",
+      "from": "merchant",
+      "to": "api",
+      "y": 508,
+      "label": "⑦ GET /signups/:id · ACTIVE → 303 tới /admin/login của shop",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Một key, một shop",
+      "items": [
+        "Retry cùng key và cùng handle+name trả cùng shop",
+        "Cùng key khác yêu cầu: signup_key_reused; handle có người dùng: handle_taken"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Không tạo gì trong cell",
+      "items": [
+        "Pooled tenancy: hàng của shop xuất hiện ở lần ghi đầu tiên",
+        "Plus: cell dedicated còn trống, hết thì 409 no_capacity; starter: cell pooled ít shop nhất"
+      ]
+    }
+  ]
+}

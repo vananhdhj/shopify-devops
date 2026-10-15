@@ -5042,8 +5042,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <path data-edge-from="settle" data-edge-to="lost" data-edge-label="⑤ hết lần" data-edge-key="6" data-edge-role="error" data-composition-points="653.5999999999999,145;653.5999999999999,217" d="M 653.5999999999999 145 L 653.5999999999999 217" class="a-security" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
 
         <!-- Nodes -->
-        <g id="node-outbox" data-node-id="outbox" data-node-label="orders.outbox" tabindex="0" role="button" aria-label="Focus orders.outbox, dispatched_at NULL, Đường chính" aria-pressed="false" data-node-kind="database" data-node-sublabel="dispatched_at NULL" data-node-context="Đường chính">
-          <title>orders.outbox · dispatched_at NULL · Đường chính</title>
+        <g id="node-outbox" data-node-id="outbox" data-node-label="orders.outbox" tabindex="0" role="button" aria-label="Focus orders.outbox, mọi tenant · chưa dispatch, Đường chính" aria-pressed="false" data-node-kind="database" data-node-sublabel="mọi tenant · chưa dispatch" data-node-context="Đường chính">
+          <title>orders.outbox · mọi tenant · chưa dispatch · Đường chính</title>
           <rect x="77.80000000000001" y="93" width="130" height="52" rx="6" class="c-mask"/>
           <rect x="77.80000000000001" y="93" width="130" height="52" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(83.80000000000001 99) scale(0.6875)">
@@ -5051,18 +5051,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="142.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">orders.outbox</text>
-          <text data-detail="context" x="142.8" y="131" class="t-muted" font-size="8" text-anchor="middle">dispatched_at NULL</text>
+          <text data-detail="context" x="142.8" y="131" class="t-muted" font-size="7.8" text-anchor="middle">mọi tenant · chưa dispatch</text>
         </g>
 
-        <g id="node-dispatch" data-node-id="dispatch" data-node-label="dispatchOutbox" tabindex="0" role="button" aria-label="Focus dispatchOutbox, mỗi 250 ms · 2 s timeout, Đường chính" aria-pressed="false" data-node-kind="backend" data-node-sublabel="mỗi 250 ms · 2 s timeout" data-node-context="Đường chính">
-          <title>dispatchOutbox · mỗi 250 ms · 2 s timeout · Đường chính</title>
+        <g id="node-dispatch" data-node-id="dispatch" data-node-label="dispatchOutbox" tabindex="0" role="button" aria-label="Focus dispatchOutbox, claim_fair_events · 250 ms, Đường chính" aria-pressed="false" data-node-kind="backend" data-node-sublabel="claim_fair_events · 250 ms" data-node-context="Đường chính">
+          <title>dispatchOutbox · claim_fair_events · 250 ms · Đường chính</title>
           <rect x="254.60000000000002" y="93" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="254.60000000000002" y="93" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(260.6 99) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="324.6" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">dispatchOutbox</text>
-          <text data-detail="context" x="324.6" y="131" class="t-muted" font-size="8" text-anchor="middle">mỗi 250 ms · 2 s timeout</text>
+          <text data-detail="context" x="324.6" y="131" class="t-muted" font-size="8" text-anchor="middle">claim_fair_events · 250 ms</text>
         </g>
 
         <g id="node-queue" data-node-id="queue" data-node-label="Redis · BullMQ" tabindex="0" role="button" aria-label="Focus Redis · BullMQ, jobId = event_id, Đường chính" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="jobId = event_id" data-node-context="Đường chính">
@@ -5102,15 +5102,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <text data-detail="context" x="801.3999999999999" y="137.4" class="t-muted" font-size="7" text-anchor="middle">status là bằng chứng</text>
         </g>
 
-        <g id="node-reconcile" data-node-id="reconcile" data-node-label="reconcileStalePending" tabindex="0" role="button" aria-label="Focus reconcileStalePending, quá 30 s, mỗi 10 s, Khôi phục" aria-pressed="false" data-node-kind="backend" data-node-sublabel="quá 30 s, mỗi 10 s" data-node-context="Khôi phục">
-          <title>reconcileStalePending · quá 30 s, mỗi 10 s · Khôi phục</title>
+        <g id="node-reconcile" data-node-id="reconcile" data-node-label="reconcileStalePending" tabindex="0" role="button" aria-label="Focus reconcileStalePending, hàm requeue · quá 30 s, Khôi phục" aria-pressed="false" data-node-kind="backend" data-node-sublabel="hàm requeue · quá 30 s" data-node-context="Khôi phục">
+          <title>reconcileStalePending · hàm requeue · quá 30 s · Khôi phục</title>
           <rect x="57.80000000000001" y="217" width="170" height="52" rx="6" class="c-mask"/>
           <rect x="57.80000000000001" y="217" width="170" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(63.80000000000001 223) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="146.10000000000002" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">reconcileStalePending</text>
-          <text data-detail="context" x="142.8" y="255" class="t-muted" font-size="8" text-anchor="middle">quá 30 s, mỗi 10 s</text>
+          <text data-detail="context" x="142.8" y="255" class="t-muted" font-size="8" text-anchor="middle">hàm requeue · quá 30 s</text>
         </g>
 
         <g id="node-lost" data-node-id="lost" data-node-label="Vẫn PENDING" tabindex="0" role="button" aria-label="Focus Vẫn PENDING, job mất hoặc hết lần, Khôi phục" aria-pressed="false" data-node-kind="security" data-node-sublabel="job mất hoặc hết lần" data-node-context="Khôi phục">

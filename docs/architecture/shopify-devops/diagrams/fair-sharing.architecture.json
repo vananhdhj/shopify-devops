@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Giới hạn theo plan ở từng tài nguyên dùng chung",
+    "output": "docs/architecture/shopify-devops/diagrams/fair-sharing.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "buyer",
+      "type": "external",
+      "label": "Buyer của một shop",
+      "sublabel": "<shop>.shop.localhost",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "bảng routing có plan",
+      "pos": [
+        300,
+        40
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "edge",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "token bucket mỗi shop",
+      "pos": [
+        300,
+        230
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "trang busy 429",
+      "pos": [
+        600,
+        230
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "orders",
+      "type": "backend",
+      "label": "order-service",
+      "sublabel": "checkout đồng thời ≤ N",
+      "pos": [
+        900,
+        60
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "quota sản phẩm",
+      "pos": [
+        900,
+        230
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "worker",
+      "sublabel": "dispatch công bằng K/shop",
+      "pos": [
+        900,
+        400
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis · BullMQ",
+      "sublabel": "queue orders",
+      "pos": [
+        1220,
+        400
+      ],
+      "size": [
+        140,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Một cell",
+      "wraps": [
+        "storefront",
+        "orders",
+        "catalog",
+        "worker",
+        "redis"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browse",
+      "from": "buyer",
+      "to": "edge",
+      "label": "① quá rate: 429",
+      "variant": "emphasis"
+    },
+    {
+      "id": "table",
+      "from": "platform",
+      "to": "edge",
+      "label": "plan trong bảng routing",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "proxy",
+      "from": "edge",
+      "to": "storefront",
+      "label": "② context mang plan",
+      "variant": "security"
+    },
+    {
+      "id": "checkout",
+      "from": "storefront",
+      "to": "orders",
+      "label": "③ POST /checkout · quá N: 429",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "admin",
+      "from": "storefront",
+      "to": "catalog",
+      "label": "④ thêm sản phẩm · 409 quota"
+    },
+    {
+      "id": "dispatch",
+      "from": "worker",
+      "to": "redis",
+      "label": "⑤ tối đa K Order/shop",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Một bảng giới hạn cho mọi đơn vị",
+      "items": [
+        "planLimits (starter, plus, internal) trong @shop/tenancy: rate, burst, checkout, sản phẩm, Order được nhận vào queue",
+        "Edge ký plan vào tenant context; context cũ không có plan được coi là starter",
+        "Shop synthetic của cell (internal) không bị giới hạn rate"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Quá giới hạn thì chờ, không lỗi",
+      "items": [
+        "Edge và order-service trả 429 kèm Retry-After, không phải 5xx",
+        "Dispatch giữ Order thừa trong outbox của chính shop đó",
+        "Trạng thái rate nằm trong bộ nhớ edge: đúng với một replica"
+      ]
+    }
+  ]
+}

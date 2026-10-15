@@ -1,0 +1,148 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Placement: chọn cell theo plan trong transaction signup",
+    "output": "docs/architecture/shopify-devops/diagrams/placement.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Trong transaction signup"
+    },
+    {
+      "id": "refuse",
+      "label": "Hết chỗ",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "plan",
+    "role",
+    "lock",
+    "count",
+    "choose",
+    "placed"
+  ],
+  "nodes": [
+    {
+      "id": "plan",
+      "lane": "main",
+      "col": 0,
+      "type": "external",
+      "label": "POST /signups",
+      "sublabel": "plan starter | plus",
+      "width": 130
+    },
+    {
+      "id": "role",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "roleFor",
+      "sublabel": "plus: dedicated · starter: pooled",
+      "width": 170
+    },
+    {
+      "id": "lock",
+      "lane": "main",
+      "col": 2,
+      "type": "security",
+      "label": "khóa cell",
+      "sublabel": "đã đăng ký · FOR UPDATE",
+      "width": 150
+    },
+    {
+      "id": "count",
+      "lane": "main",
+      "col": 3,
+      "type": "database",
+      "label": "đếm shop",
+      "sublabel": "không internal, chưa DELETED",
+      "width": 170
+    },
+    {
+      "id": "choose",
+      "lane": "main",
+      "col": 4,
+      "type": "backend",
+      "label": "choose",
+      "sublabel": "ít shop nhất còn chỗ",
+      "width": 140
+    },
+    {
+      "id": "placed",
+      "lane": "main",
+      "col": 5,
+      "type": "external",
+      "label": "tenants.cell",
+      "sublabel": "event placed"
+    },
+    {
+      "id": "refused",
+      "lane": "refuse",
+      "col": 4,
+      "type": "security",
+      "label": "409 no_capacity",
+      "sublabel": "rollback, không ghi gì",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "from": "plan",
+      "to": "role",
+      "label": "① plan"
+    },
+    {
+      "from": "role",
+      "to": "lock",
+      "label": "② role"
+    },
+    {
+      "from": "lock",
+      "to": "count",
+      "label": "③ tuần tự hoá"
+    },
+    {
+      "from": "count",
+      "to": "choose",
+      "label": "④ số shop"
+    },
+    {
+      "from": "choose",
+      "to": "placed",
+      "label": "⑤ có chỗ",
+      "variant": "emphasis"
+    },
+    {
+      "from": "choose",
+      "to": "refused",
+      "label": "không còn chỗ",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Khóa trước, đếm sau",
+      "items": [
+        "Hai signup cùng role chạy lần lượt: sáu plus đua một cell dedicated, đúng một thắng",
+        "Synthetic shop và shop đã xoá không tính vào capacity"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Từ chối ngay, không xếp hàng",
+      "items": [
+        "no_capacity là câu trả lời bình thường của API và form",
+        "Shop chỉ canary (internal) do provisioning đặt, retry tới khi cell canary đăng ký"
+      ]
+    }
+  ]
+}

@@ -17,7 +17,7 @@
     },
     {
       "id": "edge",
-      "label": "Giao diện + seed"
+      "label": "Giao diện, control plane, seed"
     }
   ],
   "mainPath": [
@@ -27,7 +27,7 @@
     "catalog",
     "orders",
     "storefront",
-    "seed"
+    "edge"
   ],
   "nodes": [
     {
@@ -89,21 +89,45 @@
       "sublabel": "/healthz"
     },
     {
-      "id": "seed",
-      "lane": "edge",
-      "col": 5,
-      "type": "cloud",
-      "label": "seed",
-      "sublabel": "make dev-up, sau --wait",
-      "tag": "job"
-    },
-    {
       "id": "worker",
       "lane": "api",
       "col": 5,
       "type": "backend",
       "label": "worker",
       "sublabel": "/health/ready :4003"
+    },
+    {
+      "id": "edge",
+      "lane": "edge",
+      "col": 5,
+      "type": "security",
+      "label": "edge",
+      "sublabel": "ops :8001"
+    },
+    {
+      "id": "pdb",
+      "lane": "edge",
+      "col": 0,
+      "type": "database",
+      "label": "platform-db",
+      "sublabel": "Postgres riêng"
+    },
+    {
+      "id": "pprep",
+      "lane": "edge",
+      "col": 1,
+      "type": "security",
+      "label": "platform prep",
+      "sublabel": "roles · migrate · seed",
+      "width": 140
+    },
+    {
+      "id": "papi",
+      "lane": "edge",
+      "col": 2,
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "/health/ready :8101"
     }
   ],
   "edges": [
@@ -139,17 +163,36 @@
       "toSide": "top"
     },
     {
-      "from": "storefront",
-      "to": "seed",
-      "variant": "dashed"
-    },
-    {
       "from": "redis",
       "to": "worker",
       "label": "healthy",
       "route": "drop",
       "fromSide": "bottom",
       "toSide": "top"
+    },
+    {
+      "from": "storefront",
+      "to": "edge",
+      "label": "healthy"
+    },
+    {
+      "from": "pdb",
+      "to": "pprep",
+      "label": "healthy"
+    },
+    {
+      "from": "pprep",
+      "to": "papi",
+      "label": "seed xong",
+      "variant": "emphasis"
+    },
+    {
+      "from": "papi",
+      "to": "edge",
+      "label": "healthy",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "bottom"
     }
   ],
   "cards": [
@@ -158,16 +201,18 @@
       "title": "Chỉ trả về khi xanh",
       "items": [
         "up --wait chờ mọi healthcheck",
-        "Sau đó mới chạy seed"
+        "Sau đó seed catalog của hai shop (17 sản phẩm); platform-seed đã nhập hai shop vào registry"
       ]
     },
     {
       "dot": "amber",
-      "title": "Ba chi tiết",
+      "title": "Năm chi tiết",
       "items": [
         "order-service còn chờ migrate-orders xong",
         "worker chờ migrate-orders, catalog và redis healthy",
-        "storefront chờ catalog-cart-api và order-service"
+        "storefront chờ catalog-cart-api và order-service",
+        "edge chờ storefront và platform-api; shop mở ở <handle>.shop.localhost:8000",
+        "cell-register (job) đăng ký cell vào control plane sau khi mọi đơn vị healthy; cell thứ hai dedicated-1 chỉ bật bằng make dev-up CELLS=2"
       ]
     }
   ]

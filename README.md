@@ -309,8 +309,7 @@ The bad-release drill is written up step by step in
   minute later; a longer lull still ends it. It can also fire again just after a fix while old
   errors remain in its 2-minute window. The drill keeps traffic steady for both reasons.
 - The dev seed job resets seed products' price and Stock on every sync.
-- Logs are read through the container runtime; there is no log store or tracing. Discord delivery
-  is checked by eye.
+- Discord delivery of alerts is checked by eye.
 - Pending orders never expire and cannot be cancelled (ADR-0002); two simultaneous "add" clicks
   from one buyer can lose an increment.
 - Out of scope so far: image scanning, network policies, load tests, data-recovery drills, progressive delivery, cloud

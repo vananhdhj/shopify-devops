@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "Checkout: một transaction ghi Order, items và outbox",
+    "title": "Checkout: hai transaction của tenant, Cart đọc qua HTTP ở giữa",
     "output": "docs/architecture/shopify-devops/diagrams/checkout.html",
     "column_fit": "spread",
     "quality_profile": "showcase"
@@ -39,7 +39,7 @@
       "from": "client",
       "to": "orders",
       "y": 170,
-      "label": "① cartToken (cookie) + checkoutKey + scenario",
+      "label": "① cartToken (cookie) + checkoutKey + scenario + context",
       "variant": "emphasis"
     },
     {
@@ -47,7 +47,7 @@
       "from": "orders",
       "to": "pg",
       "y": 205,
-      "label": "② SELECT theo checkout_key"
+      "label": "② tenant tx: SELECT theo checkout_key của shop"
     },
     {
       "id": "prior-none",
@@ -62,7 +62,7 @@
       "from": "orders",
       "to": "catalog",
       "y": 270,
-      "label": "③ GET /carts/:id · timeout 3s"
+      "label": "③ GET /carts/:id · cùng context · timeout 3s"
     },
     {
       "id": "cart-priced",
@@ -77,7 +77,7 @@
       "from": "orders",
       "to": "pg",
       "y": 337,
-      "label": "④ BEGIN · INSERT orders, order_items, outbox · COMMIT",
+      "label": "④ tenant tx: INSERT orders, order_items, outbox",
       "variant": "emphasis"
     },
     {
@@ -93,7 +93,7 @@
       "from": "orders",
       "to": "client",
       "y": 405,
-      "label": "⑤ 202 orderId + orderToken (HMAC)",
+      "label": "⑤ 202 orderId + orderToken (HMAC tenant:order)",
       "variant": "return"
     }
   ],
@@ -110,7 +110,7 @@
       "dot": "rose",
       "title": "Outbox là cầu nối",
       "items": [
-        "Order, items, outbox cùng một transaction",
+        "Order, items, outbox cùng một transaction của tenant",
         "Worker đọc outbox rồi settle (xem Settle)"
       ]
     }

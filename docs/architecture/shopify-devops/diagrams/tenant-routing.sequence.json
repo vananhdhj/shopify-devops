@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Edge: bảng routing từ control plane, context ký bằng secret của cell",
+    "output": "docs/architecture/shopify-devops/diagrams/tenant-routing.html",
+    "column_fit": "spread",
+    "quality_profile": "showcase"
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Trình duyệt",
+      "sublabel": "harbor.shop.localhost"
+    },
+    {
+      "id": "router",
+      "type": "security",
+      "label": "edge",
+      "sublabel": "router image · :8000"
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "platform-api",
+      "sublabel": "registry · :8101"
+    },
+    {
+      "id": "storefront",
+      "type": "frontend",
+      "label": "storefront",
+      "sublabel": "cell của shop · proxy.ts"
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "catalog-cart-api",
+      "sublabel": "hook tenant · withTenant"
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "RLS theo app.tenant_id"
+    }
+  ],
+  "messages": [
+    {
+      "id": "refresh",
+      "from": "router",
+      "to": "platform",
+      "y": 170,
+      "label": "① mỗi 2 s: GET /internal/routes · bảng shop + cell",
+      "variant": "security"
+    },
+    {
+      "id": "table",
+      "from": "platform",
+      "to": "router",
+      "y": 205,
+      "label": "tenants (kèm cell) và cells đã đăng ký (giữ bản cũ khi lỗi)",
+      "variant": "return"
+    },
+    {
+      "id": "request",
+      "from": "browser",
+      "to": "router",
+      "y": 250,
+      "label": "② GET / · Host harbor.shop.localhost",
+      "variant": "emphasis"
+    },
+    {
+      "id": "proxy",
+      "from": "router",
+      "to": "storefront",
+      "y": 290,
+      "label": "③ ACTIVE, còn token: ký context kèm plan bằng secret của cell",
+      "variant": "security"
+    },
+    {
+      "id": "api",
+      "from": "storefront",
+      "to": "catalog",
+      "y": 330,
+      "label": "④ GET /products · chuyển nguyên x-tenant-context"
+    },
+    {
+      "id": "tx",
+      "from": "catalog",
+      "to": "pg",
+      "y": 370,
+      "label": "⑤ BEGIN · set_config(app.tenant_id) · SELECT",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rows",
+      "from": "pg",
+      "to": "catalog",
+      "y": 402,
+      "label": "chỉ dòng của harbor",
+      "variant": "return"
+    },
+    {
+      "id": "products",
+      "from": "catalog",
+      "to": "storefront",
+      "y": 434,
+      "label": "sản phẩm Harbor Goods",
+      "variant": "return"
+    },
+    {
+      "id": "page",
+      "from": "storefront",
+      "to": "router",
+      "y": 466,
+      "label": "⑥ HTML có tên shop",
+      "variant": "return"
+    },
+    {
+      "id": "reply",
+      "from": "router",
+      "to": "browser",
+      "y": 498,
+      "label": "trang của Harbor Goods",
+      "variant": "return"
+    },
+    {
+      "id": "unknown",
+      "from": "router",
+      "to": "browser",
+      "y": 542,
+      "label": "⑦ 404 lạ · 503 chưa ACTIVE · 429 quá rate",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Chỉ router nói tenant",
+      "items": [
+        "Context mang id, handle, tên, credentialVersion, ký HMAC-SHA256 bằng secret của đúng cell",
+        "Cell chỉ giữ secret của mình: context ký cho cell khác không xác minh được",
+        "Cell chưa đăng ký hoặc edge thiếu secret: 503, không bao giờ rơi sang cell khác"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "DB là chốt cuối",
+      "items": [
+        "Mỗi truy vấn chạy trong transaction đã đặt tenant",
+        "Thiếu tenant: không thấy dòng nào, không INSERT được"
+      ]
+    }
+  ]
+}
