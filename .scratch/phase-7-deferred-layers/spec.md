@@ -1,6 +1,6 @@
 # Spec: Phase 7 — the deferred layers
 
-**Status:** ready-for-agent (decisions 1–3 approved by the author on 2026-10-14; decision 4 is the default the spec proposes; tickets under `issues/`)
+**Status:** resolved (2026-10-15: tickets 01–07 resolved; PRs #65–#82 merged and deployed to the lab cluster; the trace, the blocked manifest (#83, closed unmerged), and the rotation met the exit gate)
 
 Background: the blueprint (`~/workspace/Research/narrow/Shopify DevOps Portfolio Blueprint.md`) puts Phase 7 after tenant data operations: "Deferred layers from the October 8 plan: Alloy/Loki, OpenTelemetry/Tempo, Conftest, Sealed Secrets, HPA". The exit gate is "Follow one tenant's order across router, cell, and queue in traces; bad manifest blocked; secret rotation rehearsed". Its observability section adds:
 - structured JSON logs with `tenant_id`, `cell`, request ID, and trace ID;
