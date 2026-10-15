@@ -112,12 +112,15 @@ spec:
         - name: config
           configMap:
             name: tempo
+  # Spelled out as the API server stores it (apiVersion, kind, volumeMode): Argo CD syncs the
+  # monitoring Application with server-side apply, and a template without them differs forever.
   volumeClaimTemplates:
-    - metadata:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
-        # The API server's default, spelled out: without it Argo CD sees a difference forever.
         volumeMode: Filesystem
         resources:
           requests:
