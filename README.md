@@ -154,8 +154,19 @@ kubectl --context k3d-shop -n monitoring port-forward svc/monitoring-grafana 808
 
 Grafana's dashboards (in Git, `deploy/monitoring/config/dashboards`): **Fleet** (every cell's shops,
 traffic, errors, synthetic Checkout, and the waves), **Cell** (one cell's services, Orders, queue,
-and pods), **Tenant** (one shop's requests, limits hit, Checkout latency and outcomes, and plan), and
-**Control plane** (lifecycle work and the promoter).
+and pods), **Tenant** (one shop's requests, limits hit, Checkout latency and outcomes, plan, and its
+warning and error log lines), and **Control plane** (lifecycle work and the promoter). Since Phase 7,
+Grafana also searches every pod's logs (Loki, 24 h) and traces (Tempo, 24 h), linked both ways by
+trace id ([ADR-0031](docs/adr/0031-lean-logs-and-traces-on-the-node.md)).
+
+```sh
+make policy                 # the manifest policies (Conftest) over every rendered manifest, as CI runs them
+make argocd-apps            # re-apply Argo CD's Applications after changing their definitions
+make seal-key-backup        # the Sealed Secrets controller's key into .secrets/ (never Git); seal-key-restore puts it back
+make rotate-tenant-context CELL=dedicated-1 STEP=expand   # then switch, then contract: one pull request a step
+make experiment-trace       # a Checkout through the ingress, its trace found in Tempo by the Order id
+make experiment-autoscale   # load on pool-1's shops; its storefront scales out and back in
+```
 
 ### Drills
 
@@ -244,7 +255,13 @@ The bad-release drill is written up step by step in
   metrics are on a private port. Argo CD, Grafana, PostgreSQL, and Redis are reachable only by
   port-forward.
 - **Supply chain.** Actions are pinned to commit SHAs, downloaded tools are checksum-verified,
-  images run as non-root and are deployed by digest only.
+  and images are deployed by digest only.
+- **Manifest policies (Phase 7).** Every rendered manifest is checked in CI: no privileged or root
+  containers, no host namespaces, resource requests and limits, approved and pinned images, no
+  plain Secrets. One exception is listed, with an owner and an expiry: the log agent reads the
+  node's root-owned log files ([ADR-0032](docs/adr/0032-manifest-policies-in-ci-with-listed-exceptions.md)).
+  A tenant-context secret is rotated with no request refused
+  ([ADR-0034](docs/adr/0034-a-secret-rotated-as-expand-and-contract.md)).
 
 ## Known limits
 
@@ -267,6 +284,12 @@ The bad-release drill is written up step by step in
   Alloy reads the node's log files as root (read-only), the manifest policies' one exception.
   **To change later:** longer retention and object storage off the node, and Loki and Tempo in
   their scalable modes, in the cloud run (Phase 8).
+- Only pool-1's storefront and catalog API autoscale; the edge and the order service stay at one
+  replica, since their per-shop limits are per process
+  ([ADR-0035](docs/adr/0035-autoscaling-only-stateless-units.md)).
+- The cluster's Secrets decrypt only with the Sealed Secrets controller's key: losing both the
+  cluster and the backup in `.secrets/` (`make seal-key-backup`) loses them
+  ([ADR-0033](docs/adr/0033-cluster-secrets-sealed-in-git.md)).
 - **Manifest policies are checked in CI, not enforced in the cluster, for now (Phase 7,
   decision 4).** Conftest blocks a pull request with a bad manifest, but nothing stops one applied
   by hand. **To change later:** an admission controller (Kyverno or Gatekeeper) when the cluster
@@ -295,10 +318,11 @@ The bad-release drill is written up step by step in
 
 ## Measured results
 
-All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11, Phase 3 on 2026-10-12, Phase 4 on 2026-10-13, Phase 5 on 2026-10-13/14 (Colima at 8 GB from its end), Phase 6 on 2026-10-14.
+All on an Apple M2 with 16 GB RAM, Colima 6 CPUs / 10 GB; Phase 0 on 2026-10-10, Phases 1 and 2 on 2026-10-11, Phase 3 on 2026-10-12, Phase 4 on 2026-10-13, Phase 5 on 2026-10-13/14 (Colima at 8 GB from its end), Phase 6 on 2026-10-14, Phase 7 on 2026-10-14/15.
 
 | What | Result |
 |---|---|
+| Deferred layers (Phase 7) | One Checkout followed in one trace across the edge, the storefront, the order service, the catalog API, the outbox, and the queue to its settlement (22 spans, 66 ms), its log lines in Loki. A pull request with a privileged container blocked by the manifest policies in CI. dedicated-1's tenant-context secret rotated in three pull requests with no request refused, and the sealing key's restore rehearsed. pool-1's storefront scaled 1 → 3 under load and back. Logs and traces cost about 1 GB; the VM keeps 2.5 GB available ([Phase 7 evidence](docs/evidence/2026-10-15-phase-7-cluster.md)) |
 | Tenant data operations (Phase 6) | A starter shop with 5 Orders, 3 of them Pending, moved from pool-1 to dedicated-1 frozen 5.3 s (bound 30 s): every table's count and md5 equal in both cells, the same 5 Orders after with none Pending, nothing left in pool-1, and 60 of 60 home-page requests answered through the ingress throughout. A Merchant's 2 deleted products came back with a restore to the export before (frozen 5.1 s): every table as exported, the later Order gone as warned, another shop's rows unchanged. Every shop is exported every 15 minutes, 8 kept ([Phase 6 evidence](docs/evidence/2026-10-14-phase-6-cluster.md)) |
 | Fair sharing (Phase 5) | Per-shop limits by plan: request rate at the edge, Checkouts in flight, products, Orders admitted into the settlement queue. One starter shop at 10× its rate quota (100 requests a second for 5 minutes) got 26,976 × 429 and 0 × 5xx, while three other starter shops in its cell kept their Checkout p95 (22–23 ms baseline, 15–18 ms under the noise) with no failed journey; fleet, cell, tenant, and control-plane dashboards and a plus shop's Checkout SLO alert ([Phase 5 evidence](docs/evidence/2026-10-14-phase-5-cluster.md)) |
 | Releases in waves (Phase 4) | A release reaches the canary, is soaked 5 minutes behind a gate (health, 5xx ratio, Pending age, alerts, a synthetic shop's Checkout), and is promoted to pool-1, then dedicated-1, with no human step: merge to last wave in about 31 minutes. A bad release that passed CI (Checkout failing only inside Kubernetes) halted 49 s into the canary's soak with 0 real tenants exposed, `PromotionHalted` fired 23 s later, pool-1 and dedicated-1 never ran it, and reverting its merge commit restored the canary and went through every wave ([Phase 4 evidence](docs/evidence/2026-10-13-phase-4-cluster.md)) |
