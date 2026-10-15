@@ -20,7 +20,11 @@ export const options = {
       { executor: "constant-arrival-rate", rate, timeUnit: "1s", duration, preAllocatedVUs: 8, maxVUs: 40, exec: "home", env: { SHOP: shop } },
     ]),
   ),
-  thresholds: { "answers{class:2xx}": ["count>=0"], "answers{class:other}": ["count>=0"] },
+  // A threshold per tag makes k6 keep that submetric: the answers by class, and by the statuses
+  // a slow or limited stack gives (0 is no answer within the timeout).
+  thresholds: Object.fromEntries(
+    ["class:2xx", "class:other", ...["0", "429", "500", "502", "503", "504"].map((s) => `status:${s}`)].map((tag) => [`answers{${tag}}`, ["count>=0"]]),
+  ),
 };
 
 export function home() {
@@ -34,6 +38,7 @@ export function handleSummary(data) {
     "/out/result.json": JSON.stringify({
       ok: count("answers{class:2xx}"),
       other: count("answers{class:other}"),
+      byStatus: Object.fromEntries(["0", "429", "500", "502", "503", "504"].map((s) => [s, count(`answers{status:${s}}`)]).filter(([, n]) => n > 0)),
       p95: data.metrics.http_req_duration?.values["p(95)"] ?? null,
     }),
   };

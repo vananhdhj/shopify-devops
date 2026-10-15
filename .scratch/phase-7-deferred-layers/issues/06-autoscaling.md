@@ -4,11 +4,11 @@
 
 **Blocked by:** 01
 
-**Status:** in review (the experiment after the merge)
+**Status:** resolved
 
 - [x] `autoscaling/v2` HPAs in pool-1: storefront and catalog API, 1–3 replicas, CPU 70%, scale-down stabilisation 5 minutes; requests checked by ticket 01's policy
 - [x] Argo CD ignores `spec.replicas` of autoscaled Deployments
-- [ ] `make experiment-autoscale`: k6 load on pool-1's storefront through the ingress; replicas, CPU, and the VM's memory sampled; scale-out and scale-in times recorded
+- [x] `make experiment-autoscale`: k6 load on pool-1's storefront through the ingress; replicas, CPU, and the VM's memory sampled; scale-out and scale-in times recorded
 - [x] The edge and order service stay at one replica (ADR-0026), stated in the ADR
 
 ## Comments
@@ -32,4 +32,12 @@ Found after the merge (2026-10-14, fixed in a follow-up PR):
 - **The fix**:
   - targets as an average CPU per pod, several times an idle pod's: storefront 150m, catalog API 80m;
   - a scale-up behaviour: a 60 s stabilisation, then at most one pod a minute, so a startup burst cannot snowball.
+
+Resolved 2026-10-15 with PRs #76 and #78 (and #79, the release filters). `make experiment-autoscale` on the lab cluster, 00:47 UTC, with the VM's load at 1.4:
+- **The load**: Meadow, Harbor, and two other starter shops in pool-1, 8 home pages a second each for 4 minutes (00:47:15 to 00:51:17).
+  - 7,434 answers 2xx and 45 not, p95 3.6 s. The 45 were most likely the 10 s client timeout while one storefront replica took about 32 requests a second; that run did not record statuses, and the script now does.
+- **The storefront** went from 1 to 2 replicas at 00:48:37, 82 s after the load began (the 60 s stabilisation and the metrics' lag), and to 3 at 00:49:37 (one pod a minute). Its pods' CPU peaked at 1,401m in all. It was back at 1 at 00:56:42, 5 min 25 s after the load ended.
+- **The catalog API** stayed at 1. Its CPU peaked at 128m, over its 80m target only for single samples, not for the 60 s a scale-up waits.
+- **The VM**: load peaked at 11.2; available memory fell from 2,410 to 1,929 MiB.
+- **Idle, before and after**: storefront 12–13m and catalog API 6–7m CPU, at one replica each.
 
