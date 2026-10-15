@@ -137,7 +137,7 @@
       "id": "monitoring",
       "type": "cloud",
       "label": "Monitoring",
-      "sublabel": "Prometheus · Alertmanager · Grafana",
+      "sublabel": "metric · log · trace · alert",
       "pos": [
         960,
         640
@@ -369,7 +369,7 @@
       "title": "Edge, cell và control plane",
       "items": [
         "edge là đơn vị duy nhất trên ingress: shop nào, cell nào, ký context bằng secret của cell đó",
-        "Mỗi cell có Postgres, Redis, secret riêng; cell tự đăng ký vào cell directory",
+        "Mỗi cell có Postgres, Redis, secret riêng (niêm trong Git); cell tự đăng ký vào cell directory",
         "Control plane giữ registry, mật khẩu Merchant, placement theo plan"
       ]
     },
@@ -379,7 +379,7 @@
       "items": [
         "Release chỉ vào wave 0 (canary); promoter soak, kiểm gate rồi nhờ workflow promote commit sang wave 1, 2",
         "Mỗi cell có một synthetic shop để mua thử mỗi 15 giây",
-        "Quan sát: metric theo route template, 3 alert trong Git",
+        "Quan sát: metric theo route template, log ở Loki, trace ở Tempo, alert trong Git",
         "Mỗi shop có giới hạn theo plan: rate ở edge, checkout đồng thời, quota sản phẩm, dispatch công bằng"
       ]
     }

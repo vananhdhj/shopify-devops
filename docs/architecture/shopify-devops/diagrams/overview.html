@@ -5203,15 +5203,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="context" x="1235" y="484" class="t-muted" font-size="9" text-anchor="middle">queue orders</text>
         </g>
 
-        <g id="node-monitoring" data-node-id="monitoring" data-node-label="Monitoring" tabindex="0" role="button" aria-label="Focus Monitoring, Prometheus · Alertmanager · Grafana, Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="Prometheus · Alertmanager · Grafana" data-node-context="Architecture component">
-          <title>Monitoring · Prometheus · Alertmanager · Grafana · Architecture component</title>
+        <g id="node-monitoring" data-node-id="monitoring" data-node-label="Monitoring" tabindex="0" role="button" aria-label="Focus Monitoring, metric · log · trace · alert, Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="metric · log · trace · alert" data-node-context="Architecture component">
+          <title>Monitoring · metric · log · trace · alert · Architecture component</title>
           <rect x="960" y="640" width="180" height="60" rx="6" class="c-mask"/>
           <rect x="960" y="640" width="180" height="60" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(966 646) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="1050" y="668" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Monitoring</text>
-        <text data-detail="context" x="1050" y="684" class="t-muted" font-size="8.1" text-anchor="middle">Prometheus · Alertmanager · Grafana</text>
+        <text data-detail="context" x="1050" y="684" class="t-muted" font-size="9" text-anchor="middle">metric · log · trace · alert</text>
         </g>
 
         <g id="node-discord" data-node-id="discord" data-node-label="Discord" tabindex="0" role="button" aria-label="Focus Discord, webhook · kênh riêng, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="webhook · kênh riêng" data-node-context="Architecture component">
@@ -5556,7 +5556,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>edge là đơn vị duy nhất trên ingress: shop nào, cell nào, ký context bằng secret của cell đó</li>
-          <li>Mỗi cell có Postgres, Redis, secret riêng; cell tự đăng ký vào cell directory</li>
+          <li>Mỗi cell có Postgres, Redis, secret riêng (niêm trong Git); cell tự đăng ký vào cell directory</li>
           <li>Control plane giữ registry, mật khẩu Merchant, placement theo plan</li>
         </ul>
       </div>
@@ -5569,7 +5569,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <ul>
           <li>Release chỉ vào wave 0 (canary); promoter soak, kiểm gate rồi nhờ workflow promote commit sang wave 1, 2</li>
           <li>Mỗi cell có một synthetic shop để mua thử mỗi 15 giây</li>
-          <li>Quan sát: metric theo route template, 3 alert trong Git</li>
+          <li>Quan sát: metric theo route template, log ở Loki, trace ở Tempo, alert trong Git</li>
           <li>Mỗi shop có giới hạn theo plan: rate ở edge, checkout đồng thời, quota sản phẩm, dispatch công bằng</li>
         </ul>
       </div>

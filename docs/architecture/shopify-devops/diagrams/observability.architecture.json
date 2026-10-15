@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Quan sát: metric theo route, alert vào hai receiver",
+    "title": "Quan sát: metric, log, trace; alert vào hai receiver",
     "output": "docs/architecture/shopify-devops/diagrams/observability.html",
     "quality_profile": "showcase"
   },
@@ -14,7 +14,7 @@
       "sublabel": "ops :8001 · edge-dev",
       "pos": [
         60,
-        40
+        180
       ],
       "size": [
         150,
@@ -28,7 +28,7 @@
       "sublabel": "metrics :9464",
       "pos": [
         60,
-        140
+        280
       ],
       "size": [
         150,
@@ -42,7 +42,7 @@
       "sublabel": "/metrics :4002",
       "pos": [
         60,
-        210
+        350
       ],
       "size": [
         150,
@@ -56,7 +56,7 @@
       "sublabel": "/metrics :4001",
       "pos": [
         60,
-        280
+        420
       ],
       "size": [
         150,
@@ -70,7 +70,7 @@
       "sublabel": "ops :4003",
       "pos": [
         60,
-        350
+        490
       ],
       "size": [
         150,
@@ -84,7 +84,7 @@
       "sublabel": "kube-system :9100",
       "pos": [
         60,
-        470
+        610
       ],
       "size": [
         150,
@@ -98,7 +98,7 @@
       "sublabel": "Git là nguồn",
       "pos": [
         400,
-        520
+        660
       ],
       "size": [
         150,
@@ -112,7 +112,7 @@
       "sublabel": "15 s · giữ 1 ngày",
       "pos": [
         400,
-        230
+        370
       ],
       "size": [
         170,
@@ -126,7 +126,7 @@
       "sublabel": "group_wait 10 s",
       "pos": [
         690,
-        180
+        320
       ],
       "size": [
         160,
@@ -140,7 +140,7 @@
       "sublabel": "dashboard từ Git",
       "pos": [
         690,
-        340
+        480
       ],
       "size": [
         160,
@@ -154,7 +154,7 @@
       "sublabel": "GET /alerts",
       "pos": [
         970,
-        140
+        280
       ],
       "size": [
         150,
@@ -168,7 +168,7 @@
       "sublabel": "webhook từ file secret",
       "pos": [
         970,
-        230
+        370
       ],
       "size": [
         150,
@@ -182,7 +182,7 @@
       "sublabel": "port-forward :8082",
       "pos": [
         970,
-        340
+        480
       ],
       "size": [
         150,
@@ -196,10 +196,52 @@
       "sublabel": ":8101 · :8102 · :8103",
       "pos": [
         60,
-        570
+        710
       ],
       "size": [
         240,
+        50
+      ]
+    },
+    {
+      "id": "alloy",
+      "type": "backend",
+      "label": "Alloy",
+      "sublabel": "DaemonSet · đọc /var/log/pods",
+      "pos": [
+        400,
+        70
+      ],
+      "size": [
+        190,
+        56
+      ]
+    },
+    {
+      "id": "loki",
+      "type": "database",
+      "label": "Loki",
+      "sublabel": "single-binary · 24 giờ",
+      "pos": [
+        690,
+        40
+      ],
+      "size": [
+        160,
+        50
+      ]
+    },
+    {
+      "id": "tempo",
+      "type": "database",
+      "label": "Tempo",
+      "sublabel": "OTLP :4317 · 24 giờ",
+      "pos": [
+        690,
+        120
+      ],
+      "size": [
+        160,
         50
       ]
     }
@@ -217,12 +259,15 @@
     },
     {
       "kind": "region",
-      "label": "monitoring (kube-prometheus-stack)",
+      "label": "monitoring (Prometheus stack, Loki, Alloy, Tempo)",
       "wraps": [
         "prom",
         "alertmanager",
         "grafana",
-        "catcher"
+        "catcher",
+        "alloy",
+        "loki",
+        "tempo"
       ]
     },
     {
@@ -333,6 +378,27 @@
       "from": "platform",
       "to": "prom",
       "label": "① :8101 · :8102 · :8103"
+    },
+    {
+      "id": "collect",
+      "from": "router",
+      "to": "alloy",
+      "label": "⑤ log file · OTLP :4318",
+      "variant": "emphasis"
+    },
+    {
+      "id": "logs",
+      "from": "alloy",
+      "to": "loki",
+      "label": "⑥ push",
+      "variant": "emphasis"
+    },
+    {
+      "id": "traces",
+      "from": "alloy",
+      "to": "tempo",
+      "label": "⑥ span",
+      "variant": "emphasis"
     }
   ],
   "cards": [
@@ -341,9 +407,9 @@
       "title": "Nhãn có giới hạn",
       "items": [
         "Metric theo route template, không bao giờ theo id",
-        "Log JSON mang requestId; router gán id, storefront chuyển x-request-id sang API",
-        "Storefront chỉ log path, không log query string",
-        "Series theo shop mang tenant_id, nối với tenant_info; mọi series có nhãn cell; bốn dashboard Grafana lưu trong Git"
+        "Log JSON mang requestId, traceId, spanId; Alloy chỉ gắn nhãn namespace, cell, app",
+        "Grafana mở trace từ traceId của log, và log từ span",
+        "Series theo shop mang tenant_id; mọi series có nhãn cell; dashboard lưu trong Git"
       ]
     },
     {

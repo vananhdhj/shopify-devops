@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Manifest policy: Conftest trong CI chặn manifest xấu trước merge",
+    "output": "docs/architecture/shopify-devops/diagrams/manifest-policy.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "ci", "label": "Job manifests (CI)" },
+    { "id": "deny", "label": "Bị chặn", "variant": "exception" }
+  ],
+  "mainPath": ["pr", "render", "conftest", "fixtures", "ciok"],
+  "nodes": [
+    { "id": "pr", "lane": "ci", "col": 0, "type": "external", "label": "pull request", "sublabel": "đổi manifest", "width": 130 },
+    { "id": "render", "lane": "ci", "col": 1, "type": "backend", "label": "render", "sublabel": "cell, edge, platform, chart", "width": 170 },
+    { "id": "conftest", "lane": "ci", "col": 2, "type": "security", "label": "conftest test", "sublabel": "9 rule · policy/", "width": 150 },
+    { "id": "fixtures", "lane": "ci", "col": 3, "type": "backend", "label": "fixture", "sublabel": "14 fail, 2 pass", "width": 140 },
+    { "id": "ciok", "lane": "ci", "col": 4, "type": "cloud", "label": "ci-ok", "sublabel": "merge được", "width": 120 },
+    { "id": "exception", "lane": "deny", "col": 1, "type": "database", "label": "exceptions", "sublabel": "Alloy root · 2027-01-15", "width": 170 },
+    { "id": "blocked", "lane": "deny", "col": 3, "type": "security", "label": "BLOCKED", "sublabel": "PR #83: no-privileged", "width": 170 }
+  ],
+  "edges": [
+    { "from": "pr", "to": "render", "label": "① kustomize, helm" },
+    { "from": "render", "to": "conftest", "label": "② mọi manifest" },
+    { "from": "conftest", "to": "fixtures", "label": "③ không deny", "variant": "emphasis" },
+    { "from": "fixtures", "to": "ciok", "label": "④ đúng rule", "variant": "emphasis" },
+    { "from": "exception", "to": "conftest", "label": "owner, hạn", "variant": "dashed" },
+    { "from": "conftest", "to": "blocked", "label": "deny", "variant": "security" }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Rule",
+      "items": [
+        "no-privileged, no-privilege-escalation, non-root, no-host-namespaces",
+        "resources, approved-registries, pinned-images, no-plain-secrets",
+        "Exception hết hạn là một deny riêng"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Chưa kiểm",
+      "items": [
+        "Chỉ chạy trong CI; không có admission controller",
+        "Chart kube-prometheus-stack và Argo CD không được render"
+      ]
+    }
+  ]
+}
