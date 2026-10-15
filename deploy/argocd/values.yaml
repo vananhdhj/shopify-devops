@@ -21,7 +21,13 @@ controller:
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 768Mi }
+  # Readiness only: the chart leaves the controller's liveness probe off on purpose.
+  readinessProbe: { timeoutSeconds: 3 }
 repoServer:
+  # ADR-0017's probes for a slow node: the chart's 1 s timeouts restarted the repo server 35 times
+  # under CPU starvation, and with it down no cell could render its manifests.
+  livenessProbe: { timeoutSeconds: 5, failureThreshold: 6 }
+  readinessProbe: { timeoutSeconds: 3 }
   resources:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
@@ -29,6 +35,9 @@ server:
   resources:
     requests: { cpu: 25m, memory: 64Mi }
     limits: { memory: 256Mi }
+  # As for the repo server (ADR-0017).
+  livenessProbe: { timeoutSeconds: 5, failureThreshold: 6 }
+  readinessProbe: { timeoutSeconds: 3 }
 redis:
   resources:
     requests: { cpu: 25m, memory: 32Mi }
